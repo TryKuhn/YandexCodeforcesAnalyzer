@@ -23,12 +23,15 @@ def standings(token: str, contest_id: str, from_pos: int = None, to_pos: int = N
     result = requests.get(yandex_host + '/contests/' + contest_id + '/standings', params=params, headers=headers)
 
     if result.status_code == 200:
-        result = result.json()['rows']
+        result = result.json()
+
+        standings_slice = result['rows']
 
         if from_pos is not None:
             from_pos -= 1
-            result = result[from_pos:to_pos]
+            standings_slice = standings_slice[from_pos:to_pos]
 
+        result['rows'] = standings_slice
         return result
     elif result.status_code == 400:
         raise PermissionError('Standings are not generated!')

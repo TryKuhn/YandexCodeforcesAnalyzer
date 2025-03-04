@@ -62,15 +62,12 @@ def submissions_info(token: str, contest_id: str, from_pos: int = None, to_pos: 
 
 # need async
 def submissions(token: str, contest_id: str, from_pos: int = None, to_pos: int = None):
-    try:
-        submission_list = submissions_info(token, contest_id, from_pos, to_pos)
+    submission_list = submissions_info(token, contest_id, from_pos, to_pos)
 
-        submissions_result = list()
-        for submission_info in submission_list:
-            submission_source = submission(token, contest_id, str(submission_info['id']))
-            submission_info['source'] = submission_source
-            submissions_result.append(submission_info)
+    submissions_result = list()
+    for submission_info in submission_list:
+        submission_source = submission(token, contest_id, str(submission_info['id']))
+        submission_info['source'] = submission_source
+        submissions_result.append(submission_info)
 
-        return submissions_result
-    except Exception as e:
-        raise e
+    return submissions_result

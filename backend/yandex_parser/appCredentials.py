@@ -12,4 +12,5 @@ try:
 
     yandex_host = environ['yandex_host']
 except KeyError:
+    # save_log('while getting env variables')
     raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
