@@ -1,31 +1,30 @@
-import requests
+from aiohttp import ClientSession, TCPConnector
+from asyncio import gather, create_task
+from yarl import URL
 
-from yandex_parser.appCredentials import yandex_host
-
-DEFAULT_PAGE_SIZE = 100
+from settings import YANDEX_HOST, DEFAULT_PAGE_SIZE
 
 
-def submission(token: str, contest_id: str, submission_id: str):
+async def submission(client: ClientSession, token: str, contest_id: str, submission_id: str) -> str:
     headers = {
         'Authorization': f'OAuth {token}'
     }
 
-    result = requests.get(yandex_host + '/contests/' + contest_id + '/submissions/' + submission_id + '/source',
-                          headers=headers)
+    url = URL(YANDEX_HOST) / 'contests' / contest_id / 'submissions' / submission_id / 'source'
 
-    if result.status_code == 200:
-        return result.text
-    elif result.status_code == 403:
-        raise PermissionError('You do not have permission to this contest!')
-    elif result.status_code == 404:
-        raise PermissionError('Contest is not found!')
-    else:
-        # save_log(OAuthToken.json()['error_description'], 'while getting submission',
-        # token, contest_id, submission_id)
-        raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
+    async with client.get(str(url), headers=headers) as response:
+        if response.status == 200:
+            return await response.text()
+        elif response.status == 403:
+            raise PermissionError('You do not have permission to this contest!')
+        elif response.status == 404:
+            raise PermissionError('Contest is not found!')
+        else:
+            raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
 
 
-def submissions_info(token: str, contest_id: str, from_pos: int = None, to_pos: int = None):
+async def submissions_info(client: ClientSession, token: str, contest_id: str, from_pos: int = None,
+                           to_pos: int = None) -> dict:
     headers = {
         'Authorization': f'OAuth {token}'
     }
@@ -40,34 +39,34 @@ def submissions_info(token: str, contest_id: str, from_pos: int = None, to_pos: 
         to_pos = from_pos + DEFAULT_PAGE_SIZE
         params['pageSize'] = to_pos
 
-    result = requests.get(yandex_host + '/contests/' + contest_id + '/submissions', headers=headers, params=params)
+    url = URL(YANDEX_HOST) / 'contests' / contest_id / 'submissions'
+    async with client.get(str(url), headers=headers, params=params) as response:
+        if response.status == 200:
+            data = await response.json()
+            submission_list = data['submissions']
 
-    if result.status_code == 200:
-        result = result.json()['submissions']
+            if from_pos is not None:
+                submission_list = submission_list[from_pos - 1:to_pos]
 
-        if from_pos is not None:
-            from_pos -= 1
-            result = result[from_pos:to_pos]
-
-        return result
-    elif result.status_code == 403:
-        raise PermissionError('You do not have permission to this contest!')
-    elif result.status_code == 404:
-        raise PermissionError('Contest is not found!')
-    else:
-        # save_log(OAuthToken.json()['error_description'], 'while getting submissions info',
-        # token, contest_id, from_pos, to_pos)
-        raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
+            return submission_list
+        elif response.status == 403:
+            raise PermissionError('You do not have permission to this contest!')
+        elif response.status == 404:
+            raise PermissionError('Contest is not found!')
+        else:
+            raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
 
 
-# need async
-def submissions(token: str, contest_id: str, from_pos: int = None, to_pos: int = None):
-    submission_list = submissions_info(token, contest_id, from_pos, to_pos)
+async def submissions(token: str, contest_id: str, from_pos: int = None, to_pos: int = None):
+    connector = TCPConnector(limit=400)
+    async with ClientSession(connector=connector) as client:
+        submission_list = await submissions_info(client, token, contest_id, from_pos, to_pos)
 
-    submissions_result = list()
-    for submission_info in submission_list:
-        submission_source = submission(token, contest_id, str(submission_info['id']))
-        submission_info['source'] = submission_source
-        submissions_result.append(submission_info)
+        tasks = [create_task(submission(client, token, contest_id, str(submission_info['id']))) for submission_info in
+                 submission_list]
+        submission_sources = await gather(*tasks)
 
-    return submissions_result
+        for (submission_info, submission_source) in zip(submission_list, submission_sources):
+            submission_info['source'] = submission_source
+
+        return submission_list

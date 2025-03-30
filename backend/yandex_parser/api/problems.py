@@ -1,30 +1,31 @@
-import requests
+from aiohttp import ClientSession
+from yarl import URL
 
-from yandex_parser.appCredentials import yandex_host
+from settings import YANDEX_HOST
 
 
-def problems(token: str, contest_id: str):
+async def problems(token: str, contest_id: str):
     headers = {
         'Authorization': f'OAuth {token}'
     }
 
-    result = requests.get(yandex_host + '/contests/' + contest_id + '/problems', headers=headers)
+    url = URL(YANDEX_HOST) / 'contests' / contest_id / 'problems'
 
-    if result.status_code == 200:
-        result = result.json()['problems']
-        names = list()
+    async with ClientSession() as client:
+        async with client.get(str(url), headers=headers) as response:
+            if response.status == 200:
+                result = await response.json()
+                result = result['problems']
 
-        for problem in result:
-            names.append([problem['name'], problem['alias']])
+                names = []
+                for problem in result:
+                    names.append([problem['name'], problem['alias']])
+                names.sort(key=lambda x: x[1])
 
-        names.sort(key=lambda x: x[1])
-
-        return names
-    elif result.status_code == 403:
-        raise PermissionError('You do not have permission to this contest!')
-    elif result.status_code == 404:
-        raise PermissionError('Contest is not found!')
-    else:
-        # save_log(OAuthToken.json()['error_description'], 'while getting problems',
-        # token, contest_id)
-        raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
+                return names
+            elif response.status == 403:
+                raise PermissionError('You do not have permission to this contest!')
+            elif response.status == 404:
+                raise PermissionError('Contest is not found!')
+            else:
+                raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
