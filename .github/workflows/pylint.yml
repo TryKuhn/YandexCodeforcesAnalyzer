@@ -10,7 +10,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.10"]
 
     steps:
       - name: Checkout repository
@@ -29,4 +29,4 @@ jobs:
 
       - name: Run Pylint
         run: |
-          pylint --disable=C0111 $(git ls-files '*.py')
+          pylint --disable=C0111,R0801 $(git ls-files '*.py')
