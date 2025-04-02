@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 
-def parse_results(table, names):
+def parse_results(table: dict, names: list) -> tuple[str, dict]:
     final_table = defaultdict(list)
 
     score = 'IOI'

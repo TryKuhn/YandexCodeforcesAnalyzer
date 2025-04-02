@@ -1,5 +1,3 @@
-from typing import Any, Coroutine
-
 from logs import log_middleware
 from yandex_parser.api.login import link, token
 from yandex_parser.api.problems import problems
