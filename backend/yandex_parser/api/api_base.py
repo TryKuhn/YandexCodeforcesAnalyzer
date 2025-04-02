@@ -13,12 +13,7 @@ class ApiYandex:
 
     @staticmethod
     @log_middleware
-    async def login(login: str, password: str):
-        pass
-
-    @staticmethod
-    @log_middleware
-    async def get_standings(oauth: str, contest_id: str, from_pos: int = None, to_pos: int = None):
+    async def get_standings(oauth: str, contest_id: str, from_pos: int = None, to_pos: int = None) -> tuple[str, dict]:
         names = await problems(oauth, contest_id)
         results = await standings(oauth, contest_id, from_pos, to_pos)
 
@@ -26,7 +21,7 @@ class ApiYandex:
 
     @staticmethod
     @log_middleware
-    async def get_submissions(oauth: str, contest_id: str, from_pos: int = None, to_pos: int = None):
+    async def get_submissions(oauth: str, contest_id: str, from_pos: int = None, to_pos: int = None) -> dict:
         names = await problems(oauth, contest_id)
         submissions_list = await submissions(oauth, contest_id, from_pos, to_pos)
 

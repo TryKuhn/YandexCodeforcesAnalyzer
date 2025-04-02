@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 
-def parse_submissions(submissions, names):
+def parse_submissions(submissions: list, names: list) -> dict:
     names_compare = {}
 
     for name, alias in names:
