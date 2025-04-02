@@ -23,7 +23,7 @@ async def submission(client: ClientSession, token: str, contest_id: str, submiss
 
 
 async def submissions_info(client: ClientSession, token: str, contest_id: str, from_pos: int = None,
-                           to_pos: int = None) -> dict:
+                           to_pos: int = None) -> list:
     headers = {
         'Authorization': f'OAuth {token}'
     }
@@ -55,7 +55,7 @@ async def submissions_info(client: ClientSession, token: str, contest_id: str, f
         raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
 
 
-async def submissions(token: str, contest_id: str, from_pos: int = None, to_pos: int = None):
+async def submissions(token: str, contest_id: str, from_pos: int = None, to_pos: int = None) -> list:
     connector = TCPConnector(limit=400)
     async with ClientSession(connector=connector) as client:
         submission_list = await submissions_info(client, token, contest_id, from_pos, to_pos)
