@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 env:
-  CODEFORCES_TEST_ID: ${{ secrets.CODEFORCES_TEST_ID }}
+  CODEFORCES_TEST_KEY: ${{ secrets.CODEFORCES_TEST_KEY }}
   CODEFORCES_TEST_SECRET: ${{ secrets.CODEFORCES_TEST_SECRET }}
   CODEFORCES_HOST: ${{ secrets.CODEFORCES_HOST }}
 
