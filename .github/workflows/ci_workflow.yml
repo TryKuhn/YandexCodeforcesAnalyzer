@@ -5,6 +5,10 @@ on:
     branches: [ main ]
 
 env:
+  CODEFORCES_TEST_ID: ${{ secrets.CODEFORCES_TEST_ID }}
+  CODEFORCES_TEST_SECRET: ${{ secrets.CODEFORCES_TEST_SECRET }}
+  CODEFORCES_HOST: ${{ secrets.CODEFORCES_HOST }}
+
   YANDEX_CLIENT_ID: ${{ secrets.YANDEX_CLIENT_ID }}
   YANDEX_CLIENT_SECRET: ${{ secrets.YANDEX_CLIENT_SECRET }}
   YANDEX_HOST: ${{ secrets.YANDEX_HOST }}
