@@ -36,8 +36,7 @@ jobs:
 
       - name: Run Pylint
         run: |
-          max-line-length=120
-          pylint --disable=C0111,R0801,W1203 $(git ls-files '*.py')
+          pylint --disable=C0111,R0801,W1203 max-line-length=120 $(git ls-files '*.py')
 
   test:
     runs-on: ubuntu-latest
