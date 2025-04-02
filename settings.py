@@ -1,8 +1,8 @@
+from logging import basicConfig, INFO
+from pathlib import Path
+
 from os import environ
 from dotenv import load_dotenv
-from logging import basicConfig, INFO
-
-from pathlib import Path
 
 ANALYZER_ROOT = Path(__file__).parent
 DOTENV_PATH = ANALYZER_ROOT / '.env'

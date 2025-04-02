@@ -1,5 +1,5 @@
-from aiohttp import ClientSession, TCPConnector
 from asyncio import gather, create_task
+from aiohttp import ClientSession, TCPConnector
 from yarl import URL
 
 from settings import YANDEX_HOST, DEFAULT_PAGE_SIZE

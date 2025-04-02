@@ -34,11 +34,10 @@ async def standings(token: str, contest_id: str, from_pos: int = None, to_pos: i
 
                 result['rows'] = standings_slice
                 return result
-            elif response.status == 400:
+            if response.status == 400:
                 raise PermissionError('Standings are not generated!')
-            elif response.status == 403:
+            if response.status == 403:
                 raise PermissionError('You do not have permission to this contest!')
-            elif response.status == 404:
+            if response.status == 404:
                 raise PermissionError('Contest is not found!')
-            else:
-                raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
+            raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')

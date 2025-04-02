@@ -2,9 +2,9 @@ from logs.logs import log_middleware
 from yandex_parser.api.login import link, token
 from yandex_parser.api.problems import problems
 from yandex_parser.api.standings import standings
-from yandex_parser.parse_results.resultsParser import parse_results
+from yandex_parser.parse_results.results_parser import parse_results
 from yandex_parser.api.submissions import submissions
-from yandex_parser.parse_submissions.submissionParser import parse_submissions
+from yandex_parser.parse_submissions.submission_parser import parse_submissions
 
 
 class ApiYandex:

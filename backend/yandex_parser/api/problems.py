@@ -23,9 +23,8 @@ async def problems(token: str, contest_id: str):
                 names.sort(key=lambda x: x[1])
 
                 return names
-            elif response.status == 403:
+            if response.status == 403:
                 raise PermissionError('You do not have permission to this contest!')
-            elif response.status == 404:
+            if response.status == 404:
                 raise PermissionError('Contest is not found!')
-            else:
-                raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
+            raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')

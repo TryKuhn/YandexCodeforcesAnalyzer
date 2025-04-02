@@ -2,7 +2,7 @@ from collections import defaultdict
 
 
 def parse_submissions(submissions, names):
-    names_compare = dict()
+    names_compare = {}
 
     for name, alias in names:
         names_compare[alias] = name
