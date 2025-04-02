@@ -10,6 +10,7 @@ def log_middleware(func):
             return response
         except Exception as e:
             logging.error(f'Exception caught in {func.__name__}: {e}')
+            raise e
         finally:
             logging.info(f'Ended {func.__name__}')
 

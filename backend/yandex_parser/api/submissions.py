@@ -1,5 +1,5 @@
-from aiohttp import ClientSession, TCPConnector
 from asyncio import gather, create_task
+from aiohttp import ClientSession, TCPConnector
 from yarl import URL
 
 from settings import YANDEX_HOST, DEFAULT_PAGE_SIZE
@@ -15,12 +15,11 @@ async def submission(client: ClientSession, token: str, contest_id: str, submiss
     async with client.get(str(url), headers=headers) as response:
         if response.status == 200:
             return await response.text()
-        elif response.status == 403:
+        if response.status == 403:
             raise PermissionError('You do not have permission to this contest!')
-        elif response.status == 404:
+        if response.status == 404:
             raise PermissionError('Contest is not found!')
-        else:
-            raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
+        raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
 
 
 async def submissions_info(client: ClientSession, token: str, contest_id: str, from_pos: int = None,
@@ -49,12 +48,11 @@ async def submissions_info(client: ClientSession, token: str, contest_id: str, f
                 submission_list = submission_list[from_pos - 1:to_pos]
 
             return submission_list
-        elif response.status == 403:
+        if response.status == 403:
             raise PermissionError('You do not have permission to this contest!')
-        elif response.status == 404:
+        if response.status == 404:
             raise PermissionError('Contest is not found!')
-        else:
-            raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
+        raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
 
 
 async def submissions(token: str, contest_id: str, from_pos: int = None, to_pos: int = None):

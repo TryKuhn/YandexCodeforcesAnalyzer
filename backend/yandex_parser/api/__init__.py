@@ -1,1 +1,1 @@
-from yandex_parser.api.apiBase import ApiYandex
+from yandex_parser.api.api_base import ApiYandex
