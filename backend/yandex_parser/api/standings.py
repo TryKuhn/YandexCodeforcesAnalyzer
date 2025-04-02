@@ -4,7 +4,7 @@ from aiohttp import ClientSession
 from settings import YANDEX_HOST, DEFAULT_PAGE_SIZE
 
 
-async def standings(token: str, contest_id: str, from_pos: int = None, to_pos: int = None):
+async def standings(token: str, contest_id: str, from_pos: int = None, to_pos: int = None) -> dict:
     headers = {
         'Authorization': f'OAuth {token}'
     }
@@ -13,11 +13,12 @@ async def standings(token: str, contest_id: str, from_pos: int = None, to_pos: i
         'page': 1
     }
 
-    if to_pos is not None:
-        params['pageSize'] = to_pos
-    elif from_pos is not None:
-        to_pos = from_pos + DEFAULT_PAGE_SIZE
-        params['pageSize'] = to_pos
+    if from_pos is None:
+        from_pos = 1
+    if to_pos is None:
+        to_pos = from_pos + DEFAULT_PAGE_SIZE - 1
+
+    params['pageSize'] = to_pos
 
     url = URL(YANDEX_HOST) / 'contests' / contest_id / 'standings'
 
@@ -28,9 +29,8 @@ async def standings(token: str, contest_id: str, from_pos: int = None, to_pos: i
 
                 standings_slice = result['rows']
 
-                if from_pos is not None:
-                    from_pos -= 1
-                    standings_slice = standings_slice[from_pos:to_pos]
+                from_pos -= 1
+                standings_slice = standings_slice[from_pos:to_pos]
 
                 result['rows'] = standings_slice
                 return result

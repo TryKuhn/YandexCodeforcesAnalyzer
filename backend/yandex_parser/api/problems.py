@@ -4,7 +4,7 @@ from yarl import URL
 from settings import YANDEX_HOST
 
 
-async def problems(token: str, contest_id: str):
+async def problems(token: str, contest_id: str) -> list:
     headers = {
         'Authorization': f'OAuth {token}'
     }
