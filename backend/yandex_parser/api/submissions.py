@@ -15,6 +15,8 @@ async def submission(client: ClientSession, token: str, contest_id: str, submiss
     async with client.get(str(url), headers=headers) as response:
         if response.status == 200:
             return await response.text()
+        if response.status == 401:
+            raise PermissionError('Invalid token!')
         if response.status == 403:
             raise PermissionError('You do not have permission to this contest!')
         if response.status == 404:
@@ -48,6 +50,8 @@ async def submissions_info(client: ClientSession, token: str, contest_id: str, f
                 submission_list = submission_list[from_pos - 1:to_pos]
 
             return submission_list
+        if response.status == 401:
+            raise PermissionError('Invalid token!')
         if response.status == 403:
             raise PermissionError('You do not have permission to this contest!')
         if response.status == 404:

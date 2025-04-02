@@ -4,6 +4,27 @@ from aiohttp import ClientSession
 from settings import YANDEX_HOST, DEFAULT_PAGE_SIZE
 
 
+async def contest_info(token: str, contest_id: str) -> dict:
+    headers = {
+        'Authorization': f'OAuth {token}',
+    }
+
+    url = URL(YANDEX_HOST) / 'contests' / contest_id
+
+    async with ClientSession() as client:
+        async with client.get(url, headers=headers) as response:
+            if response.status == 200:
+                result = await response.json()
+                return result
+            if response.status == 401:
+                raise PermissionError('Invalid token!')
+            if response.status == 403:
+                raise PermissionError('You do not have permission to this contest!')
+            if response.status == 404:
+                raise PermissionError('Contest not found!')
+            raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
+
+
 async def standings(token: str, contest_id: str, from_pos: int = None, to_pos: int = None) -> dict:
     headers = {
         'Authorization': f'OAuth {token}'
@@ -36,8 +57,10 @@ async def standings(token: str, contest_id: str, from_pos: int = None, to_pos: i
                 return result
             if response.status == 400:
                 raise PermissionError('Standings are not generated!')
+            if response.status == 401:
+                raise PermissionError('Invalid token!')
             if response.status == 403:
                 raise PermissionError('You do not have permission to this contest!')
             if response.status == 404:
-                raise PermissionError('Contest is not found!')
+                raise PermissionError('Contest not found!')
             raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
