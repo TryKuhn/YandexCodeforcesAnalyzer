@@ -1,4 +1,4 @@
-from logs.logs import log_middleware
+from logs import log_middleware
 from yandex_parser.api.login import link, token
 from yandex_parser.api.problems import problems
 from yandex_parser.api.standings import standings

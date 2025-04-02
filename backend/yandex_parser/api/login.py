@@ -1,6 +1,6 @@
 from aiohttp import ClientSession
 
-from logs.logs import log_middleware
+from logs import log_middleware
 from settings import YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET, REDIRECT_URI
 
 
