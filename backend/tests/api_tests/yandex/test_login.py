@@ -1,2 +1,2 @@
 def test_trash():
-    assert 1 == 1
+    assert True
