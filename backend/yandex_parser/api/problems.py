@@ -23,6 +23,8 @@ async def problems(token: str, contest_id: str) -> list:
                 names.sort(key=lambda x: x[1])
 
                 return names
+            if response.status == 401:
+                raise PermissionError('Invalid token!')
             if response.status == 403:
                 raise PermissionError('You do not have permission to this contest!')
             if response.status == 404:

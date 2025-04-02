@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 
-def parse_results(table: dict, names: list) -> tuple[str, dict]:
+def parse_results(table: dict, names: list, contest: dict) -> tuple[str, dict]:
     final_table = defaultdict(list)
 
     score = 'IOI'
@@ -11,6 +11,9 @@ def parse_results(table: dict, names: list) -> tuple[str, dict]:
                 problem['score'] = '0'
             if problem['score'] == '':
                 score = 'ICPC'
+
+    final_table['contestName'] = [ contest['name'] ]
+    final_table['type'] = [ score ]
 
     for row in table['rows']:
         final_table['name'].append(row['participantInfo']['name'])
