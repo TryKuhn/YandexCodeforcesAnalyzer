@@ -23,7 +23,7 @@ async def status(client: ClientSession, oauth: tuple[str, str], contest_id: str,
     method_name = f'contest.{status.__name__}'
 
     from_pos, to_pos = gen_borders(from_pos, to_pos)
-    params = gen_params(oauth, method_name, contestId=contest_id, From=from_pos, count=(to_pos - from_pos + 1))
+    params = gen_params(oauth, method_name, contestId=contest_id, From=from_pos, count=to_pos-from_pos+1)
 
     url = URL(CODEFORCES_HOST) / method_name
 
