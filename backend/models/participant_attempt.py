@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 
-from base import Base
+from models.base import Base
 
 
 class ParticipantsAttempt(Base):
