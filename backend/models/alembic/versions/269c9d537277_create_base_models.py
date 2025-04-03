@@ -1,3 +1,4 @@
+# pylint: disable-all
 """Create base models
 
 Revision ID: 269c9d537277
