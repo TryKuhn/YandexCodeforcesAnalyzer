@@ -12,9 +12,13 @@ env:
   YANDEX_CLIENT_ID: ${{ secrets.YANDEX_CLIENT_ID }}
   YANDEX_CLIENT_SECRET: ${{ secrets.YANDEX_CLIENT_SECRET }}
   YANDEX_HOST: ${{ secrets.YANDEX_HOST }}
+  YANDEX_TEST_OAUTH: ${{ secrets.YANDEX_TEST_OAUTH }}
+
+  DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
+  DATABASE_USER: ${{ secrets.DATABASE_USER }}
+  DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
 
   REDIRECT_URI: ${{ secrets.REDIRECT_URI }}
-  ENV: ${{ secrets.ENV }}
 
 jobs:
   lint:
