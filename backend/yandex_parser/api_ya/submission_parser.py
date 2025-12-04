@@ -1,13 +1,14 @@
 from collections import defaultdict
+from typing import Any, Dict
 
 
 def parse_submissions(submissions: list, names: list) -> dict:
-    names_compare = {}
+    names_compare: Dict[str, str] = {}
 
     for name, alias in names:
         names_compare[alias] = name
 
-    submissions_result = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    submissions_result: Dict[str, Any] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 
     for submission in submissions:
         task_alias = submission["problemAlias"]

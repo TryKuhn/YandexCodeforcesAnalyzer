@@ -1,4 +1,5 @@
 from asyncio import create_task, gather
+from typing import Optional
 
 from aiohttp import ClientSession, TCPConnector
 from yarl import URL
@@ -38,8 +39,8 @@ async def submissions_info(
     client: ClientSession,
     token: str,
     contest_id: str,
-    from_pos: int = None,
-    to_pos: int = None,
+    from_pos: Optional[int] = None,
+    to_pos: Optional[int] = None,
 ) -> list:
     headers = {"Authorization": f"OAuth {token}"}
 
@@ -73,7 +74,7 @@ async def submissions_info(
 
 
 async def submissions(
-    token: str, contest_id: str, from_pos: int = None, to_pos: int = None
+    token: str, contest_id: str, from_pos: Optional[int] = None, to_pos: Optional[int] = None
 ) -> list:
     connector = TCPConnector(limit=400)
     async with ClientSession(connector=connector) as client:

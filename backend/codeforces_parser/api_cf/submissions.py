@@ -1,4 +1,5 @@
 from asyncio import create_task, gather
+from typing import Optional
 
 from aiohttp import ClientSession, TCPConnector
 from codeforces_parser.api_cf.request_signer import gen_borders, gen_params
@@ -26,18 +27,20 @@ async def status(
     client: ClientSession,
     oauth: tuple[str, str],
     contest_id: str,
-    from_pos: int = None,
-    to_pos: int = None,
+    from_pos: Optional[int] = None,
+    to_pos: Optional[int] = None,
 ) -> dict:
     method_name = f"contest.{status.__name__}"
 
-    from_pos, to_pos = gen_borders(from_pos, to_pos)
+    from_pos_int: int
+    to_pos_int: int
+    from_pos_int, to_pos_int = gen_borders(from_pos, to_pos)
     params = gen_params(
         oauth,
         method_name,
         contestId=contest_id,
-        From=from_pos,
-        count=to_pos - from_pos + 1,
+        From=from_pos_int,
+        count=to_pos_int - from_pos_int + 1,
     )
 
     url = URL(CODEFORCES_HOST) / method_name
@@ -46,7 +49,7 @@ async def status(
 
 
 async def submissions(
-    oauth: tuple[str, str], contest_id: str, from_pos: int = None, to_pos: int = None
+    oauth: tuple[str, str], contest_id: str, from_pos: Optional[int] = None, to_pos: Optional[int] = None
 ):
     connector = TCPConnector(limit=400)
     async with ClientSession(connector=connector) as client:

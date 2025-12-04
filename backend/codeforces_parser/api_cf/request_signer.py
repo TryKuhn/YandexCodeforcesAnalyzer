@@ -5,7 +5,7 @@ from time import time
 from settings import DEFAULT_PAGE_SIZE
 
 
-def gen_borders(from_pos: str | None, to_pos: str | None):
+def gen_borders(from_pos: int | None, to_pos: int | None) -> tuple[int, int]:
     if from_pos is None:
         from_pos = 1
     if to_pos is None:
@@ -15,10 +15,10 @@ def gen_borders(from_pos: str | None, to_pos: str | None):
 
 
 def sign_request(method_name: str, api_secret: str, params: dict[str, str]) -> str:
-    params = sorted(params.items(), key=lambda item: item[0:])
+    params_sorted = sorted(params.items(), key=lambda item: item[0])
     rand = str(randrange(1000000)).zfill(6)
 
-    s = f'{rand}/{method_name}?{"&".join([f"{x}={y}" for x, y in params])}#{api_secret}'
+    s = f'{rand}/{method_name}?{"&".join([f"{x}={y}" for x, y in params_sorted])}#{api_secret}'
 
     hasher = sha512(s.encode()).hexdigest()
     return f"{rand}{hasher}"
@@ -29,7 +29,7 @@ def gen_params(
 ) -> list[tuple[str, str]]:
     millis = int(round(time()))
 
-    params = {str(k): str(v) for k, v in kwargs.items() if v is not None}
+    params: dict[str, str] = {str(k): str(v) for k, v in kwargs.items() if v is not None}
     params["asManager"] = "false"
     params["time"] = str(millis)
     params["apiKey"] = oauth[0]
@@ -40,6 +40,6 @@ def gen_params(
 
     params["apiSig"] = sign_request(method_name, oauth[1], params)
 
-    params = [(k, v) for k, v in params.items()]
+    params_list: list[tuple[str, str]] = [(k, v) for k, v in params.items()]
 
-    return params
+    return params_list
