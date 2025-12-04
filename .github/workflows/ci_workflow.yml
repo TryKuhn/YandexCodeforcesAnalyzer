@@ -39,6 +39,7 @@ jobs:
           tags: yandexcodeforcesanalyzer:latest
 
   lint:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -61,6 +62,7 @@ jobs:
         run: mypy . --ignore-missing-imports
 
   test:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -78,3 +80,15 @@ jobs:
 
       - name: Run pytest
         run: pytest backend/tests --cov=backend
+
+  all-checks-passed:
+    needs: [build, lint, test]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check if all jobs passed
+        run: |
+          if [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ]; then
+            exit 1
+          fi
+
