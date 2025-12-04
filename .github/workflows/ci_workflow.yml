@@ -81,14 +81,37 @@ jobs:
       - name: Run pytest
         run: pytest backend/tests --cov=backend
 
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    strategy:
+      matrix:
+        language: ['python']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
   all-checks-passed:
-    needs: [build, lint, test]
+    needs: [build, lint, test, codeql]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: Check if all jobs passed
         run: |
-          if [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ]; then
+          if [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.codeql.result }}" != "success" ]; then
             exit 1
           fi
 
