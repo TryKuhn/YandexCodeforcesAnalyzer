@@ -6,10 +6,12 @@ async def get_response(client: ClientSession, url, params):
         if response.status == 200:
             result = await response.json()
 
-            return result['result']
+            return result["result"]
         print(response.status)
         print(await response.text())
         if response.status == 400:
             result = await response.json()
-            raise AttributeError(result['comment'])
-        raise RuntimeError('Oops! Something went wrong. We are already working to fix it!')
+            raise AttributeError(result["comment"])
+        raise RuntimeError(
+            "Oops! Something went wrong. We are already working to fix it!"
+        )

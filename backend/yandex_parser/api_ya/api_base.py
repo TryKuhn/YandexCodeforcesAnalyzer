@@ -1,9 +1,9 @@
 from logs import log_middleware
-from yandex_parser.api.login import link, token
-from yandex_parser.api.problems import problems
-from yandex_parser.api.standings import standings, contest_info
+from yandex_parser.api_ya.login import link, token
+from yandex_parser.api_ya.problems import problems
+from yandex_parser.api_ya.standings import contest_info, standings
+from yandex_parser.api_ya.submissions import submissions
 from yandex_parser.parse_results.results_parser import parse_results
-from yandex_parser.api.submissions import submissions
 from yandex_parser.parse_submissions.submission_parser import parse_submissions
 
 
@@ -13,7 +13,9 @@ class ApiYandex:
 
     @staticmethod
     @log_middleware
-    async def get_standings(oauth: str, contest_id: str, from_pos: int = None, to_pos: int = None) -> tuple[str, dict]:
+    async def get_standings(
+        oauth: str, contest_id: str, from_pos: int = None, to_pos: int = None
+    ) -> tuple[str, dict]:
         names = await problems(oauth, contest_id)
         results = await standings(oauth, contest_id, from_pos, to_pos)
         contest = await contest_info(oauth, contest_id)
@@ -22,7 +24,9 @@ class ApiYandex:
 
     @staticmethod
     @log_middleware
-    async def get_submissions(oauth: str, contest_id: str, from_pos: int = None, to_pos: int = None) -> dict:
+    async def get_submissions(
+        oauth: str, contest_id: str, from_pos: int = None, to_pos: int = None
+    ) -> dict:
         names = await problems(oauth, contest_id)
         submissions_list = await submissions(oauth, contest_id, from_pos, to_pos)
 

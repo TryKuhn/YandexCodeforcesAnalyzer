@@ -21,22 +21,24 @@ def sign_request(method_name: str, api_secret: str, params: dict[str, str]) -> s
     s = f'{rand}/{method_name}?{"&".join([f"{x}={y}" for x, y in params])}#{api_secret}'
 
     hasher = sha512(s.encode()).hexdigest()
-    return f'{rand}{hasher}'
+    return f"{rand}{hasher}"
 
 
-def gen_params(oauth: tuple[str, str], method_name: str, **kwargs) -> list[tuple[str, str]]:
+def gen_params(
+    oauth: tuple[str, str], method_name: str, **kwargs
+) -> list[tuple[str, str]]:
     millis = int(round(time()))
 
     params = {str(k): str(v) for k, v in kwargs.items() if v is not None}
-    params['asManager'] = 'false'
-    params['time'] = str(millis)
-    params['apiKey'] = oauth[0]
+    params["asManager"] = "false"
+    params["time"] = str(millis)
+    params["apiKey"] = oauth[0]
 
-    if 'From' in params:
-        params['from'] = params['From']
-        params.pop('From')
+    if "From" in params:
+        params["from"] = params["From"]
+        params.pop("From")
 
-    params['apiSig'] = sign_request(method_name, oauth[1], params)
+    params["apiSig"] = sign_request(method_name, oauth[1], params)
 
     params = [(k, v) for k, v in params.items()]
 
