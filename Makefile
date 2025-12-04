@@ -4,16 +4,16 @@ build:
 	docker build -t yandexcodeforcesanalyzer .
 
 lint:
-	docker-compose run backend ruff check .
-	docker-compose run backend mypy . --ignore-missing-imports
+	docker-compose run --rm backend ruff check .
+	docker-compose run --rm backend mypy . --ignore-missing-imports
 
 lint.fix:
-	docker-compose run backend black .
-	docker-compose run backend isort .
-	docker-compose run backend ruff check . --fix
+	docker-compose run --rm backend black .
+	docker-compose run --rm backend isort .
+	docker-compose run --rm backend ruff check . --fix
 
 test:
-	docker-compose run backend pytest backend/tests --cov=backend
+	docker-compose run --rm backend pytest backend/tests --cov=backend
 
 run:
 	docker-compose -f docker-compose.yml up
