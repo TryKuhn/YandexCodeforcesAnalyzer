@@ -3,8 +3,8 @@ from yandex_parser.api_ya.login import link, token
 from yandex_parser.api_ya.problems import problems
 from yandex_parser.api_ya.standings import contest_info, standings
 from yandex_parser.api_ya.submissions import submissions
-from yandex_parser.parse_results.results_parser import parse_results
-from yandex_parser.parse_submissions.submission_parser import parse_submissions
+from api_ya.results_parser import parse_results
+from api_ya.submission_parser import parse_submissions
 
 
 class ApiYandex:

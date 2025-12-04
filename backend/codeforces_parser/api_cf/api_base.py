@@ -1,7 +1,7 @@
 from codeforces_parser.api_cf.standings import standings
 from codeforces_parser.api_cf.submissions import submissions
-from codeforces_parser.parse_results.results_parser import parse_results
-from codeforces_parser.parse_submissions.submission_parser import \
+from api_cf.results_parser import parse_results
+from api_cf.submission_parser import \
     parse_submissions
 from logs import log_middleware
 
