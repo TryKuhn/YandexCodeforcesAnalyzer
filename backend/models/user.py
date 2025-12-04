@@ -1,11 +1,11 @@
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
 
-from models.base import Base
+from backend.models.base import Base
 
 
 class User(Base):
-    __tablename__ = 'users'
+    __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
 
@@ -19,5 +19,9 @@ class User(Base):
 
     telegram_id = Column(String(50))
 
-    competition_results = relationship('CompetitionResult', back_populates='user', cascade='all, delete-orphan')
-    participant_results = relationship('ParticipantAttempt', back_populates='user', cascade='all, delete-orphan')
+    competition_results = relationship(
+        "CompetitionResult", back_populates="user", cascade="all, delete-orphan"
+    )
+    participant_results = relationship(
+        "ParticipantAttempt", back_populates="user", cascade="all, delete-orphan"
+    )
