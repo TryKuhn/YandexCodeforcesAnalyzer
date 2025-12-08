@@ -1,4 +1,3 @@
-from logging import INFO, basicConfig
 from os import environ
 from pathlib import Path
 
@@ -9,25 +8,21 @@ DOTENV_PATH = ANALYZER_ROOT / ".env"
 
 load_dotenv(dotenv_path=str(DOTENV_PATH))
 
-basicConfig(
-    filename="logs.txt",
-    level=INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-
+# General settings
 DEFAULT_PAGE_SIZE = 100
 
-YANDEX_HOST = environ["YANDEX_HOST"]
+# Yandex OAuth2 settings
+YANDEX_HOST = "https://api.contest.yandex.net/api/public/v2"
 YANDEX_CLIENT_ID = environ["YANDEX_CLIENT_ID"]
 YANDEX_CLIENT_SECRET = environ["YANDEX_CLIENT_SECRET"]
-YANDEX_TEST_OAUTH = environ["YANDEX_TEST_OAUTH"]
+YANDEX_REDIRECT_URI = environ["YANDEX_REDIRECT_URI"]
 
-CODEFORCES_HOST = environ["CODEFORCES_HOST"]
+# Codeforces OAuth2 settings
+CODEFORCES_HOST = "https://codeforces.com/api"
 CODEFORCES_TEST_KEY = environ["CODEFORCES_TEST_KEY"]
 CODEFORCES_TEST_SECRET = environ["CODEFORCES_TEST_SECRET"]
 
-DATABASE_NAME = environ["DATABASE_NAME"]
-DATABASE_USER = environ["DATABASE_USER"]
-DATABASE_PASSWORD = environ["DATABASE_PASSWORD"]
-
-REDIRECT_URI = environ["REDIRECT_URI"]
+# Database settings
+POSTGRES_DB = environ["POSTGRES_DB"]
+POSTGRES_USER = environ["POSTGRES_USER"]
+POSTGRES_PASSWORD = environ["POSTGRES_PASSWORD"]
