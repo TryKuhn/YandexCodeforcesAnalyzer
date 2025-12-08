@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Create build directory for temporary files
+RUN mkdir -p /app/build
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

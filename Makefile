@@ -18,5 +18,6 @@ test:
 run:
 	docker-compose -f docker-compose.yml up
 
-build-run:
-	docker-compose -f docker-compose.yml up --build
+clean:
+	docker-compose down --rmi all --volumes --remove-orphans
+	docker system prune -af --volumes

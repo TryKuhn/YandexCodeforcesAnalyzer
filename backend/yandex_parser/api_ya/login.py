@@ -2,7 +2,7 @@ from aiohttp import ClientSession
 from logs import log_middleware
 from yarl import URL
 
-from settings import REDIRECT_URI, YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET
+from settings import YANDEX_REDIRECT_URI, YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET
 
 
 @log_middleware
@@ -10,7 +10,7 @@ async def link() -> URL:
     async with ClientSession() as client:
         async with client.get(
             f"https://oauth.yandex.ru/authorize?response_type=code&client_id={YANDEX_CLIENT_ID}&"
-            f"redirect_uri={REDIRECT_URI}"
+            f"redirect_uri={YANDEX_REDIRECT_URI}"
         ) as request_code:
             if request_code.status == 200:
                 return request_code.url
