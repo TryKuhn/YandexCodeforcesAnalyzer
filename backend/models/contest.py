@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer
 from sqlalchemy.orm import relationship
 
-from models.base import Base
+from backend.models.base import Base
 
 
 class Contest(Base):
