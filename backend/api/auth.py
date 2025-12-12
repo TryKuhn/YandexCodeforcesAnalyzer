@@ -42,7 +42,7 @@ def decode_access_token(token: str) -> Dict[str, Any]:
         token: JWT token строка
 
     Returns:
-        Декодированный payload если токен валиден
+        Decoded payload if the token is valid
 
     Raises:
         JWTError: если токен невалиден или просрочен
