@@ -5,7 +5,7 @@ from backend.models.base import Base
 
 
 class Contest(Base):
-    __table__ = "contests"
+    __tablename__ = "contests"
 
     id = Column(Integer, primary_key=True)
 
