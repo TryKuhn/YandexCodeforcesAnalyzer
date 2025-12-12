@@ -17,14 +17,14 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 def create_access_token(data: Dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """
-    Создаёт JWT access token с заданными данными.
+    Creates a JWT access token with the specified data.
 
     Args:
-        data: словарь данных для кодирования (например, {"sub": "user_id"})
-        expires_delta: опциональная дельта времени жизни токена
+        data: A dictionary of data to encode (e.g., {"sub": "user_id"})
+        expires_delta: Optional time delta for the token's lifetime
 
     Returns:
-        JWT token в виде строки
+        JWT token as a string
     """
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + (
