@@ -36,16 +36,16 @@ def create_access_token(data: Dict[str, Any], expires_delta: timedelta | None = 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
     """
-    Декодирует и проверяет JWT token.
+    Decodes and verifies a JWT token.
 
     Args:
-        token: JWT token строка
+        token: JWT token string
 
     Returns:
         Decoded payload if the token is valid
 
     Raises:
-        JWTError: если токен невалиден или просрочен
+        JWTError: if the token is invalid or expired
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
