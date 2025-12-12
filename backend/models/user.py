@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, String
 from sqlalchemy.orm import relationship
 
 from backend.models.base import Base
@@ -7,9 +7,7 @@ from backend.models.base import Base
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True)
-
-    login = Column(String(50), unique=True, nullable=False)
+    login = Column(String(50), primary_key=True, nullable=False)
     password = Column(String(120), nullable=False)
 
     codeforces_api_key = Column(String(100))
@@ -17,11 +15,4 @@ class User(Base):
 
     yandex_access_token = Column(String(255))
 
-    telegram_id = Column(String(50))
-
-    competition_results = relationship(
-        "CompetitionResult", back_populates="user", cascade="all, delete-orphan"
-    )
-    participant_results = relationship(
-        "ParticipantAttempt", back_populates="user", cascade="all, delete-orphan"
-    )
+    contest = relationship("Contest", back_populates="users")

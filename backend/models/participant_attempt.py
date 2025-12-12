@@ -4,8 +4,8 @@ from sqlalchemy.orm import relationship
 from backend.models.base import Base
 
 
-class ParticipantsAttempt(Base):
-    __tablename__ = "participantsAttempt"
+class ParticipantAttempt(Base):
+    __tablename__ = "participantsAttempts"
 
     id = Column(Integer, primary_key=True)
 
