@@ -9,7 +9,7 @@ class Participant(Base):
 
     id = Column(Integer, primary_key=True)
 
-    user_login = Column(String(50), nullable=False)
+    user_login = Column(String(50), ForeignKey("users.login"), nullable=False)
     contest_id = Column(Integer, ForeignKey("contests.id"))
 
     user = relationship("User", back_populates="participants")

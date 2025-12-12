@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, Column, ForeignKey, Integer
+from sqlalchemy import JSON, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from backend.models.base import Base
@@ -11,5 +11,5 @@ class ParticipantAttempt(Base):
 
     result_data = Column(JSON)
 
-    user_id = Column(Integer, ForeignKey("users.id"))
-    user = relationship("User", back_populates="contest_results")
+    user_login = Column(String(50), ForeignKey("users.login"))
+    user = relationship("User", back_populates="participant_attempts")
