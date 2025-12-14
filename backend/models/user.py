@@ -15,4 +15,9 @@ class User(Base):
 
     yandex_access_token = Column(String(255))
 
-    contest = relationship("Contest", back_populates="users")
+    refresh_token = relationship("RefreshToken", back_populates="users")
+    contests = relationship("Contest", back_populates="users")
+    participants = relationship("Participant", back_populates="users")
+    role =relationship("Role", back_populates="users")
+
+
