@@ -5,7 +5,7 @@ from backend.models.base import Base
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "user"
 
     login = Column(String(50), primary_key=True, nullable=False)
     password = Column(String(120), nullable=False)
@@ -15,4 +15,9 @@ class User(Base):
 
     yandex_access_token = Column(String(255))
 
-    contest = relationship("Contest", back_populates="users")
+    refresh_token = relationship("RefreshToken", back_populates="user")
+    contests = relationship("Contest", back_populates="user")
+    participants = relationship("Participant", back_populates="user")
+    role =relationship("Role", back_populates="user")
+
+
