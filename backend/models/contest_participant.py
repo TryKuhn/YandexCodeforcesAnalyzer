@@ -1,11 +1,11 @@
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
 
-from models.base import Base
+from backend.models.base import Base
 
 
 class ContestParticipant(Base):
-    __tablename__ = "contest_participant"
+    __tablename__ = "contest_participants"
 
     id = Column(Integer, primary_key=True)
 
@@ -14,4 +14,4 @@ class ContestParticipant(Base):
 
     total_score = Column(Integer, nullable=False)
 
-    task_result = relationship("TaskResult", back_populates="contest_participant")
+    task_result = relationship("TaskResult", back_populates="contest_participants")

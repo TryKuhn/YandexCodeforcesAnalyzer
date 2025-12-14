@@ -5,7 +5,7 @@ from backend.models.base import Base
 
 
 class TaskResult(Base):
-    __tablename__ = "task_result"
+    __tablename__ = "task_results"
 
     id = Column(Integer, primary_key=True)
 
@@ -17,6 +17,6 @@ class TaskResult(Base):
 
     banned = Column(Boolean, nullable=True)
 
-    submissions = relationship('Submission', back_populates='task_result')
-    task = relationship('Task', back_populates='task_result')
+    submissions = relationship("Submission", back_populates="task_results")
+    task = relationship("Task", back_populates="task_results")
 
