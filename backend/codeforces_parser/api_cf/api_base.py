@@ -2,6 +2,7 @@ from typing import Optional
 
 from api_cf.results_parser import parse_results
 from api_cf.submission_parser import parse_submissions
+
 from codeforces_parser.api_cf.standings import standings
 from codeforces_parser.api_cf.submissions import submissions
 from logs.logs import log_middleware

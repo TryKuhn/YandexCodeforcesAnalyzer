@@ -1,6 +1,6 @@
-from sqlalchemy import Column, String, Integer
+from sqlalchemy import Column, Integer, String
 
-from backend.models.base import Base
+from models.base import Base
 
 
 class Task(Base):
@@ -8,7 +8,7 @@ class Task(Base):
 
     id = Column(Integer, primary_key=True)
 
-    task_short_name = Column(String(20), nullable=False)
-    task_name = Column(String(100), nullable=False)
+    short_name = Column(String(20), nullable=True)
+    full_name = Column(String(100), nullable=False)
 
-    max_score = Column(Integer, nullable=False)
+    max_score = Column(Integer, nullable=True)

@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
 
-from backend.models.base import Base
+from models.base import Base
 
 
 class ContestParticipant(Base):
@@ -9,9 +9,9 @@ class ContestParticipant(Base):
 
     id = Column(Integer, primary_key=True)
 
-    user_login = Column(String(50), nullable=False)
-    user_name = Column(String(50), nullable=False)
+    login = Column(String(50), nullable=False)
+    name = Column(String(50), nullable=True)
 
-    total_score = Column(Integer, nullable=False)
+    score = Column(Integer, nullable=False)
 
-    task_result = relationship("TaskResult", back_populates="contest_participants")
+    tasks_result = relationship("TaskResult", back_populates="contest_participants")

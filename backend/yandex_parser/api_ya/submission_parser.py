@@ -8,7 +8,9 @@ def parse_submissions(submissions: list, names: list) -> dict:
     for name, alias in names:
         names_compare[alias] = name
 
-    submissions_result: Dict[str, Any] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    submissions_result: Dict[str, Any] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(list))
+    )
 
     for submission in submissions:
         task_alias = submission["problemAlias"]

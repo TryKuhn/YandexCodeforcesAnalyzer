@@ -1,17 +1,19 @@
 import time
 from contextlib import asynccontextmanager
-from logging import basicConfig, INFO
+from logging import INFO, basicConfig
+from pathlib import Path
 
 from fastapi import FastAPI
 from sqlalchemy.exc import OperationalError
 
-from backend.api.user_api import router
-from backend.app.database import engine
-from backend.models.base import Base
-from settings import ANALYZER_ROOT
+from api.user_api import router
+from app.database import engine
+
+log_dir = Path("app/logs")
+log_dir.mkdir(parents=True, exist_ok=True)
 
 basicConfig(
-    filename=ANALYZER_ROOT / "logs.txt",
+    filename=log_dir / "logs.txt",
     level=INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
@@ -26,8 +28,6 @@ async def lifespan(app: FastAPI):
             break
         except OperationalError:
             time.sleep(1)
-
-    Base.metadata.create_all(engine)
 
     yield
 

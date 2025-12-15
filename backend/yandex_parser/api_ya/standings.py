@@ -30,7 +30,10 @@ async def contest_info(token: str, contest_id: str) -> dict:
 
 
 async def standings(
-    token: str, contest_id: str, from_pos: Optional[int] = None, to_pos: Optional[int] = None
+    token: str,
+    contest_id: str,
+    from_pos: Optional[int] = None,
+    to_pos: Optional[int] = None,
 ) -> dict:
     headers = {"Authorization": f"OAuth {token}"}
 

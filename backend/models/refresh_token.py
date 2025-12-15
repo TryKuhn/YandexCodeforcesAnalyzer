@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, DateTime, Integer, String
 
-from backend.models.base import Base
+from models.base import Base
 
 
 class RefreshToken(Base):
@@ -8,6 +8,5 @@ class RefreshToken(Base):
 
     id = Column(Integer, primary_key=True)
 
-    refresh_token_hash = Column(String(256), unique=True, nullable=False)
-
+    refresh_token = Column(String(256), unique=True, nullable=False)
     expires_in = Column(DateTime, nullable=False)

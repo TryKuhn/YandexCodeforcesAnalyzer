@@ -1,22 +1,19 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, DateTime, Integer, String
 
-from backend.models.base import Base
+from models.base import Base
+
 
 class Submission(Base):
     __tablename__ = "submissions"
 
-    submission_id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)
 
-    start_time = Column(DateTime, nullable=False)
-    finish_time = Column(DateTime, nullable=False)
-
-    score = Column(Integer, nullable=True)
+    send_time = Column(DateTime, nullable=False)
 
     language = Column(String(50), nullable=False)
 
+    score = Column(Integer, nullable=True)
     verdict = Column(String(50), nullable=False)
-
-    runtime = Column(Integer, nullable=False)
+    run_time = Column(Integer, nullable=False)
 
     source = Column(String(100000), nullable=False)
-

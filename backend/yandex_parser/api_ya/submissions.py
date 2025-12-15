@@ -74,7 +74,10 @@ async def submissions_info(
 
 
 async def submissions(
-    token: str, contest_id: str, from_pos: Optional[int] = None, to_pos: Optional[int] = None
+    token: str,
+    contest_id: str,
+    from_pos: Optional[int] = None,
+    to_pos: Optional[int] = None,
 ) -> list:
     connector = TCPConnector(limit=400)
     async with ClientSession(connector=connector) as client:

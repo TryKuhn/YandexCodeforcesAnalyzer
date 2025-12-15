@@ -3,14 +3,16 @@ from typing import Optional
 from aiohttp import ClientSession
 from yarl import URL
 
-from backend.codeforces_parser.api_cf.request_signer import (gen_borders,
-                                                             gen_params)
-from backend.codeforces_parser.api_cf.response import get_response
+from codeforces_parser.api_cf.request_signer import gen_borders, gen_params
+from codeforces_parser.api_cf.response import get_response
 from settings import CODEFORCES_HOST
 
 
 async def standings(
-    oauth: tuple[str, str], contest_id: str, from_pos: Optional[int] = None, to_pos: Optional[int] = None
+    oauth: tuple[str, str],
+    contest_id: str,
+    from_pos: Optional[int] = None,
+    to_pos: Optional[int] = None,
 ):
     method_name = f"contest.{standings.__name__}"
 

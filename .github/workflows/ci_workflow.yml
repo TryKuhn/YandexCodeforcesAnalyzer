@@ -56,10 +56,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run ruff
-        run: ruff check .
+        run: ruff check backend
 
       - name: Run mypy
-        run: mypy . --ignore-missing-imports
+        run: mypy backend --ignore-missing-imports --explicit-package-bases
 
   test:
     needs: build
@@ -81,7 +81,7 @@ jobs:
         run: pytest backend/tests --cov=backend
 
   all-checks-passed:
-    needs: [build, lint, test]
+    needs: [ build, lint, test ]
     runs-on: ubuntu-latest
     if: always()
     steps:
