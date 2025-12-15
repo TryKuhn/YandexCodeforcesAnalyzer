@@ -3,7 +3,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-ANALYZER_ROOT = Path(__file__).parent
+ANALYZER_ROOT = Path(__file__).parent.parent
 DOTENV_PATH = ANALYZER_ROOT / ".env"
 
 load_dotenv(dotenv_path=str(DOTENV_PATH))
@@ -26,3 +26,6 @@ CODEFORCES_TEST_SECRET = environ["CODEFORCES_TEST_SECRET"]
 POSTGRES_DB = environ["POSTGRES_DB"]
 POSTGRES_USER = environ["POSTGRES_USER"]
 POSTGRES_PASSWORD = environ["POSTGRES_PASSWORD"]
+POSTGRES_URL = (
+    f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@postgres:5432/{POSTGRES_DB}"
+)

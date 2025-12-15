@@ -29,7 +29,9 @@ def gen_params(
 ) -> list[tuple[str, str]]:
     millis = int(round(time()))
 
-    params: dict[str, str] = {str(k): str(v) for k, v in kwargs.items() if v is not None}
+    params: dict[str, str] = {
+        str(k): str(v) for k, v in kwargs.items() if v is not None
+    }
     params["asManager"] = "false"
     params["time"] = str(millis)
     params["apiKey"] = oauth[0]

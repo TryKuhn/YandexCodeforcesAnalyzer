@@ -1,8 +1,8 @@
-from fastapi import Depends, APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from backend.api.schemas import UserRegister, UserLogin, Token
-from backend.app.database import get_db
+from api.schemas import Token, UserLogin, UserRegister
+from app.database import get_db
 
 router = APIRouter()
 

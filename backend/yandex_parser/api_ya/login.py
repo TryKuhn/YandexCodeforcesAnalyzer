@@ -1,23 +1,21 @@
 from aiohttp import ClientSession
-from logs import log_middleware
 from yarl import URL
 
-from settings import YANDEX_REDIRECT_URI, YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET
+from settings import (YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET,
+                      YANDEX_REDIRECT_URI)
 
 
-@log_middleware
 async def link() -> URL:
     async with ClientSession() as client:
         async with client.get(
-            f"https://oauth.yandex.ru/authorize?response_type=code&client_id={YANDEX_CLIENT_ID}&"
-            f"redirect_uri={YANDEX_REDIRECT_URI}"
+                f"https://oauth.yandex.ru/authorize?response_type=code&client_id={YANDEX_CLIENT_ID}&"
+                f"redirect_uri={YANDEX_REDIRECT_URI}"
         ) as request_code:
             if request_code.status == 200:
                 return request_code.url
             raise ConnectionError("Error while connecting to Yandex. Try again later.")
 
 
-@log_middleware
 async def token(verification_code) -> str:
     data = [
         ("grant_type", "authorization_code"),
@@ -28,7 +26,7 @@ async def token(verification_code) -> str:
 
     async with ClientSession() as client:
         async with client.post(
-            "https://oauth.yandex.ru/token", data=data
+                "https://oauth.yandex.ru/token", data=data
         ) as oauth_token:
             if oauth_token.status == 200:
                 # save_credentials(OAuthToken.json()['access_token'], OAuthToken.json()['expires_in'])

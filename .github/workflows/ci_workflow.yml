@@ -59,7 +59,7 @@ jobs:
         run: ruff check .
 
       - name: Run mypy
-        run: mypy . --ignore-missing-imports
+        run: mypy . --ignore-missing-imports --explicit-package-bases
 
   test:
     needs: build
@@ -81,7 +81,7 @@ jobs:
         run: pytest backend/tests --cov=backend
 
   all-checks-passed:
-    needs: [build, lint, test]
+    needs: [ build, lint, test ]
     runs-on: ubuntu-latest
     if: always()
     steps:

@@ -25,14 +25,13 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       PYTHONUNBUFFERED: 1
     volumes:
       - .:/app
-      - ./build:/app/build
     depends_on:
-        postgres:
-          condition: service_healthy
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 60s
