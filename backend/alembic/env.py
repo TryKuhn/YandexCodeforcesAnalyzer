@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from models import *  # noqa: F403
+from models import Base  # noqa: F401
 from settings import POSTGRES_URL
 
 # this is the Alembic Config object, which provides
