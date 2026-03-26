@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
 
 from backend.tests.api_tests.test_base import client
 from backend.app.database import get_db
