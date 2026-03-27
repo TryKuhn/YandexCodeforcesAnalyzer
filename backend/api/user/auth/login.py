@@ -9,8 +9,8 @@ from backend.api.pydantic_schemas.user.auth import UserRegister, UserLogin, Toke
 
 from backend.app.database import get_db
 
-from backend.models.refresh_token import RefreshToken
-from backend.models.user import User
+from models.user.refresh_token import RefreshToken
+from models.user.user import User
 
 from backend.settings import EXPIRES_ACCESS, EXPIRES_REFRESH
 

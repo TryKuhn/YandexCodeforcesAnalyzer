@@ -6,8 +6,8 @@ from sqlalchemy.orm import relationship, mapped_column, Mapped
 from models.base import Base
 
 if TYPE_CHECKING:
-    from models.contest import Contest
-    from models.task_result import TaskResult
+    from models.contest.contest import Contest
+    from models.contest.task_result import TaskResult
 
 class ContestParticipant(Base):
     __tablename__ = 'contest_participants'

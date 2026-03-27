@@ -7,9 +7,9 @@ from sqlalchemy.orm import relationship, Mapped, mapped_column
 from models.base import Base
 
 if TYPE_CHECKING:
-    from models.contest_participant import ContestParticipant
-    from models.task import Task
-    from models.submission import Submission
+    from models.contest.contest_participant import ContestParticipant
+    from models.contest.task import Task
+    from models.submissions.submission import Submission
 
 class TaskResult(Base):
     __tablename__ = 'task_results'

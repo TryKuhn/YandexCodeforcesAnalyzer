@@ -6,10 +6,10 @@ from sqlalchemy.orm import relationship, Mapped, mapped_column
 from models.base import Base
 
 if TYPE_CHECKING:
-    from models.refresh_token import RefreshToken
-    from models.contest import Contest
-    from models.participant import Participant
-    from models.role import Role
+    from models.user.refresh_token import RefreshToken
+    from models.contest.contest import Contest
+    from models.participant.participant import Participant
+    from models.user.role import Role
 
 class User(Base):
     __tablename__ = 'users'
