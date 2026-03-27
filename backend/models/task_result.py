@@ -1,14 +1,15 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
-from backend.models.base import Base
+from models.base import Base
 
 if TYPE_CHECKING:
-    from backend.models.contest_participant import ContestParticipant
-    from backend.models.task import Task
-    from backend.models.submission import Submission
+    from models.contest_participant import ContestParticipant
+    from models.task import Task
+    from models.submission import Submission
 
 class TaskResult(Base):
     __tablename__ = 'task_results'
@@ -21,7 +22,7 @@ class TaskResult(Base):
     tries_count: Mapped[int | None] = mapped_column()
     verdict: Mapped[str] = mapped_column(String(50))
 
-    last_success_time: Mapped[DateTime] = mapped_column()
+    last_success_time: Mapped[datetime] = mapped_column()
 
     banned: Mapped[bool] = mapped_column(default=False)
 

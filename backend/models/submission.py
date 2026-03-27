@@ -1,13 +1,14 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
-from backend.models.base import Base
+from models.base import Base
 
 if TYPE_CHECKING:
-    from backend.models.task_result import TaskResult
-    from backend.models.pair_of_banned_submissions import PairOfBannedSubmissions
+    from models.task_result import TaskResult
+    from models.pair_of_banned_submissions import PairOfBannedSubmissions
 
 
 class Submission(Base):
@@ -21,7 +22,7 @@ class Submission(Base):
     participant_login: Mapped[str] = mapped_column(String(50))
     task_name: Mapped[str] = mapped_column(String(50))
 
-    send_time: Mapped[DateTime] = mapped_column()
+    send_time: Mapped[datetime] = mapped_column()
 
     language: Mapped[str] = mapped_column(String(50))
 
