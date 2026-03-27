@@ -9,7 +9,7 @@ class UserRegister(BaseModel):
     @field_validator('login')
     def validate_login(self, value: str):
         if len(value) < 5:
-            raise ValueError('Login length must contain at least 5 character')
+            raise ValueError('Login length must contain at least 5 characters')
         if len(value) > 30:
             raise ValueError('Login length must contain at most 30 characters')
 

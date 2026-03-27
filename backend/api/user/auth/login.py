@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -61,8 +61,8 @@ async def login(payload: UserLogin, db: Session = Depends(get_db)):
         )
 
     user_id: int = user_exists.id # type: ignore[assignment]
-    created_at = datetime.now()
-    expires_in = created_at + timedelta(minutes=EXPIRES_ACCESS)
+    created_at = datetime.now(timezone.utc)
+    expires_in = created_at + timedelta(minutes=EXPIRES_REFRESH)
 
     data = {
         'user_id': user_id,
