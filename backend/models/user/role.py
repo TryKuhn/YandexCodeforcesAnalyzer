@@ -6,7 +6,7 @@ from sqlalchemy.orm import relationship, Mapped, mapped_column
 from models.base import Base
 
 if TYPE_CHECKING:
-    from models.user import User
+    from models.user.user import User
 
 
 class Role(Base):

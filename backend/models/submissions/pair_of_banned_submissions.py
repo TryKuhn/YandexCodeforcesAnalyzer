@@ -6,8 +6,8 @@ from sqlalchemy.orm import relationship, mapped_column, Mapped
 from models.base import Base
 
 if TYPE_CHECKING:
-    from models.contest import Contest
-    from models.submission import Submission
+    from models.contest.contest import Contest
+    from models.submissions.submission import Submission
 
 class PairOfBannedSubmissions(Base):
     __tablename__ = 'pairs_of_banned_submissions'

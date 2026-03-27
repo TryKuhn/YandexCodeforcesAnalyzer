@@ -7,10 +7,10 @@ from sqlalchemy.orm import relationship, mapped_column, Mapped
 from models.base import Base
 
 if TYPE_CHECKING:
-    from models.user import User
-    from models.contest_participant import ContestParticipant
-    from models.task import Task
-    from models.pair_of_banned_submissions import PairOfBannedSubmissions
+    from models.user.user import User
+    from models.contest.contest_participant import ContestParticipant
+    from models.contest.task import Task
+    from models.submissions.pair_of_banned_submissions import PairOfBannedSubmissions
 
 class Contest(Base):
     __tablename__ = 'contests'
