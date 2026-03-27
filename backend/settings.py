@@ -11,6 +11,13 @@ load_dotenv(dotenv_path=str(DOTENV_PATH))
 # General settings
 DEFAULT_PAGE_SIZE = 100
 
+# JWT settings
+ALGORITHM = "HS256"
+SECRET_KEY = environ["SECRET_KEY"]
+
+EXPIRES_ACCESS = 3
+EXPIRES_REFRESH = 30
+
 # Yandex OAuth2 settings
 YANDEX_HOST = "https://api.contest.yandex.net/api/public/v2"
 YANDEX_CLIENT_ID = environ["YANDEX_CLIENT_ID"]
