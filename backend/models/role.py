@@ -1,11 +1,19 @@
-from sqlalchemy import Column, Integer, String
+from typing import TYPE_CHECKING
 
-from models.base import Base
+from sqlalchemy import String
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+
+from backend.models.base import Base
+
+if TYPE_CHECKING:
+    from backend.models.user import User
 
 
 class Role(Base):
-    __tablename__ = "roles"
+    __tablename__ = 'roles'
 
-    id = Column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
 
-    name = Column(String(100), nullable=False)
+    name: Mapped[str] = mapped_column(String(100))
+
+    user: Mapped[list['User']] = relationship(back_populates='roles')

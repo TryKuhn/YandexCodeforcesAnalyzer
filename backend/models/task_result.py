@@ -1,21 +1,31 @@
-from sqlalchemy import Boolean, Column, DateTime, Integer, String
-from sqlalchemy.orm import relationship
+from typing import TYPE_CHECKING
 
-from models.base import Base
+from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 
+from backend.models.base import Base
+
+if TYPE_CHECKING:
+    from backend.models.contest_participant import ContestParticipant
+    from backend.models.task import Task
+    from backend.models.submission import Submission
 
 class TaskResult(Base):
-    __tablename__ = "task_results"
+    __tablename__ = 'task_results'
 
-    id = Column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    contest_participant_id: Mapped[int] = mapped_column(ForeignKey('contest_participants.id'))
+    task_id: Mapped[int] = mapped_column(ForeignKey('tasks.id'))
 
-    score = Column(Integer, nullable=True)
-    tries_count = Column(Integer, nullable=True)
-    verdict = Column(String(50), nullable=False)
+    score: Mapped[int | None] = mapped_column()
+    tries_count: Mapped[int | None] = mapped_column()
+    verdict: Mapped[str] = mapped_column(String(50))
 
-    last_success_time = Column(DateTime, nullable=True)
+    last_success_time: Mapped[DateTime] = mapped_column()
 
-    banned = Column(Boolean, nullable=False)
+    banned: Mapped[bool] = mapped_column(default=False)
 
-    submissions = relationship("Submission", back_populates="task_results")
-    task = relationship("Task", back_populates="task_results")
+    contest_participant: Mapped["ContestParticipant"] = relationship(back_populates='tasks_results')
+
+    task: Mapped["Task"] = relationship(back_populates='task_results')
+    submissions: Mapped["Submission"] = relationship(back_populates='task_result')

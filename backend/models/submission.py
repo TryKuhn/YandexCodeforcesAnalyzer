@@ -1,19 +1,36 @@
-from sqlalchemy import Column, DateTime, Integer, String
+from typing import TYPE_CHECKING
 
-from models.base import Base
+from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+
+from backend.models.base import Base
+
+if TYPE_CHECKING:
+    from backend.models.task_result import TaskResult
+    from backend.models.pair_of_banned_submissions import PairOfBannedSubmissions
 
 
 class Submission(Base):
-    __tablename__ = "submissions"
+    __tablename__ = 'submissions'
 
-    id = Column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
 
-    send_time = Column(DateTime, nullable=False)
+    contest_id: Mapped[int] = mapped_column(ForeignKey('contests.id'))
+    task_result_id: Mapped[int] = mapped_column(ForeignKey('task_results.id'))
 
-    language = Column(String(50), nullable=False)
+    participant_login: Mapped[str] = mapped_column(String(50))
+    task_name: Mapped[str] = mapped_column(String(50))
 
-    score = Column(Integer, nullable=True)
-    verdict = Column(String(50), nullable=False)
-    run_time = Column(Integer, nullable=False)
+    send_time: Mapped[DateTime] = mapped_column()
 
-    source = Column(String(100000), nullable=False)
+    language: Mapped[str] = mapped_column(String(50))
+
+    score: Mapped[int | None] = mapped_column()
+    verdict: Mapped[str] = mapped_column(String(50))
+    run_time: Mapped[int] = mapped_column()
+    banned: Mapped[bool] = mapped_column(default=False)
+
+    source: Mapped[str | None] = mapped_column()
+
+    task_result: Mapped["TaskResult"] = relationship(back_populates='submissions')
+    pair_of_banned_submissions: Mapped["PairOfBannedSubmissions"] = relationship(back_populates='submissions')
