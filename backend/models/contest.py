@@ -1,24 +1,39 @@
-from sqlalchemy import Column, DateTime, Integer, String
-from sqlalchemy.orm import relationship
+from typing import TYPE_CHECKING
 
-from models.base import Base
+from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy.orm import relationship, mapped_column, Mapped
 
+from backend.models.base import Base
+
+if TYPE_CHECKING:
+    from backend.models.user import User
+    from backend.models.contest_participant import ContestParticipant
+    from backend.models.task import Task
+    from backend.models.pair_of_banned_submissions import PairOfBannedSubmissions
 
 class Contest(Base):
-    __tablename__ = "contests"
+    __tablename__ = 'contests'
 
-    id = Column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_login: Mapped[str] = mapped_column(String(50), ForeignKey('users.login'))
 
-    name = Column(String(256), nullable=False)
-    type = Column(String(5), nullable=False)
+    name: Mapped[str] = mapped_column(String(256))
+    type: Mapped[str] = mapped_column(String(5))
 
-    start_time = Column(DateTime, nullable=True)
-    finish_time = Column(DateTime, nullable=True)
+    start_time: Mapped[DateTime | None] = mapped_column()
+    finish_time: Mapped[DateTime | None] = mapped_column()
 
-    participants_of_contest = relationship(
-        "ContestParticipant", back_populates="contests"
+    user: Mapped["User"] = relationship(back_populates='contests')
+
+    contest_participants: Mapped[list["ContestParticipant"]] = relationship(
+        back_populates='contest',
+        cascade='all, delete-orphan'
     )
-    tasks = relationship("Task", back_populates="contests")
-    pairs_of_banned_submissions = relationship(
-        "PairOfBannedSubmission", back_populates="contests"
+    tasks: Mapped[list["Task"]] = relationship(
+        back_populates='contest',
+        cascade='all, delete-orphan'
+    )
+    pairs_of_banned_submissions: Mapped[list["PairOfBannedSubmissions"]] = relationship(
+        back_populates='contest',
+        cascade='all, delete-orphan'
     )

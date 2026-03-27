@@ -1,22 +1,43 @@
-from sqlalchemy import Column, String
-from sqlalchemy.orm import relationship
+from typing import TYPE_CHECKING
 
-from models.base import Base
+from sqlalchemy import String
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 
+from backend.models.base import Base
+
+if TYPE_CHECKING:
+    from backend.models.refresh_token import RefreshToken
+    from backend.models.contest import Contest
+    from backend.models.participant import Participant
+    from backend.models.role import Role
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = 'users'
 
-    login = Column(String(50), primary_key=True, nullable=False)
-    password = Column(String(120), nullable=False)
-    email = Column(String(50), nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
 
-    codeforces_api_key = Column(String(100), nullable=True)
-    codeforces_api_secret = Column(String(100), nullable=True)
+    login: Mapped[str] = mapped_column(String(50), unique=True)
+    password: Mapped[str] = mapped_column(String(120))
+    email: Mapped[str] = mapped_column(String(100))
 
-    yandex_access_token = Column(String(255), nullable=True)
+    codeforces_api_key: Mapped[str | None] = mapped_column(String(100))
+    codeforces_api_secret: Mapped[str | None] = mapped_column(String(100))
 
-    refresh_token = relationship("RefreshToken", back_populates="users")
-    contests = relationship("Contest", back_populates="users")
-    participants = relationship("Participant", back_populates="users")
-    role = relationship("Role", back_populates="users")
+    yandex_access_token: Mapped[str | None] = mapped_column(String(255))
+
+    refresh_tokens: Mapped[list['RefreshToken']] = relationship(
+        back_populates='user',
+        cascade='all, delete-orphan'
+    )
+    contests: Mapped[list['Contest']] = relationship(
+        back_populates='user',
+        cascade='all, delete-orphan'
+    )
+    participants: Mapped[list['Participant']] = relationship(
+        back_populates='user',
+        cascade='all, delete-orphan'
+    )
+    roles: Mapped[list['Role']] = relationship(
+        back_populates='user',
+        cascade='all, delete-orphan'
+    )

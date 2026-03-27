@@ -1,17 +1,25 @@
-from sqlalchemy import Column, Integer, String
-from sqlalchemy.orm import relationship
+from typing import TYPE_CHECKING
 
-from models.base import Base
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import relationship, mapped_column, Mapped
 
+from backend.models.base import Base
+
+if TYPE_CHECKING:
+    from backend.models.contest import Contest
+    from backend.models.task_result import TaskResult
 
 class ContestParticipant(Base):
-    __tablename__ = "contest_participants"
+    __tablename__ = 'contest_participants'
 
-    id = Column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    contest_id: Mapped[int] = mapped_column(ForeignKey('contests.id'))
 
-    login = Column(String(50), nullable=False)
-    name = Column(String(50), nullable=True)
+    login: Mapped[str] = mapped_column(String(50))
+    name: Mapped[str | None] = mapped_column(String(50))
 
-    score = Column(Integer, nullable=False)
+    score: Mapped[int] = mapped_column()
 
-    tasks_result = relationship("TaskResult", back_populates="contest_participants")
+    contest: Mapped["Contest"] = relationship(back_populates='contest_participants')
+
+    tasks_results: Mapped[list["TaskResult"]] = relationship(back_populates='contest_participant')

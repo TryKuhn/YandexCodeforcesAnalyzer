@@ -1,19 +1,25 @@
-from sqlalchemy import Column, Integer
-from sqlalchemy.orm import relationship
+from typing import TYPE_CHECKING
 
-from models.base import Base
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import relationship, mapped_column, Mapped
 
+from backend.models.base import Base
+
+if TYPE_CHECKING:
+    from backend.models.contest import Contest
+    from backend.models.submission import Submission
 
 class PairOfBannedSubmissions(Base):
-    __tablename__ = "pairs_of_banned_submissions"
+    __tablename__ = 'pairs_of_banned_submissions'
 
-    id = Column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    contest_id: Mapped[int] = mapped_column(ForeignKey('contests.id'))
 
-    percentage = Column(Integer, nullable=False)
+    first_submission_id: Mapped[int] = mapped_column(ForeignKey('submissions.id'))
+    second_submission_id: Mapped[int] = mapped_column(ForeignKey('submissions.id'))
 
-    first_submission = relationship(
-        "Submission", back_populates="pairs_of_banned_submissions"
-    )
-    second_submission = relationship(
-        "Submission", back_populates="pairs_of_banned_submissions"
-    )
+    percentage: Mapped[float] = mapped_column()
+
+    contest: Mapped["Contest"] = relationship(back_populates='pairs_of_banned_submissions')
+
+    submissions: Mapped["Submission"] = relationship(back_populates='pair_of_banned_submissions')
