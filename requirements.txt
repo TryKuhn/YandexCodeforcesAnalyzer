@@ -7,9 +7,10 @@ python-dotenv>=1.2.1
 typing_extensions>=4.13.0
 
 aiohttp>=3.13.2
-cryptography>=46.0.3
+bcrypt>=4.0.0
+cryptography>=46.0.5
 fastapi>=0.124.4
-python-jose>=3.5.0
+passlib>=1.7.4
 pydantic>=2.12.5
 uvicorn>=0.24.0
 yarl>=1.22.0
@@ -18,8 +19,9 @@ SQLAlchemy>=2.0.45
 alembic>=1.17.2
 uliweb-alembic>=0.6.9
 
-pytest>=8.3.5
+pytest>=9.0.2
 pytest-cov>=7.0.0
+pyjwt
 
 ruff>=0.9.0
 mypy>=1.14.0
