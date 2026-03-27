@@ -3,11 +3,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import String
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
-from backend.models.base import Base
+from models.base import Base
 
 if TYPE_CHECKING:
-    from backend.models.contest_participant import ContestParticipant
-    from backend.models.user import User
+    from models.contest_participant import ContestParticipant
+    from models.user import User
 
 
 class Participant(Base):

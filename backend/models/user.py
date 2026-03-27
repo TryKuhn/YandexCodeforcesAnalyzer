@@ -3,13 +3,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import String
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
-from backend.models.base import Base
+from models.base import Base
 
 if TYPE_CHECKING:
-    from backend.models.refresh_token import RefreshToken
-    from backend.models.contest import Contest
-    from backend.models.participant import Participant
-    from backend.models.role import Role
+    from models.refresh_token import RefreshToken
+    from models.contest import Contest
+    from models.participant import Participant
+    from models.role import Role
 
 class User(Base):
     __tablename__ = 'users'

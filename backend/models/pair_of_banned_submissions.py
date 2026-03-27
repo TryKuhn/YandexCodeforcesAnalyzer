@@ -3,11 +3,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship, mapped_column, Mapped
 
-from backend.models.base import Base
+from models.base import Base
 
 if TYPE_CHECKING:
-    from backend.models.contest import Contest
-    from backend.models.submission import Submission
+    from models.contest import Contest
+    from models.submission import Submission
 
 class PairOfBannedSubmissions(Base):
     __tablename__ = 'pairs_of_banned_submissions'
