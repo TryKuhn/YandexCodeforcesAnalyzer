@@ -11,8 +11,8 @@ from api.pydantic_schemas.user.auth import UserRegister, UserLogin, Token, Chang
 
 from app.database import get_db
 
-from models.refresh_token import RefreshToken
-from models.user import User
+from models.user.refresh_token import RefreshToken
+from models.user.user import User
 
 from settings import EXPIRES_ACCESS, EXPIRES_REFRESH
 
