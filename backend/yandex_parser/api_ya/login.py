@@ -1,8 +1,7 @@
 from aiohttp import ClientSession
 from yarl import URL
 
-from settings import (YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET,
-                      YANDEX_REDIRECT_URI)
+from settings import YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET, YANDEX_REDIRECT_URI
 
 
 async def link() -> URL:
