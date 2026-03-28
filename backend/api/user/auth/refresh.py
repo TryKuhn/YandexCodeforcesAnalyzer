@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from api.crypt import hash_password
 from api.pydantic_schemas import Token
-from api.user.auth.login import get_tokens
+from api.user import get_tokens
 from app.database import get_db
 from models import RefreshToken
 
