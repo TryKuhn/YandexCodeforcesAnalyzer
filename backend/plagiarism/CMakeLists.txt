@@ -29,7 +29,6 @@ add_executable(plagiarism
         tokenizer/normalize_tokens.cpp
         tokenizer/normalize_tokens.h
         models/submission_features.h
-        models/submission_finally.h
 )
 
 target_include_directories(plagiarism PRIVATE

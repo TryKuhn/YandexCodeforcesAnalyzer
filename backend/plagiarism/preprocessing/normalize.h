@@ -2,4 +2,5 @@
 
 #include <string>
 
-std::string NormalizeCode(const std::string& code);
+std::string NormalizeForTokenizer(const std::string& code);
+std::string NormalizeForAST(const std::string& code);

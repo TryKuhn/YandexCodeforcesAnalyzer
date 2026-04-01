@@ -1,20 +1,21 @@
 #pragma once
-#include<string>
+
+#include <string>
 #include <vector>
 
 #include "token.h"
+#include "token_features.h"
+#include "../ast/ast_features.h"
 
 struct SubmissionData {
-    std::string rawCode;
+    std::string raw_code;
+    std::string ast_code;
+    std::string token_code;
 
-    std::string astCode;
-    std::string preprocessedCode;
+    std::vector<Token> tokens;
+    std::vector<Token> normalized_tokens;
+    std::vector<std::string> normalized_token_texts;
 
-    std::vector<Token> ppTokens;
-    std::vector<Token> normalizedPpTokens;
-    std::vector<std::string> normalizedPpTokenTexts;
-
-    TokenFeatures tokenFeatures;
-    AstFeatures astFeatures;
-    PreprocessorFeatures ppFeatures;
+    TokenFeatures token_features;
+    AstFeatures ast_features;
 };

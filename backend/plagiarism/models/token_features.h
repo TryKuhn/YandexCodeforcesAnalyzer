@@ -11,7 +11,7 @@ struct TokenFeatures {
     int keywords_cnt = 0;
     int identifiers_cnt = 0;
 
-    int unique_normalized_tokens = 0;
+    int unique_tokens = 0;
 
     std::unordered_map<std::string, int> freq;
     std::vector<std::string> grams3;

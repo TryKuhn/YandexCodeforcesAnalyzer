@@ -1,41 +1,24 @@
 #include "submission_builder.h"
 
-#include <string>
-#include <unordered_set>
-
-#include "normalize_tokens.h"
 #include "../preprocessing/normalize.h"
 #include "../tokenizer/tokenizer.h"
+#include "../tokenizer/normalize_tokens.h"
+#include "../tokenizer/token_features_builder.h"
+#include "../ast/ast_analyzer.h"
 
 SubmissionData BuildSubmissionData(const Submission& submission) {
     SubmissionData dat;
 
-    dat.normalizedCode = NormalizeCode(submission.rawCode);
+    dat.raw_code = submission.rawCode;
+    dat.ast_code = NormalizeForAST(dat.raw_code);
+    dat.token_code = NormalizeForTokenizer(dat.raw_code);
 
-    dat.rawTokens = TokenizerWithClang(dat.normalizedCode);
-    dat.normalizedTokens = NormalizeTokens(dat.rawTokens);
-    dat.normalizedTokenTexts = TextTokens(dat.normalizedTokens);
+    dat.tokens = TokenizerWithClang(dat.token_code);
+    dat.normalized_tokens = NormalizeTokens(dat.tokens);
+    dat.normalized_token_texts = TextTokens(dat.normalized_tokens);
+
+    dat.token_features = BuildTokenFeatures(dat.tokens, dat.normalized_tokens);
+    dat.ast_features = analyze_ast(dat.ast_code);
 
     return dat;
 }
-SubmissionFeatures BuildSubmissionFeatures(const SubmissionData& representation) {
-    SubmissionFeatures features;
-    std::unordered_set<std::string> unique_tokens;
-    for (auto& token : representation.normalizedTokens) {
-        if (token.type == TokenType::Literal) {
-            features.literals_cnt++;
-        } else if (token.type == TokenType::Identifier) {
-            features.identifiers_cnt++;
-        } else if (token.type == TokenType::Keyword) {
-            features.keywords_cnt++;
-        } else if (token.type == TokenType::Punctuation) {
-            features.punctuations_cnt++;
-        }
-
-        unique_tokens.insert(token.text);
-        features.tokens_cnt++;
-    }
-    features.unique_ids = unique_tokens.size();
-    return features;
-}
-
