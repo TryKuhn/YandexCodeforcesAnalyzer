@@ -1,4 +1,3 @@
-#pragma once
 
 #include "string_normalizer.h"
 

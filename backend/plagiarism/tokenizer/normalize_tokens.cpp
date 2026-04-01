@@ -1,6 +1,6 @@
 #include <unordered_set>
 
-#include "tokenizer.h"
+#include "normalize_tokens.h"
 
 const std::unordered_set<std::string> allowed_ids = {
     "std",

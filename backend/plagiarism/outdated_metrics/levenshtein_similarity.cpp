@@ -33,7 +33,7 @@ std::size_t CalculateLevenshteinDistance(const std::string& left,
                                   });
         }
 
-        previous = current;
+        std::swap(previous, current);
     }
 
     return previous[right.size()];

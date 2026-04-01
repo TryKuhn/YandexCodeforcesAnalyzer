@@ -113,8 +113,8 @@ double compute_ast_similarity(const SubmissionData& lft, const SubmissionData& r
     std::vector < std::string > lft_grams = build_ast_grams3(lft.ast_features.preorder_kinds);
     std::vector < std::string > rht_grams = build_ast_grams3(rht.ast_features.preorder_kinds);
 
-    double gramms3 = jaccard_score(lft_grams, rht_grams);
-    return 0.6 * count_score + 0.4 * gramms3;
+    double grams3 = jaccard_score(lft_grams, rht_grams);
+    return 0.6 * count_score + 0.4 * grams3;
     //PRELIMINARY formula
 
 }

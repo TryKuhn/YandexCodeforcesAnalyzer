@@ -1,9 +1,12 @@
+#pragma once
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <chrono>
 #include <string>
 #include <vector>
+#include <errno.h>
 
 bool WriteAll(int fd, const std::string& text);
 bool ReadAll(int fd, std::string& text);

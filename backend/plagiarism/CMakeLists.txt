@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(Clang REQUIRED CONFIG)
+
 add_executable(plagiarism
         main.cpp
 
@@ -38,4 +40,9 @@ target_include_directories(plagiarism PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/preprocessing
         ${CMAKE_CURRENT_SOURCE_DIR}/submission_builder
         ${CMAKE_CURRENT_SOURCE_DIR}/tokenizer
+        ${CLANG_INCLUDE_DIRS}
+)
+
+target_link_libraries(plagiarism PRIVATE
+        libclang
 )
