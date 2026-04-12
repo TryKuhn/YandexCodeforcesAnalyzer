@@ -5,7 +5,7 @@
 #include "line_endings.h"
 #include "lines.h"
 
-std::string NormalizerForTokenizer(const std::string& code) {
+std::string NormalizeForTokenizer(const std::string& code) {
     std::string result = NormalizeLineEndings(code);
     result = RemoveComments(result);
     result = NormalizeLines(result);
@@ -13,8 +13,10 @@ std::string NormalizerForTokenizer(const std::string& code) {
     return result;
 }
 
-std::string NormalizerForAST(const std::string& code) {
+std::string NormalizeForAST(const std::string& code) {
     std::string result = NormalizeLineEndings(code);
     result = RemoveComments(result);
+    result = NormalizeLines(result);
+    result = PreprocessCode(result);
     return result;
 }

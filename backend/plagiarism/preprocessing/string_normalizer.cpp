@@ -40,7 +40,7 @@ void StringNormalizer::ProcessStringLiteral() {
         flag_ = false;
     } else if (line_[i_] == '\\') {
         flag_ = true;
-    } else if (line_[i_] == '\'') {
+    } else if (line_[i_] == '"') {
         now_ = State::Normal;
     }
 }
@@ -64,8 +64,8 @@ void StringNormalizer::RemoveDoubleSpaces() {
             ProcessNormal();
         } else if (now_ == State::CharLiteral) {
             ProcessCharLiteral();
-        } else if (now_ == State::Normal) {
-            ProcessNormal();
+        } else if (now_ == State::StringLiteral) {
+            ProcessStringLiteral();
         }
     }
     line_ = result_;

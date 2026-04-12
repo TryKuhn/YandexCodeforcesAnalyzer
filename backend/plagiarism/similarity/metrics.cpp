@@ -1,32 +1,34 @@
 #include "metrics.h"
 
 #include <unordered_set>
-#include <bits/valarray_after.h>
+#include <cmath>
 
 double jaccard_score(
     const std::vector<std::string>& lft,
     const std::vector<std::string>& rht
 ) {
-    std::unordered_set<std::string> lft_set;
-    std::unordered_set<std::string> rht_set;
+    std::unordered_set<std::string> lft_set(lft.begin(), lft.end());
+    std::unordered_set<std::string> rht_set(rht.begin(), rht.end());
+
+    if (lft_set.empty() && rht_set.empty()) {
+        return 1.0;
+    }
 
     int intersec = 0;
-    for (const auto& tokens : lft) {
-        lft_set.insert(tokens);
-    }
-
-    for (const auto& tokens : rht) {
-        rht_set.insert(tokens);
-    }
-
-    for (const auto& tokens : lft_set) {
-        if (rht_set.find(tokens) != rht_set.end()) {
-            intersec++;
+    for (const auto& token : lft_set) {
+        if (rht_set.find(token) != rht_set.end()) {
+            ++intersec;
         }
-        lft_set.insert(tokens); // i want to save sets union in left_set
     }
 
-    return static_cast<double>(intersec) / static_cast<double>(lft_set.size());
+    std::size_t union_size = lft_set.size();
+    for (const auto& token : rht_set) {
+        if (lft_set.find(token) == lft_set.end()) {
+            ++union_size;
+        }
+    }
+
+    return static_cast<double>(intersec) / static_cast<double>(union_size);
 
 }
 
@@ -35,13 +37,14 @@ double cosine_similarity_score(
     const std::unordered_map<std::string, int>& rht
 ) {
     double lft_norm = 0, rht_norm = 0;
-    double sccalar = 0.0;
+    double scalar = 0.0;
 
     for (const auto& to : lft) {
         lft_norm += static_cast<double>(to.second) * static_cast<double>(to.second);
 
-        if (rht.count(to.first)) {
-            scalar += static_cast<double>(to.second) * static_cast<double>(rht[to.first]);
+        auto it = rht.find(to.first);
+        if (it != rht.end()) {
+            scalar += static_cast<double>(to.second) * static_cast<double>(it->second);
         }
     }
     for (const auto& to : rht) {

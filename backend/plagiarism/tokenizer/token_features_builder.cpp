@@ -24,7 +24,7 @@ TokenFeatures BuildTokenFeatures(const std::vector<Token>& raw_tokens,
     for (const auto& token : raw_tokens) {
         uniq.insert(token.text);
     }
-    for (size_t i = 0; i < normalized_tokens.size() - 2; i++) {
+    for (size_t i = 0; i + 2 < normalized_tokens.size(); i++) {
         features.grams3.push_back(
             normalized_tokens[i].text + "|" + normalized_tokens[i + 1].text + "|" + normalized_tokens[i + 2].text
         );
