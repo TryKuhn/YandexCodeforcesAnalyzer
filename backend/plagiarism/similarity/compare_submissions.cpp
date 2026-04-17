@@ -10,10 +10,12 @@
 static double compute_similarity_impl(const SubmissionData& lft, const SubmissionData& rht) {
     double token_similarity = compute_token_similarity(lft, rht);
     double ast_similarity = compute_ast_similarity(lft, rht);
+    double ir_similarity = compute_ir_similarity(lft, rht);
 
     bool has_ast = lft.ast_features.parse_ok && rht.ast_features.parse_ok;
+    bool has_ir = lft.ir_parse_ok && rht.ir_parse_ok;
 
-    return compute_overall_similarity(token_similarity, ast_similarity, has_ast);
+    return compute_overall_similarity(token_similarity, ast_similarity, has_ast, ir_similarity, has_ir);
 }
 
 

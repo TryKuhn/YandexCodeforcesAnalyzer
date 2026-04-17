@@ -2,6 +2,10 @@
 
 #include <unordered_set>
 
+static bool IsParenPunctuation(const Token& token) {
+    return token.type == TokenType::Punctuation && (token.text == "(" || token.text == ")");
+}
+
 TokenFeatures BuildTokenFeatures(const std::vector<Token>& raw_tokens,
                                  const std::vector<Token>& normalized_tokens) {
     TokenFeatures features;
@@ -19,16 +23,27 @@ TokenFeatures BuildTokenFeatures(const std::vector<Token>& raw_tokens,
         }
         features.freq[token.text]++;
     }
-    std::unordered_set<std::string> uniq;
 
+    std::unordered_set<std::string> uniq;
     for (const auto& token : raw_tokens) {
         uniq.insert(token.text);
     }
-    for (size_t i = 0; i + 2 < normalized_tokens.size(); i++) {
+
+    std::vector<std::string> grams_source;
+    grams_source.reserve(normalized_tokens.size());
+    for (const auto& token : normalized_tokens) {
+        if (IsParenPunctuation(token)) {
+            continue;
+        }
+        grams_source.push_back(token.text);
+    }
+
+    for (size_t i = 0; i + 2 < grams_source.size(); i++) {
         features.grams3.push_back(
-            normalized_tokens[i].text + "|" + normalized_tokens[i + 1].text + "|" + normalized_tokens[i + 2].text
+            grams_source[i] + "|" + grams_source[i + 1] + "|" + grams_source[i + 2]
         );
     }
+
     features.unique_tokens = static_cast<int>(uniq.size());
     return features;
 }

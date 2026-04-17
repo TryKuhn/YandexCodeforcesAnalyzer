@@ -12,18 +12,19 @@ static std::string ConvertCxStringToStdString(CXString s) {
 }
 
 static TokenType ConvertClangTokenKindToTokenType(CXTokenKind kind) {
-    switch (kind) {
-        case CXToken_Punctuation:
-            return TokenType::Punctuation;
-        case CXToken_Keyword:
-            return TokenType::Keyword;
-        case CXToken_Identifier:
-            return TokenType::Identifier;
-        case CXToken_Literal:
-            return TokenType::Literal;
-        default:
-            return TokenType::Unknown;
+    if (kind == CXToken_Punctuation) {
+        return TokenType::Punctuation;
     }
+    if (kind == CXToken_Keyword) {
+        return TokenType::Keyword;
+    }
+    if (kind == CXToken_Identifier) {
+        return TokenType::Identifier;
+    }
+    if (kind == CXToken_Literal) {
+        return TokenType::Literal;
+    }
+    return TokenType::Unknown;
 }
 
 static std::size_t GetTokenStartOffset(CXTranslationUnit tu, CXToken token) {

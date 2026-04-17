@@ -8,10 +8,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Clang REQUIRED CONFIG)
 find_package(Boost REQUIRED)
+find_package(pybind11 CONFIG QUIET)
 
-add_executable(plagiarism
-        main.cpp
-
+set(PLAGIARISM_CORE_SOURCES
         outdated_metrics/levenshtein_similarity.cpp
 
         preprocessing/comments.cpp
@@ -20,6 +19,7 @@ add_executable(plagiarism
         preprocessing/normalize.cpp
         preprocessing/string_normalizer.cpp
         preprocessing/cpp_preprocessor.cpp
+        preprocessing/llvm_ir_pipeline.cpp
 
         submission_builder/submission_builder.cpp
         submission_builder/submission_stages.cpp
@@ -30,25 +30,18 @@ add_executable(plagiarism
 
         similarity/compare_submissions.cpp
         similarity/metrics.cpp
-        ast/ast_analyzer.cpp
-
-        preprocessing/cpp_preprocessor.h
-        preprocessing/string_normalizer.h
-        tokenizer/tokenizer.h
-        tokenizer/normalize_tokens.h
-        models/token.h
-        models/submission_data.h
-        models/submission_features.h
-        models/similar_submission_pair.h
-        models/similarity_result.h
-        models/winnowing_features.h
-        similarity/winnowing.h
         similarity/winnowing.cpp
-        similarity/lsh.h
         similarity/lsh.cpp
+
+        ast/ast_analyzer.cpp
+        ast/ast_hashing.cpp
 )
 
-target_include_directories(plagiarism PRIVATE
+add_library(plagiarism_core STATIC
+        ${PLAGIARISM_CORE_SOURCES}
+)
+
+target_include_directories(plagiarism_core PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/metrics
         ${CMAKE_CURRENT_SOURCE_DIR}/models
@@ -59,7 +52,30 @@ target_include_directories(plagiarism PRIVATE
         ${CLANG_INCLUDE_DIRS}
 )
 
-target_link_libraries(plagiarism PRIVATE
+target_link_libraries(plagiarism_core PUBLIC
         libclang
         Boost::headers
 )
+
+set_target_properties(plagiarism_core PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+)
+
+add_executable(plagiarism
+        main.cpp
+)
+
+target_link_libraries(plagiarism PRIVATE
+        plagiarism_core
+)
+
+if(pybind11_FOUND)
+    pybind11_add_module(plagiarism_cpp
+            similarity/bindings.cpp
+    )
+
+    target_link_libraries(plagiarism_cpp PRIVATE
+            plagiarism_core
+    )
+endif()
+

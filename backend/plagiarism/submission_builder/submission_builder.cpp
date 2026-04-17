@@ -10,6 +10,8 @@ SubmissionData BuildSubmissionData(const Submission& submission) {
     dat.raw_code = submission.rawCode;
     dat.ast_code = BuildSubmissionAstCode(submission);
     dat.token_code = BuildSubmissionTokenCode(submission);
+    dat.ir_code = BuildSubmissionIrCode(dat.ast_code);
+    dat.ir_parse_ok = !dat.ir_code.empty();
 
     dat.tokens = BuildSubmissionTokens(dat.token_code);
     dat.normalized_tokens = BuildNormalizedSubmissionTokens(dat.tokens);
@@ -22,6 +24,10 @@ SubmissionData BuildSubmissionData(const Submission& submission) {
 
     dat.token_features = BuildSubmissionTokenFeatures(dat.tokens, dat.normalized_tokens);
     dat.ast_features = BuildSubmissionAstFeatures(dat.ast_code);
+
+    const AstTree ast_tree = BuildSubmissionAstTree(dat.ast_code);
+    dat.ast_subtree_hash_freq = BuildSubmissionAstSubtreeHashFreq(ast_tree);
+    dat.ast_normalized_sequence = BuildSubmissionAstNormalizedSequence(ast_tree);
 
     return dat;
 }
