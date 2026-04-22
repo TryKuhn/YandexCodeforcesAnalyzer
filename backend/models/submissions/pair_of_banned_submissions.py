@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from models.submissions.submission import Submission
 
 class PairOfBannedSubmissions(Base):
-    __tablename__ = 'pairs_of_banned_submissions'
+    __tablename__ = 'pair_of_banned_submissions'
 
     id: Mapped[int] = mapped_column(primary_key=True)
     contest_id: Mapped[int] = mapped_column(ForeignKey('contests.id'))
@@ -22,4 +22,11 @@ class PairOfBannedSubmissions(Base):
 
     contest: Mapped["Contest"] = relationship(back_populates='pairs_of_banned_submissions')
 
-    submissions: Mapped["Submission"] = relationship(back_populates='pair_of_banned_submissions')
+    first_submission: Mapped["Submission"] = relationship(
+        foreign_keys=[first_submission_id],
+        back_populates='banned_as_first'
+    )
+    second_submission: Mapped["Submission"] = relationship(
+        foreign_keys=[second_submission_id],
+        back_populates='banned_as_second'
+    )

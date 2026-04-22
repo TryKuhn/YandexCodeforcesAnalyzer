@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String
+from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from models.base import Base
@@ -16,12 +16,19 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
+    role_id: Mapped[int] = mapped_column(ForeignKey('roles.id'))
+
     login: Mapped[str] = mapped_column(String(50), unique=True)
     password: Mapped[str] = mapped_column(String(120))
     email: Mapped[str] = mapped_column(String(100))
 
     codeforces_api_key: Mapped[str | None] = mapped_column(String(100))
     codeforces_api_secret: Mapped[str | None] = mapped_column(String(100))
+
+    # codeforces_access_token: Mapped[str | None] = mapped_column(String(255))
+
+    polygon_api_key: Mapped[str | None] = mapped_column(String(100))
+    polygon_api_secret: Mapped[str | None] = mapped_column(String(100))
 
     yandex_access_token: Mapped[str | None] = mapped_column(String(255))
 
@@ -37,7 +44,4 @@ class User(Base):
         back_populates='user',
         cascade='all, delete-orphan'
     )
-    roles: Mapped[list['Role']] = relationship(
-        back_populates='user',
-        cascade='all, delete-orphan'
-    )
+    role: Mapped['Role'] = relationship(back_populates='user')
