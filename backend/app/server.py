@@ -16,8 +16,8 @@ from api.crypt import verify_token
 from api.user import contest_router
 from api.user.auth import auth_router
 from api.user.codeforces import codeforces_router
-from api.user.gpt import gpt_router
-from api.user.polygon.base_polygon import polygon_router
+# from api.user.gpt import gpt_router
+# from api.user.polygon.base_polygon import polygon_router
 from api.user.yandex import yandex_router
 from app.database import engine, Session
 from app.logging_config import setup_logging, get_logger
@@ -120,8 +120,8 @@ app.include_router(health_router, tags=["health"])
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(contest_router, prefix="/contests", tags=["contest"])
 app.include_router(codeforces_router, prefix="/codeforces", tags=["codeforces"])
-app.include_router(polygon_router, prefix="/polygon", tags=["polygon"])
-app.include_router(gpt_router, prefix="/ai", tags=["gpt"])
+# app.include_router(polygon_router, prefix="/polygon", tags=["polygon"])
+# app.include_router(gpt_router, prefix="/ai", tags=["gpt"])
 app.include_router(yandex_router, prefix="/yandex", tags=["yandex"])
 # app.include_router(user_router)
 # app.include_router(analytics_router)

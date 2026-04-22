@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <utility>
 #include <unordered_map>
+#include <iostream>
 
 std::uint64_t build_lsh_bucket_key(
     const std::vector<std::uint64_t>& signature,
@@ -41,6 +42,26 @@ std::vector<std::pair < int, int > > generate_lsh_candidate_pairs(
             buckets[bucket_key].push_back(to.submission_id);
         }
     }
+
+    std::cout << "\n--- LSH BUCKET STATS ---\n";
+    std::cout << "Total buckets: " << buckets.size() << "\n";
+    int buckets_size_1 = 0;
+    int buckets_size_small = 0; 
+    int buckets_size_huge = 0;  
+    int max_bucket_size = 0;
+    
+    for (const auto& [hashh, indexes] : buckets) {
+        max_bucket_size = std::max(max_bucket_size, (int)indexes.size());
+        if (indexes.size() == 1) buckets_size_1++;
+        else if (indexes.size() <= MAX_BUCKET_SIZE) buckets_size_small++;
+        else buckets_size_huge++;
+    }
+    
+    std::cout << "Buckets with 1 item: " << buckets_size_1 << "\n";
+    std::cout << "Buckets with 2 to " << MAX_BUCKET_SIZE << " items (processed): " << buckets_size_small << "\n";
+    std::cout << "Buckets with > " << MAX_BUCKET_SIZE << " items (ignored): " << buckets_size_huge << "\n";
+    std::cout << "Max bucket size: " << max_bucket_size << "\n";
+    std::cout << "------------------------\n";
 
     for (auto& [hashh, indexes] : buckets) {
         if (indexes.size() > MAX_BUCKET_SIZE) {
