@@ -10,7 +10,13 @@ SubmissionData BuildSubmissionData(const Submission& submission) {
     dat.raw_code = submission.rawCode;
     dat.ast_code = BuildSubmissionAstCode(submission);
     dat.token_code = BuildSubmissionTokenCode(submission);
-    dat.ir_code = BuildSubmissionIrCode(dat.ast_code);
+    // if (submission.language == ProgrammingLanguage::Cpp) {
+    //     dat.ir_code = BuildSubmissionIrCode(submission.rawCode);
+    //     dat.ir_parse_ok = !dat.ir_code.empty();
+    // } else {
+        dat.ir_code.clear();
+        dat.ir_parse_ok = false;
+    // }
     dat.ir_parse_ok = !dat.ir_code.empty();
 
     dat.tokens = BuildSubmissionTokens(dat.token_code);

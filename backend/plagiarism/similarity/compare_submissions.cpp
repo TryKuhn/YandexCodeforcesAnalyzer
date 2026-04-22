@@ -39,7 +39,8 @@ std::vector<SimilarSubmissionPair> compute_similarity_pairs(
     }
 
     const auto candidate_pairs = generate_lsh_candidate_pairs(prepared);
-    for (const auto& [left_id, right_id] : candidate_pairs) {
+    for (const auto& [left_id, right_id] : candidate_pairs)
+        {
         const auto left_it = id_to_index.find(left_id);
         const auto right_it = id_to_index.find(right_id);
         if (left_it == id_to_index.end() || right_it == id_to_index.end()) {
@@ -48,7 +49,15 @@ std::vector<SimilarSubmissionPair> compute_similarity_pairs(
 
         const std::size_t i = left_it->second;
         const std::size_t j = right_it->second;
+        if (submissions[i].participant == submissions[j].participant) {
+            continue;
+        }
 
+        if (!submissions[i].problem.empty() &&
+            !submissions[j].problem.empty() &&
+            submissions[i].problem != submissions[j].problem) {
+            continue;
+            }
         double similarity = compute_similarity_impl(prepared[i], prepared[j]);
         if (similarity < threshold) {
             continue;
@@ -57,8 +66,21 @@ std::vector<SimilarSubmissionPair> compute_similarity_pairs(
         result.push_back(SimilarSubmissionPair{
             submissions[i].id,
             submissions[j].id,
-            similarity * 100.0
+            similarity * 100.0,
+
+            submissions[i].participant,
+            submissions[j].participant,
+
+            submissions[i].problem,
+            submissions[j].problem,
+
+            submissions[i].file_name,
+            submissions[j].file_name,
+
+            submissions[i].source_path,
+            submissions[j].source_path
         });
+
     }
 
     std::sort(result.begin(), result.end(), [](const SimilarSubmissionPair& left, const SimilarSubmissionPair& right) {
