@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String
+from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from models.base import Base
@@ -15,11 +15,13 @@ class Participant(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+
     login: Mapped[str] = mapped_column(String(50))
     name: Mapped[str | None] = mapped_column(String(50))
 
-    rating: Mapped[float] = mapped_column()
+    rating: Mapped[float | None] = mapped_column()
 
     user: Mapped["User"] = relationship(back_populates='participants')
 
-    participant_of_contests: Mapped[list["ContestParticipant"]] = relationship(back_populates='participant')
+    contest_participants: Mapped[list["ContestParticipant"]] = relationship(back_populates='participant')

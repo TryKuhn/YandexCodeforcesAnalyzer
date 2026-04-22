@@ -16,17 +16,17 @@ class TaskResult(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     contest_participant_id: Mapped[int] = mapped_column(ForeignKey('contest_participants.id'))
-    task_id: Mapped[int] = mapped_column(ForeignKey('tasks.id'))
+    task_id: Mapped[str] = mapped_column(ForeignKey('tasks.id'))
 
-    score: Mapped[int | None] = mapped_column()
+    score: Mapped[float | None] = mapped_column()
     tries_count: Mapped[int | None] = mapped_column()
     verdict: Mapped[str] = mapped_column(String(50))
 
-    last_success_time: Mapped[datetime] = mapped_column()
+    last_success_time: Mapped[datetime | None] = mapped_column()
 
     banned: Mapped[bool] = mapped_column(default=False)
 
-    contest_participant: Mapped["ContestParticipant"] = relationship(back_populates='tasks_results')
+    task: Mapped['Task'] = relationship(back_populates='task_results')
+    contest_participant: Mapped['ContestParticipant'] = relationship(back_populates='tasks_results')
 
-    task: Mapped["Task"] = relationship(back_populates='task_results')
-    submissions: Mapped["Submission"] = relationship(back_populates='task_result')
+    submissions: Mapped[list['Submission']] = relationship(back_populates='task_result')

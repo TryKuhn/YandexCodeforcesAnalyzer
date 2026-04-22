@@ -16,4 +16,4 @@ class Role(Base):
 
     name: Mapped[str] = mapped_column(String(100))
 
-    user: Mapped[list['User']] = relationship(back_populates='roles')
+    user: Mapped[list['User']] = relationship(back_populates='role')

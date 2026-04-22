@@ -1,16 +1,11 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
-from settings import POSTGRES_URL
+from settings import settings
 
-engine = create_engine(POSTGRES_URL)
-Session = sessionmaker(bind=engine)
+engine = create_async_engine(settings.database_url)
+Session = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 
-def get_db():
-    db = Session()
-
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db():
+    async with Session() as session:
+        yield session
