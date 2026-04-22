@@ -20,6 +20,9 @@ import {ContestAnalytics} from "./pages/ContestAnalytics.tsx";
 import {AITasks} from "./pages/AITasks.tsx";
 import {ImportSubmissions} from "./pages/ImportSubmissions.tsx";
 import {SubmissionSource} from "./pages/SubmissionSource.tsx";
+import {PlagiarismReport} from "./pages/PlagiarismReport.tsx";
+import {PlagiarismComparison} from "./pages/PlagiarismComparation.tsx";
+import {PlagiarismSetup} from "./pages/PlagiarismSetup.tsx";
 
 function App() {
     const {isAuthenticated} = useAuthStore();
@@ -42,7 +45,10 @@ function App() {
                         <Route path="submissions" element={<ContestSubmissions/>}/>
                         <Route path="/contests/:id/submissions/:subId" element={<SubmissionSource />} />
                         <Route path="import-submissions" element={<ImportSubmissions/>}/>
-                        <Route path="analytics" element={<ContestAnalytics/>}/>
+                        <Route path="analytics" element={<ContestAnalytics/>} />
+                        <Route path="analytics/check" element={<PlagiarismSetup />} />
+                        <Route path="analytics/reports/:reportId" element={<PlagiarismReport />} />
+                        <Route path="analytics/compare/:pairId" element={<PlagiarismComparison />} />
                     </Route>
                     <Route path="submissions" element={<div>Страница посылок</div>}/>
                     <Route path="participants" element={<div>Страница участников</div>}/>
