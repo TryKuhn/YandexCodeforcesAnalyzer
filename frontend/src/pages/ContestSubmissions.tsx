@@ -19,11 +19,13 @@ export const ContestSubmissions = () => {
             case 'OK':
                 return 'text-green-500';
             case 'PARTIAL':
-                return 'text-yellow-500 dark:text-yellow-400'; // Желтый для частичных решений
+                return 'text-yellow-500 dark:text-yellow-400';
             case 'COMPILATION_ERROR':
-                return 'text-blue-500 dark:text-blue-400';    // Синий для ошибок компиляции
+                return 'text-blue-500 dark:text-blue-400';
+            case 'CompilationError':
+                return 'text-blue-500 dark:text-blue-400';
             default:
-                return 'text-red-500'; // Красный для всех остальных (WA, RE, TL и т.д.)
+                return 'text-red-500';
         }
     };
 
