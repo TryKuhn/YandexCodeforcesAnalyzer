@@ -11,7 +11,7 @@
 #include "../ast/ast_features.h"
 
 struct SubmissionData {
-    int submission_id = 0;
+    std::string submission_id;
 
     std::string raw_code;
     std::string ast_code;

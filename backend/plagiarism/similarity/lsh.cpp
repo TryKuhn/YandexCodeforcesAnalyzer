@@ -19,20 +19,20 @@ std::uint64_t build_lsh_bucket_key(
 }
 
 struct PairHash {
-    std::size_t operator()(const std::pair<int, int>& p) const noexcept {
+    std::size_t operator()(const std::pair<std::string, std::string>& p) const noexcept {
         std::size_t seed = 0;
         boost::hash_combine(seed, p.first);
         boost::hash_combine(seed, p.second);
         return seed;
     }
 };
-std::vector<std::pair < int, int > > generate_lsh_candidate_pairs(
+std::vector<std::pair < std::string, std::string > > generate_lsh_candidate_pairs(
     const std::vector<SubmissionData>& prepared
 ) {
-    std::vector < std:: pair < int, int > > candidates;
+    std::vector < std:: pair < std::string, std::string > > candidates;
 
-    std::unordered_map<std::uint64_t, std::vector<int>> buckets;
-    std::unordered_map<std::pair < int, int >, int, PairHash > in_one_bucket_cnt;
+    std::unordered_map<std::uint64_t, std::vector<std::string>> buckets;
+    std::unordered_map<std::pair < std::string, std::string >, int, PairHash > in_one_bucket_cnt;
     for (auto& to : prepared) {
         for (size_t band = 0; band < BANDS; band++) {
             std::uint64_t bucket_key = build_lsh_bucket_key(
@@ -69,7 +69,7 @@ std::vector<std::pair < int, int > > generate_lsh_candidate_pairs(
         }
         for (size_t i = 0; i < indexes.size(); i++) {
             for (size_t j = i + 1; j < indexes.size(); j++) {
-                std::pair < int, int > p = {std::min(indexes[i], indexes[j]), std::max(indexes[i], indexes[j])};
+                std::pair < std::string, std::string > p = {std::min(indexes[i], indexes[j]), std::max(indexes[i], indexes[j])};
                 in_one_bucket_cnt[p]++;
             }
         }

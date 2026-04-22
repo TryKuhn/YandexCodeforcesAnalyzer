@@ -32,7 +32,7 @@ std::vector<SimilarSubmissionPair> compute_similarity_pairs(
 
     std::vector<SimilarSubmissionPair> result;
 
-    std::unordered_map<int, std::size_t> id_to_index;
+    std::unordered_map<std::string, std::size_t> id_to_index;
     id_to_index.reserve(submissions.size());
     for (std::size_t i = 0; i < submissions.size(); ++i) {
         id_to_index[submissions[i].id] = i;
