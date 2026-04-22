@@ -104,7 +104,7 @@ std::vector<Submission> SubmissionLoader::load_from_directory(const std::string&
 
 std::vector<Submission> SubmissionLoader::load_problem_submissions(
     const std::string& root_dir,
-    const std::string& problem_letter
+    const std::vector<std::string>& problem_letters
 ) {
     std::vector<Submission> submissions;
 
@@ -119,13 +119,28 @@ std::vector<Submission> SubmissionLoader::load_problem_submissions(
         if (!user_entry.is_directory()) continue;
 
         const std::string participant = user_entry.path().filename().string();
-        std::string problem_path = (user_entry.path() / problem_letter).string();
-        if (fs::exists(problem_path) && fs::is_directory(problem_path)) {
-            load_submissions_from_directory(problem_path, participant, problem_letter, submissions, submission_id);
-            continue;
+        
+        for (const auto& file_entry : fs::directory_iterator(user_entry.path())) {
+            if (!file_entry.is_regular_file()) continue;
+            
+            std::string filename = file_entry.path().filename().string();
+            
+            for (const std::string& problem_letter : problem_letters) {
+                // Ищем префикс "B-" или "C-" и т.д.
+                if (filename.rfind(problem_letter + "-", 0) == 0) {
+                    if (!is_supported_source_file(file_entry.path())) break;
+                    
+                    Submission sub = SubmissionLoader::load_submission(submission_id, file_entry.path().string());
+                    sub.participant = participant;
+                    sub.problem = problem_letter;
+                    sub.file_name = filename;
+                    sub.source_path = file_entry.path().string();
+                    submissions.push_back(sub);
+                    ++submission_id;
+                    break;
+                }
+            }
         }
-
-        load_submissions_from_directory(user_entry.path(), participant, "", submissions, submission_id);
     }
 
     return submissions;

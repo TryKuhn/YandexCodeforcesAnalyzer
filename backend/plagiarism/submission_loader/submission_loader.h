@@ -11,7 +11,7 @@ public:
 
     static std::vector<Submission> load_problem_submissions(
         const std::string& root_dir,
-        const std::string& problem_letter
+        const std::vector<std::string>& problem_letters
     );
 
     static Submission load_submission(int id, const std::string& file_path);
