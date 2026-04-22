@@ -1,0 +1,24 @@
+#pragma once
+
+#include <string>
+#include <vector>
+#include "../models/submission.h"
+#include "../models/programming_language.h"
+
+class SubmissionLoader {
+public:
+    static std::vector<Submission> load_from_directory(const std::string& root_dir);
+
+    static std::vector<Submission> load_problem_submissions(
+        const std::string& root_dir,
+        const std::string& problem_letter
+    );
+
+    static Submission load_submission(int id, const std::string& file_path);
+
+private:
+    static ProgrammingLanguage detect_language(const std::string& file_path);
+
+    static std::string read_file_content(const std::string& file_path);
+};
+

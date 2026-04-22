@@ -35,6 +35,8 @@ set(PLAGIARISM_CORE_SOURCES
 
         ast/ast_analyzer.cpp
         ast/ast_hashing.cpp
+
+        submission_loader/submission_loader.cpp
 )
 
 add_library(plagiarism_core STATIC
