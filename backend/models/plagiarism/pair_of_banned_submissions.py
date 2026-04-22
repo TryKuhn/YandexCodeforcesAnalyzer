@@ -15,8 +15,8 @@ class PairOfBannedSubmissions(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     contest_id: Mapped[int] = mapped_column(ForeignKey('contests.id'))
 
-    first_submission_id: Mapped[int] = mapped_column(ForeignKey('submissions.id'))
-    second_submission_id: Mapped[int] = mapped_column(ForeignKey('submissions.id'))
+    first_submission_id: Mapped[str] = mapped_column(ForeignKey('submissions.id'))
+    second_submission_id: Mapped[str] = mapped_column(ForeignKey('submissions.id'))
 
     percentage: Mapped[float] = mapped_column()
 
