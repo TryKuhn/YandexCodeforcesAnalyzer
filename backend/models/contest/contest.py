@@ -9,7 +9,8 @@ from models.base import Base
 if TYPE_CHECKING:
     from models.contest.contest_participant import ContestParticipant
     from models.contest.task import Task
-    from models.submissions.pair_of_banned_submissions import PairOfBannedSubmissions
+    from models.plagiarism.pair_of_banned_submissions import PairOfBannedSubmissions
+    from models.plagiarism.plagiarism_report import PlagiarismReport
     from models.user.user import User
 
 class Contest(Base):
@@ -40,6 +41,11 @@ class Contest(Base):
         cascade='all, delete-orphan'
     )
     pairs_of_banned_submissions: Mapped[list["PairOfBannedSubmissions"]] = relationship(
+        back_populates='contest',
+        cascade='all, delete-orphan'
+    )
+
+    plagiarism_reports: Mapped[list["PlagiarismReport"]] = relationship(
         back_populates='contest',
         cascade='all, delete-orphan'
     )

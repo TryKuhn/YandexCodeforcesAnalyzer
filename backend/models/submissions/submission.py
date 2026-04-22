@@ -8,7 +8,7 @@ from models.base import Base
 
 if TYPE_CHECKING:
     from models.contest.task_result import TaskResult
-    from models.submissions.pair_of_banned_submissions import PairOfBannedSubmissions
+    from models.plagiarism.pair_of_banned_submissions import PairOfBannedSubmissions
 
 
 class Submission(Base):
