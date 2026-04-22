@@ -3,7 +3,7 @@
 #include "programming_language.h"
 
 struct Submission {
-    int id = 0;
+    std::string id;
     ProgrammingLanguage language = ProgrammingLanguage::Unknown;
     std::string rawCode;
     std::string participant;

@@ -19,7 +19,7 @@ std::uint64_t build_lsh_bucket_key(
     int rows_per_band = ROWS_PER_BAND
 );
 
-std::vector<std:: pair < int, int > > generate_lsh_candidate_pairs(
+std::vector<std:: pair < std::string, std::string > > generate_lsh_candidate_pairs(
     const std::vector<SubmissionData>& prepared
 );
 
