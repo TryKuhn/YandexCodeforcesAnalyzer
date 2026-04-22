@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, Field
 import re
 
 class UserRegister(BaseModel):
@@ -7,7 +7,8 @@ class UserRegister(BaseModel):
     email: EmailStr
 
     @field_validator('login')
-    def validate_login(self, value: str):
+    @classmethod
+    def validate_login(cls, value: str):
         if len(value) < 5:
             raise ValueError('Login length must contain at least 5 characters')
         if len(value) > 30:
@@ -20,7 +21,8 @@ class UserRegister(BaseModel):
         return value
 
     @field_validator('password')
-    def validate_password(self, value: str):
+    @classmethod
+    def validate_password(cls, value: str):
         if len(value) < 8:
             raise ValueError('Password length must contain at least 8 characters')
         if len(value) > 30:
@@ -31,7 +33,7 @@ class UserRegister(BaseModel):
             raise ValueError('Password must contain uppercase letters')
         if not re.search('[0-9]', value):
             raise ValueError('Password must contain numbers')
-        if not re.search('\.,<>_\?!@#\$%\^&\*\(\)', value):
+        if not re.search(r'[.,<>_?!@#$%^&*()]', value):
             raise ValueError('Password must contain special characters')
 
         return value
@@ -47,7 +49,7 @@ class Token(BaseModel):
     token_type: str
 
 class Authorization(BaseModel):
-    Authorization: str
+    Bearer: str
 
 class ChangePassword(BaseModel):
     old_password: str
@@ -55,7 +57,8 @@ class ChangePassword(BaseModel):
     confirm_password: str
 
     @field_validator('new_password')
-    def validate_password(self, value: str):
+    @classmethod
+    def validate_password(cls, value: str):
         if len(value) < 8:
             raise ValueError('Password length must contain at least 8 characters')
         if len(value) > 30:
@@ -66,7 +69,7 @@ class ChangePassword(BaseModel):
             raise ValueError('Password must contain uppercase letters')
         if not re.search('[0-9]', value):
             raise ValueError('Password must contain numbers')
-        if not re.search('\.,<>_\?!@#\$%\^&\*\(\)', value):
+        if not re.search(r'[.,<>_?!@#$%^&*()]', value):
             raise ValueError('Password must contain special characters')
 
         return value

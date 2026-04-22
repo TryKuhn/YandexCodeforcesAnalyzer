@@ -1,33 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import Depends, HTTPException, status
+from sqlalchemy import select, delete
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.crypt import hash_password, get_current_user
+from api.crypt import get_current_user
+from api.crypt.crypt_password import hash_token
 from api.pydantic_schemas import Token, Authorization
+from api.user.auth import auth_router
 from app.database import get_db
 from models import RefreshToken
 
-router = APIRouter()
+@auth_router.post('/logout')
+async def logout(payload: Token, db: AsyncSession = Depends(get_db)) -> dict:
+    refresh_hash = hash_token(payload.refresh_token)
 
-@router.post('/logout')
-async def logout(payload: Token, db: Session = Depends(get_db)) -> dict:
-    db_token = db.query(RefreshToken).filter_by(refresh_hash=hash_password(payload.refresh_token)).first()
+    db_token = await db.execute(select(RefreshToken).filter_by(refresh_hash=refresh_hash))
+    db_token = db_token.scalars().first()
+
     if not db_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid refresh token.'
         )
 
-    db.delete(db_token)
-    db.commit()
+    await db.delete(db_token)
+    await db.commit()
 
     return {'message': 'Successfully logged out.'}
 
 
-@router.post('/logout_all')
-async def logout_all(payload: Authorization, db: Session = Depends(get_db)) -> dict:
-    user_id = get_current_user(payload.Authorization)
+@auth_router.post('/logout_all')
+async def logout_all(user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+    await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
+    await db.commit()
 
-    db.query(RefreshToken).filter(RefreshToken.user_id == user_id).delete()
-    db.commit()
-
-    return {'message': 'Successfully logged all.'}
+    return {'message': 'Successfully logged all devices out.'}
