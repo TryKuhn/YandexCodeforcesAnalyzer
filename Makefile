@@ -1,73 +1,66 @@
-OS_NAME := $(shell uname -s | tr A-Z a-z)
-DOCKER_COMPOSE := $(shell command -v docker-compose 2> /dev/null || echo "docker compose")
-
-ifeq ($(OS_NAME),linux)
-	VENV_ACTIVATE = . .venv/bin/activate
-	VENV_PIP = .venv/bin/pip
-	PYTHON = python3
-else ifeq ($(OS_NAME),darwin)
-	VENV_ACTIVATE = . .venv/bin/activate
-	VENV_PIP = .venv/bin/pip
-	PYTHON = python3
-else
-	# Windows (Git Bash, WSL)
+ifeq ($(OS),Windows_NT)
+	DC_KIND := $(shell docker-compose version >nul 2>nul && echo v1 || echo v2)
 	VENV_ACTIVATE = . .venv/Scripts/activate
 	VENV_PIP = .venv/Scripts/pip
 	PYTHON = python
+else
+	DC_KIND := $(shell command -v docker-compose >/dev/null 2>&1 && echo v1 || echo v2)
+	VENV_ACTIVATE = . .venv/bin/activate
+	VENV_PIP = .venv/bin/pip
+	PYTHON = python3
 endif
 
-build:
-ifeq ($(OS_NAME),linux)
-	# Только Linux нуждается в установке системных пакетов
-	sudo apt update
-	sudo apt install python3-full -y
+ifeq ($(DC_KIND),v1)
+	DOCKER_COMPOSE := docker-compose
+else
+	DOCKER_COMPOSE := docker compose
 endif
-	# Общие для всех ОС действия
-	$(PYTHON) -m venv .venv
-	$(VENV_PIP) install --upgrade pip
-	$(VENV_PIP) install -r requirements.txt
-	docker build -t yandexcodeforcesanalyzer .
+
+up:
+	$(DOCKER_COMPOSE) up -d --build
+
+down:
+	$(DOCKER_COMPOSE) down
+
+logs.be:
+	$(DOCKER_COMPOSE) logs -f backend
+
+logs.fe:
+	$(DOCKER_COMPOSE) logs -f frontend
 
 lint:
-	$(DOCKER_COMPOSE) run --rm backend ruff check .
-	$(DOCKER_COMPOSE) run --rm backend mypy . --ignore-missing-imports --explicit-package-bases
+	$(DOCKER_COMPOSE) exec backend ruff check .
+	$(DOCKER_COMPOSE) exec backend mypy . --ignore-missing-imports --explicit-package-bases
 
 lint.fix:
-	$(DOCKER_COMPOSE) run --rm backend black .
-	$(DOCKER_COMPOSE) run --rm backend isort .
-	$(DOCKER_COMPOSE) run --rm backend ruff check . --fix
+	$(DOCKER_COMPOSE) exec backend black .
+	$(DOCKER_COMPOSE) exec backend isort .
+	$(DOCKER_COMPOSE) exec backend ruff check . --fix
 
 test:
-	$(DOCKER_COMPOSE) run --rm backend pytest backend/tests --cov=backend
+	$(DOCKER_COMPOSE) exec backend pytest backend/tests --cov=backend
 
 migrate:
-	$(DOCKER_COMPOSE) exec -T backend sh -c "alembic revision --autogenerate -m '$(msg)'"
+	$(DOCKER_COMPOSE) exec -T backend alembic revision --autogenerate -m "$(msg)"
 
 migrate.upgrade:
-	$(DOCKER_COMPOSE) exec -T backend sh -c "alembic upgrade head"
+	$(DOCKER_COMPOSE) exec -T backend alembic upgrade head
 
 migrate.downgrade:
-	$(DOCKER_COMPOSE) exec -T backend sh -c "alembic downgrade -1"
+	$(DOCKER_COMPOSE) exec -T backend alembic downgrade -1
 
 check.migrations:
 	$(DOCKER_COMPOSE) exec postgres sh -c 'psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "\\dt"'
 
 migrate.status:
-	$(DOCKER_COMPOSE) exec -T backend sh -c "alembic current"
-
-migrate.history:
-	$(DOCKER_COMPOSE) exec -T backend sh -c "alembic history"
+	$(DOCKER_COMPOSE) exec -T backend alembic current
 
 migrate.check:
-	$(DOCKER_COMPOSE) exec postgres sh -c 'psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "\\dt"'
-	$(DOCKER_COMPOSE) exec -T backend sh -c "alembic current"
+	$(MAKE) check.migrations
+	$(MAKE) migrate.status
 
-migrate.list:
-	$(DOCKER_COMPOSE) exec -T backend sh -c "ls -la backend/alembic/versions/"
-
-run:
-	$(DOCKER_COMPOSE) -f docker-compose.yml up -d
-	$(DOCKER_COMPOSE) logs -f backend
+db.shell:
+	$(DOCKER_COMPOSE) exec postgres sh -c 'psql -U $$POSTGRES_USER -d $$POSTGRES_DB'
 
 clean:
 	$(DOCKER_COMPOSE) down --rmi all --volumes --remove-orphans
