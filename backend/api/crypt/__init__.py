@@ -1,9 +1,10 @@
-from crypt_password import hash_password, verify_password
-from jwt_token import create_token, verify_token, get_current_user
+from api.crypt.crypt_password import hash_password, verify_password
+from api.crypt.jwt_token import create_token, verify_token, get_current_user, get_current_payload
 
 __all__ = [
     'create_token',
     'get_current_user',
+    'get_current_payload',
     'hash_password',
     'verify_password',
     'verify_token',
