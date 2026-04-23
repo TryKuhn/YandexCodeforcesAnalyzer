@@ -1,0 +1,51 @@
+import logging
+from time import time
+
+from aiohttp import ClientSession
+from fastapi import Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from yarl import URL
+
+from api.crypt import get_current_user
+from app.database import get_db
+from models import User
+from settings import settings
+
+from api.user.polygon.create_signature import create_signature
+from api.user.polygon.get_response import get_response
+
+logger = logging.getLogger(__name__)
+
+
+async def add_source(
+        problem_id: int,
+        name: str,
+        file: str,
+        user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    method_name = 'problem.saveFile'
+
+    user = await db.execute(select(User).filter_by(id=user_id))
+    user = user.scalars().first()
+
+    if not user.polygon_api_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Polygon API is not configured')
+
+    current_time_unix = int(time())
+
+    params = {
+        'apiKey': user.polygon_api_key,
+        'time': str(current_time_unix),
+        'type': 'source',
+        'problemId': str(problem_id),
+        'name': name,
+        'file': file,
+    }
+
+    signature = create_signature(method_name, params, user.polygon_api_secret)
+    params['apiSig'] = signature
+
+    url = URL(settings.POLYGON_HOST) / method_name
+
+    async with ClientSession() as client:
+        return await get_response(client, url, params)
