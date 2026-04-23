@@ -20,6 +20,7 @@ from app.database import engine, Session
 from app.logging_config import setup_logging, get_logger
 from app.middlewares.log_middleware import LoggingMiddleware
 from models import Role, RefreshToken
+from api.user.plagiarism import plagiarism_router
 
 LOG_LEVEL = logging.INFO
 LOG_TO_STDOUT = True
@@ -120,6 +121,7 @@ app.include_router(codeforces_router, prefix="/codeforces", tags=["codeforces"])
 # app.include_router(polygon_router, prefix="/polygon", tags=["polygon"])
 # app.include_router(gpt_router, prefix="/ai", tags=["gpt"])
 app.include_router(yandex_router, prefix="/yandex", tags=["yandex"])
+app.include_router(plagiarism_router, prefix="/analytics", tags=["plagiarism"])
 # app.include_router(user_router)
 # app.include_router(analytics_router)
 # app.include_router(data_router)

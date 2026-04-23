@@ -1,49 +1,46 @@
-#include<pybind11/pybind11.h>
-#include<pybind11/stl.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 #include "compare_submissions.h"
-#include<models/submission.h>
-
-#include<string>
-#include<vector>
+#include <models/submission.h>
+#include <models/similar_submission_pair.h>
 
 namespace py = pybind11;
 
-py::list compute_similarity_pairs_py(py::list submissions, double threshold) {
-    std::vector<Submission> subs;
-    for (const auto& item : submissions) {
-        subs.push_back(item.cast<Submission>());
-    }
-
-    const auto pairs = compute_similarity_pairs(subs, threshold);
-    py::list ret;
-    for (const auto& pair : pairs) {
-        py::dict d;
-        d["first_submission_id"] = pair.first_submission_id;
-        d["second_submission_id"] = pair.second_submission_id;
-        d["plagiarism_percent"] = pair.plagiarism_percent;
-
-        d["first_participant"] = pair.first_participant;
-        d["second_participant"] = pair.second_participant;
-
-        d["first_problem"] = pair.first_problem;
-        d["second_problem"] = pair.second_problem;
-
-        d["first_file_name"] = pair.first_file_name;
-        d["second_file_name"] = pair.second_file_name;
-
-        d["first_source_path"] = pair.first_source_path;
-        d["second_source_path"] = pair.second_source_path;
-
-        ret.append(d);
-    }
-    return ret;
-}
 PYBIND11_MODULE(plagiarism_cpp, m) {
-    m.doc() = "Python bindings for plagiarism";
-    m.def("compute_similarity_pairs",
-          &compute_similarity_pairs_py,
-          py::arg("submissions"),
-          py::arg("threshold"),
-          "Compute plagiarism similarity pairs" );
+    py::enum_<ProgrammingLanguage>(m, "ProgrammingLanguage")
+        .value("Cpp", ProgrammingLanguage::Cpp)
+        .value("Python", ProgrammingLanguage::Python)
+        .value("Unknown", ProgrammingLanguage::Unknown)
+        .export_values();
+
+    py::class_<Submission>(m, "Submission")
+        .def(py::init<>())
+        .def_readwrite("id", &Submission::id)
+        .def_readwrite("language", &Submission::language)
+        .def_readwrite("rawCode", &Submission::rawCode)
+        .def_readwrite("participant", &Submission::participant)
+        .def_readwrite("problem", &Submission::problem)
+        .def_readwrite("file_name", &Submission::file_name)
+        .def_readwrite("source_path", &Submission::source_path);
+
+    py::class_<SimilarSubmissionPair>(m, "SimilarSubmissionPair")
+        .def_readonly("first_submission_id", &SimilarSubmissionPair::first_submission_id)
+        .def_readonly("second_submission_id", &SimilarSubmissionPair::second_submission_id)
+        .def_readonly("plagiarism_percent", &SimilarSubmissionPair::plagiarism_percent)
+        .def_readonly("first_participant", &SimilarSubmissionPair::first_participant)
+        .def_readonly("second_participant", &SimilarSubmissionPair::second_participant)
+        .def_readonly("first_problem", &SimilarSubmissionPair::first_problem)
+        .def_readonly("second_problem", &SimilarSubmissionPair::second_problem)
+        .def_readonly("first_file_name", &SimilarSubmissionPair::first_file_name)
+        .def_readonly("second_file_name", &SimilarSubmissionPair::second_file_name)
+        .def_readonly("first_source_path", &SimilarSubmissionPair::first_source_path)
+        .def_readonly("second_source_path", &SimilarSubmissionPair::second_source_path);
+
+    m.def(
+        "compute_similarity_pairs",
+        &compute_similarity_pairs,
+        py::arg("submissions"),
+        py::arg("threshold")
+    );
 }
