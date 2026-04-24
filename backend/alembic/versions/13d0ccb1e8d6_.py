@@ -1,8 +1,8 @@
 """
 
-Revision ID: 3f1fdec7d630
+Revision ID: 13d0ccb1e8d6
 Revises: 
-Create Date: 2026-04-21 23:47:38.675796
+Create Date: 2026-04-23 08:24:15.736253
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '3f1fdec7d630'
+revision: str = '13d0ccb1e8d6'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -86,6 +86,15 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['participant_id'], ['participants.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('plagiarism_reports',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('contest_id', sa.Integer(), nullable=False),
+    sa.Column('status', sa.String(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('threshold', sa.Float(), nullable=False),
+    sa.ForeignKeyConstraint(['contest_id'], ['contests.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('tasks',
     sa.Column('id', sa.String(), nullable=False),
     sa.Column('contest_id', sa.Integer(), nullable=False),
@@ -119,6 +128,7 @@ def upgrade() -> None:
     sa.Column('score', sa.Float(), nullable=True),
     sa.Column('verdict', sa.String(length=50), nullable=False),
     sa.Column('run_time', sa.Interval(), nullable=False),
+    sa.Column('memory_bytes', sa.Integer(), nullable=False),
     sa.Column('banned', sa.Boolean(), nullable=False),
     sa.Column('source', sa.String(), nullable=True),
     sa.ForeignKeyConstraint(['contest_id'], ['contests.id'], ),
@@ -126,13 +136,15 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('pair_of_banned_submissions',
-    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('contest_id', sa.Integer(), nullable=False),
+    sa.Column('report_id', sa.Integer(), nullable=False),
     sa.Column('first_submission_id', sa.String(), nullable=False),
     sa.Column('second_submission_id', sa.String(), nullable=False),
     sa.Column('percentage', sa.Float(), nullable=False),
     sa.ForeignKeyConstraint(['contest_id'], ['contests.id'], ),
     sa.ForeignKeyConstraint(['first_submission_id'], ['submissions.id'], ),
+    sa.ForeignKeyConstraint(['report_id'], ['plagiarism_reports.id'], ),
     sa.ForeignKeyConstraint(['second_submission_id'], ['submissions.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -146,6 +158,7 @@ def downgrade() -> None:
     op.drop_table('submissions')
     op.drop_table('task_results')
     op.drop_table('tasks')
+    op.drop_table('plagiarism_reports')
     op.drop_table('contest_participants')
     op.drop_table('refresh_tokens')
     op.drop_table('participants')

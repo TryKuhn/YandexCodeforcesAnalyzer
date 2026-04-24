@@ -50,9 +50,7 @@ function App() {
                         <Route path="analytics/reports/:reportId" element={<PlagiarismReport />} />
                         <Route path="analytics/compare/:pairId" element={<PlagiarismComparison />} />
                     </Route>
-                    <Route path="submissions" element={<div>Страница посылок</div>}/>
                     <Route path="participants" element={<div>Страница участников</div>}/>
-                    <Route path="analytics" element={<div>Страница аналитики</div>}/>
                     <Route path="ai-tasks" element={<AITasks/>}/>
                     <Route path="profile" element={<Profile/>}/>
                     <Route path="yandex/callback" element={<YandexCallback/>}/>

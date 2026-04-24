@@ -18,6 +18,7 @@ __all__ = [
     "Task",
     "TaskResult",
     "PairOfBannedSubmissions",
+    "PlagiarismReport",
     "Submission",
     "Participant",
     "RefreshToken",

@@ -1,9 +1,14 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
-from models import Base
+from models.base import Base
+
+if TYPE_CHECKING:
+    from models.contest.contest import Contest
+    from models.plagiarism.pair_of_banned_submissions import PairOfBannedSubmissions
 
 
 class PlagiarismReport(Base):
@@ -14,7 +19,15 @@ class PlagiarismReport(Base):
     contest_id: Mapped[int] = mapped_column(ForeignKey('contests.id'))
 
     status: Mapped[str] = mapped_column(default="processing")  # "processing", "completed", "failed"
-    created_at: Mapped[datetime] = mapped_column(default=datetime.now().replace(tzinfo=None))
-    threshold: Mapped[float] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
-    contest = relationship(back_populates="plagiarism_reports")
+    threshold: Mapped[float] = mapped_column()
+    only_ok: Mapped[bool] = mapped_column()
+
+    contest: Mapped["Contest"] = relationship(back_populates="plagiarism_reports")
+
+    pairs: Mapped[list["PairOfBannedSubmissions"]] = relationship(
+        back_populates="report",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )

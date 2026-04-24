@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from api.crypt import get_current_user
 from app.database import get_db, Session
 from models import Contest, Submission
-from models.submissions.plagiarism_report import PlagiarismReport
-from models.submissions.pair_of_banned_submissions import PairOfBannedSubmissions
+from models.plagiarism.plagiarism_report import PlagiarismReport
+from models.plagiarism.pair_of_banned_submissions import PairOfBannedSubmissions
 from base64 import b64decode
 import plagiarism_cpp
 
@@ -48,7 +49,7 @@ async def get_contest_reports(
             'threshold': report.threshold,
             'only_ok': report.only_ok,
             'created_at': report.created_at,
-            'updated_at': report.updated_at,
+            'pairs_count': len(report.pairs)
         }
         for report in reports
     ]
@@ -79,6 +80,18 @@ async def get_report(
     )
     pairs = pairs.scalars().all()
 
+    result = await db.execute(
+        select(PlagiarismReport)
+        .options(
+            joinedload(PlagiarismReport.pairs)
+            .joinedload(PairOfBannedSubmissions.first_submission),
+            joinedload(PlagiarismReport.pairs)
+            .joinedload(PairOfBannedSubmissions.second_submission)
+        )
+        .filter_by(id=report_id)
+    )
+    report = result.scalars().first()
+
     return {
         'id': report.id,
         'contest_id': report.contest_id,
@@ -86,9 +99,12 @@ async def get_report(
         'pairs': [
             {
                 'id': pair.id,
-                'first_submission_id': pair.first_submission_id,
-                'second_submission_id': pair.second_submission_id,
-                'plagiarism_percent': pair.percentage,
+                'sub1': pair.first_submission_id,
+                'sub2': pair.second_submission_id,
+                'user1': pair.first_submission.participant_login,
+                'user2': pair.second_submission.participant_login,
+                'task_name': pair.first_submission.task_name,
+                'percent': round(pair.percentage, 2)
             }
             for pair in pairs
         ]
@@ -185,15 +201,13 @@ async def process_plagiarism_report(
             submissions = submissions_result.scalars().all()
 
             py_submissions = []
-            local_to_real_id = {}
 
-            local_id = 1
             for submission in submissions:
                 if not submission.source:
                     continue
 
                 py_sub = plagiarism_cpp.Submission()
-                py_sub.id = local_id
+                py_sub.id = str(submission.id)
                 py_sub.language = plagiarism_cpp.ProgrammingLanguage.Cpp
                 decoded_code = b64decode(submission.source).decode('utf-8')
                 py_sub.rawCode = decoded_code
@@ -201,21 +215,16 @@ async def process_plagiarism_report(
                 py_sub.problem = submission.task_name or ''
 
                 py_submissions.append(py_sub)
-                local_to_real_id[local_id] = submission.id
-                local_id += 1
 
             pairs = plagiarism_cpp.compute_similarity_pairs(py_submissions, threshold)
 
             for pair in pairs:
-                first_real_id = local_to_real_id[pair.first_submission_id]
-                second_real_id = local_to_real_id[pair.second_submission_id]
-
                 db.add(
                     PairOfBannedSubmissions(
                         contest_id=contest_id,
                         report_id=report_id,
-                        first_submission_id=first_real_id,
-                        second_submission_id=second_real_id,
+                        first_submission_id=str(pair['first_submission_id']),
+                        second_submission_id=str(pair['second_submission_id']),
                         percentage=pair.plagiarism_percent,
                     )
                 )
