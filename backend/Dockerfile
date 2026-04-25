@@ -3,6 +3,13 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
+    cmake \
+    python3-dev \
+    clang \
+    llvm-dev \
+    libclang-dev \
+    libboost-dev \
+    pybind11-dev \
     build-essential \
     libpq-dev \
     curl \
@@ -12,7 +19,13 @@ RUN mkdir -p /app/build
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
+RUN pip install --no-cache-dir pybind11
 COPY . .
-
+RUN mkdir -p /tmp/plag-build && \
+    cmake -S /app/plagiarism -B /tmp/plag-build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -Dpybind11_DIR="$(python -m pybind11 --cmakedir)" && \
+    cmake --build /tmp/plag-build --target plagiarism_cpp -j"$(nproc)" && \
+    find /tmp/plag-build -name "plagiarism_cpp*.so" -exec cp {} /usr/local/lib/python3.11/site-packages/ \; && \
+    ls -la /usr/local/lib/python3.11/site-packages/ | grep plagiarism_cpp
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.server:app --host 0.0.0.0 --port 8000 --reload"]

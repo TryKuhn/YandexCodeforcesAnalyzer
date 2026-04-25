@@ -17,8 +17,8 @@ class Participant(Base):
 
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
 
-    login: Mapped[str] = mapped_column(String(50))
-    name: Mapped[str | None] = mapped_column(String(50))
+    login: Mapped[str] = mapped_column(String(255))
+    name: Mapped[str | None] = mapped_column(String(255))
 
     rating: Mapped[float | None] = mapped_column()
 

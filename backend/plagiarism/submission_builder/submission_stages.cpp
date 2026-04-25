@@ -68,3 +68,7 @@ std::unordered_map<std::uint64_t, int> BuildSubmissionAstSubtreeHashFreq(
 std::vector<std::string> BuildSubmissionAstNormalizedSequence(const AstTree& tree) {
     return BuildAstNormalizedSequencePreorder(tree);
 }
+
+std::pair<AstFeatures, AstTree> BuildSubmissionAstAndFeatures(const std::string& ast_code) {
+    return analyze_and_build_ast(ast_code);
+}

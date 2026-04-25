@@ -27,6 +27,7 @@ TokenFeatures BuildSubmissionTokenFeatures(
 
 AstFeatures BuildSubmissionAstFeatures(const std::string& ast_code);
 AstTree BuildSubmissionAstTree(const std::string& ast_code);
+std::pair<AstFeatures, AstTree> BuildSubmissionAstAndFeatures(const std::string& ast_code);
 std::unordered_map<std::uint64_t, int> BuildSubmissionAstSubtreeHashFreq(
     const AstTree& tree,
     int min_subtree_size = 2

@@ -18,14 +18,20 @@ int main(int argc, char* argv[]) {
     }
 
     const std::string root_dir = argv[2];
-    const std::string problem = (argc > 3) ? argv[3] : "";
+    
+    std::vector<std::string> problems;
+    for (int i = 3; i < argc; ++i) {
+        problems.push_back(argv[i]);
+    }
 
     std::vector<Submission> submissions;
 
     std::cout << "Loading submissions from: " << root_dir << "\n";
-    if (!problem.empty()) {
-        std::cout << "Problem: " << problem << "\n";
-        submissions = SubmissionLoader::load_problem_submissions(root_dir, problem);
+    if (!problems.empty()) {
+        std::cout << "Problems: ";
+        for (const auto& p : problems) std::cout << p << " ";
+        std::cout << "\n";
+        submissions = SubmissionLoader::load_problem_submissions(root_dir, problems);
     } else {
         submissions = SubmissionLoader::load_from_directory(root_dir);
     }

@@ -420,3 +420,35 @@ AstTree build_ast_tree(const std::string& code) {
 
     return tree;
 }
+
+std::pair<AstFeatures, AstTree> analyze_and_build_ast(const std::string& code) {
+    AstFeatures features;
+    AstTree tree;
+
+    parsed_unit parsed = parse_code_to_unit(code);
+    if (parsed.translation_unit == nullptr) {
+        return {features, std::move(tree)};
+    }
+
+    features.parse_ok = true;
+    tree.parse_ok = true;
+
+    CXCursor root_cursor = clang_getTranslationUnitCursor(parsed.translation_unit);
+    tree.root = make_node(root_cursor, nullptr, 0);
+
+    traverse_data child_data;
+    child_data.parent = tree.root.get();
+    child_data.features = &features;
+    normalization_state normalization;
+    child_data.normalization = &normalization;
+    child_data.depth = 1;
+    
+    clang_visitChildren(root_cursor, for_kids, &child_data);
+
+    fill_subtree_size(tree.root.get());
+
+    clang_disposeTranslationUnit(parsed.translation_unit);
+    clang_disposeIndex(parsed.index);
+
+    return {features, std::move(tree)};
+}

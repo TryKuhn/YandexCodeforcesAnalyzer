@@ -29,9 +29,10 @@ SubmissionData BuildSubmissionData(const Submission& submission) {
     dat.winnowing_features.minhash_signature = build_minhash_signature(fingerprints);
 
     dat.token_features = BuildSubmissionTokenFeatures(dat.tokens, dat.normalized_tokens);
-    dat.ast_features = BuildSubmissionAstFeatures(dat.ast_code);
 
-    const AstTree ast_tree = BuildSubmissionAstTree(dat.ast_code);
+    auto ast_pair = BuildSubmissionAstAndFeatures(dat.ast_code);
+    dat.ast_features = std::move(ast_pair.first);
+    const AstTree ast_tree = std::move(ast_pair.second);
     dat.ast_subtree_hash_freq = BuildSubmissionAstSubtreeHashFreq(ast_tree);
     dat.ast_normalized_sequence = BuildSubmissionAstNormalizedSequence(ast_tree);
 

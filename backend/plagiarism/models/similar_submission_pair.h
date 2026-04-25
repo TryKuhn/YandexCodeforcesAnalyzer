@@ -3,8 +3,8 @@
 #include <string>
 
 struct SimilarSubmissionPair {
-    int first_submission_id = 0;
-    int second_submission_id = 0;
+    std::string first_submission_id;
+    std::string second_submission_id;
     double plagiarism_percent = 0.0;
 
     std::string first_participant;

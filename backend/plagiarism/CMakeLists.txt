@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(plagiarism LANGUAGES CXX)
+project(plagiarism LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

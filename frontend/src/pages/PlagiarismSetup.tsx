@@ -22,7 +22,7 @@ export const PlagiarismSetup = () => {
                 onlyOk: config.onlyOk
             });
             // Переходим на страницу отчета (report_id берем из ответа бека)
-            navigate(`/contests/${id}/analytics/reports/${res.data.report_id}`);
+            navigate(`/contests/${id}/analytics/reports/${res.data.reportId}`);
         } catch (e) {
             alert("Ошибка при запуске анализа");
         } finally {
