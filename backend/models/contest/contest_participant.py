@@ -18,8 +18,8 @@ class ContestParticipant(Base):
     contest_id: Mapped[int] = mapped_column(ForeignKey('contests.id'))
     participant_id: Mapped[int] = mapped_column(ForeignKey('participants.id'))
 
-    login: Mapped[str] = mapped_column(String(50))
-    name: Mapped[str | None] = mapped_column(String(50))
+    login: Mapped[str] = mapped_column(String(255))
+    name: Mapped[str | None] = mapped_column(String(255))
 
     score: Mapped[float | None] = mapped_column()
 

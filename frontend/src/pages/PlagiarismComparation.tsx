@@ -29,19 +29,17 @@ export const PlagiarismComparison = () => {
     if (!data) return null;
 
     const CodeHeader = ({user, subId}: any) => (
-        <div
-            className="p-4 bg-white dark:bg-slate-900 border-b dark:border-slate-800 flex items-center justify-between">
+        <div className="p-4 bg-white dark:bg-slate-900 border-b dark:border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-3">
-                <div
-                    className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center font-bold">
-                    {user[0].toUpperCase()}
+                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center font-bold">
+                    {user ? user[0].toUpperCase() : '?'}
                 </div>
                 <div>
-                    <p className="font-bold text-sm dark:text-white">{user}</p>
-                    <p className="text-[10px] text-slate-400">ID Посылки: {subId.split('_').pop()}</p>
+                    <p className="font-bold text-sm dark:text-white">{user || 'Неизвестный'}</p>
+                    <p className="text-[10px] text-slate-400">ID Посылки: {subId?.split('_').pop() || '—'}</p>
                 </div>
             </div>
-            <button onClick={() => navigator.clipboard.writeText(user)}
+            <button onClick={() => user && navigator.clipboard.writeText(user)}
                     className="p-2 text-slate-400 hover:text-blue-500">
                 <Copy size={16}/>
             </button>

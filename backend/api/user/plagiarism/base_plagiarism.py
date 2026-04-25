@@ -1,18 +1,19 @@
 import asyncio
+from base64 import b64decode
+from math import ceil
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import plagiarism_cpp
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from api.crypt import get_current_user
 from app.database import get_db, Session
 from models import Contest, Submission
-from models.plagiarism.plagiarism_report import PlagiarismReport
 from models.plagiarism.pair_of_banned_submissions import PairOfBannedSubmissions
-from base64 import b64decode
-import plagiarism_cpp
+from models.plagiarism.plagiarism_report import PlagiarismReport
 
 router = APIRouter()
 
@@ -24,9 +25,9 @@ class PlagiarismCheckBody(BaseModel):
 
 @router.get('/contests/{contest_id}/reports')
 async def get_contest_reports(
-    contest_id: int,
-    user_id: int = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+        contest_id: int,
+        user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
 ):
     contest = await db.execute(select(Contest).filter_by(id=contest_id, user_id=user_id))
     contest = contest.scalars().first()
@@ -56,11 +57,13 @@ async def get_contest_reports(
 
 
 @router.get('/reports/{report_id}')
-async def get_report(
-    report_id: int,
-    user_id: int = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
+async def get_report(report_id: int,
+                     page: int = Query(1, ge=1),
+                     per_page: int = Query(20, ge=10, le=100),
+                     task_name: str = Query(None),
+                     user_id: int = Depends(get_current_user),
+                     db: AsyncSession = Depends(get_db),
+                     ):
     report = await db.execute(select(PlagiarismReport).filter_by(id=report_id))
     report = report.scalars().first()
 
@@ -73,51 +76,90 @@ async def get_report(
     if not contest:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Contest not found')
 
-    pairs = await db.execute(
-        select(PairOfBannedSubmissions)
-        .filter_by(report_id=report_id)
-        .order_by(PairOfBannedSubmissions.percentage.desc())
-    )
-    pairs = pairs.scalars().all()
+    if report.status != 'completed':
+        return {
+            'id': report.id,
+            'contest_id': report.contest_id,
+            'status': report.status,
+            'pairs': [],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': 0,
+                'total_pages': 1
+            }
+        }
 
-    result = await db.execute(
-        select(PlagiarismReport)
-        .options(
-            joinedload(PlagiarismReport.pairs)
-            .joinedload(PairOfBannedSubmissions.first_submission),
-            joinedload(PlagiarismReport.pairs)
-            .joinedload(PairOfBannedSubmissions.second_submission)
-        )
-        .filter_by(id=report_id)
+    tasks = (
+        select(Submission.task_name)
+        .distinct()
+        .join(PairOfBannedSubmissions, PairOfBannedSubmissions.first_submission_id == Submission.id)
+        .filter(PairOfBannedSubmissions.report_id == report_id)
     )
-    report = result.scalars().first()
+    tasks = await db.execute(tasks)
+    available_tasks = [t for t in tasks.scalars().all() if t]
+
+    query = (
+        select(PairOfBannedSubmissions)
+        .options(
+            joinedload(PairOfBannedSubmissions.first_submission),
+            joinedload(PairOfBannedSubmissions.second_submission),
+        )
+        .filter_by(report_id=report_id)
+    )
+
+    if task_name:
+        query = query.join(
+            Submission,
+            PairOfBannedSubmissions.first_submission_id == Submission.id
+        ).filter(Submission.task_name == task_name)
+
+    total_query = select(func.count()).select_from(query.subquery())
+    total = await db.execute(total_query)
+    total = total.scalar() or 0
+
+    pairs_result = await db.execute(
+        query.order_by(PairOfBannedSubmissions.percentage.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    )
+    pairs = pairs_result.scalars().all()
 
     return {
         'id': report.id,
-        'contest_id': report.contest_id,
         'status': report.status,
+        'tasks': available_tasks,
         'pairs': [
             {
                 'id': pair.id,
-                'sub1': pair.first_submission_id,
-                'sub2': pair.second_submission_id,
                 'user1': pair.first_submission.participant_login,
                 'user2': pair.second_submission.participant_login,
                 'task_name': pair.first_submission.task_name,
                 'percent': round(pair.percentage, 2)
-            }
-            for pair in pairs
-        ]
+            } for pair in pairs
+        ],
+        'pagination': {
+            'page': page,
+            'total': total,
+            'total_pages': ceil(total / per_page) if total > 0 else 1
+        }
     }
 
 
 @router.get('/pairs/{pair_id}')
 async def get_pair(
-    pair_id: int,
-    user_id: int = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+        pair_id: int,
+        user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
 ):
-    pair = await db.execute(select(PairOfBannedSubmissions).filter_by(id=pair_id))
+    pair = await db.execute(
+        select(PairOfBannedSubmissions)
+        .options(
+            joinedload(PairOfBannedSubmissions.first_submission),
+            joinedload(PairOfBannedSubmissions.second_submission)
+        )
+        .filter_by(id=pair_id)
+    )
     pair = pair.scalars().first()
 
     if not pair:
@@ -129,29 +171,24 @@ async def get_pair(
     if not contest:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Contest not found')
 
-    first_submission = await db.execute(select(Submission).filter_by(id=pair.first_submission_id))
-    first_submission = first_submission.scalars().first()
-
-    second_submission = await db.execute(select(Submission).filter_by(id=pair.second_submission_id))
-    second_submission = second_submission.scalars().first()
-
-    if not first_submission or not second_submission:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Submission not found')
-
     return {
         'id': pair.id,
-        'plagiarism_percent': pair.percentage,
-        'code1': first_submission.source or '',
-        'code2': second_submission.source or '',
+        'percent': round(pair.percentage, 2),
+        'user1': pair.first_submission.participant_login,
+        'user2': pair.second_submission.participant_login,
+        'sub1_id': str(pair.first_submission_id),
+        'sub2_id': str(pair.second_submission_id),
+        'code1': pair.first_submission.source or '',
+        'code2': pair.second_submission.source or '',
     }
 
 
 @router.post('/contests/{contest_id}/check')
 async def run_plagiarism_check(
-    contest_id: int,
-    body: PlagiarismCheckBody,
-    user_id: int = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+        contest_id: int,
+        body: PlagiarismCheckBody,
+        user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
 ):
     contest = await db.execute(select(Contest).filter_by(id=contest_id, user_id=user_id))
     contest = contest.scalars().first()
@@ -185,10 +222,10 @@ async def run_plagiarism_check(
 
 
 async def process_plagiarism_report(
-    report_id: int,
-    contest_id: int,
-    threshold: float,
-    only_ok: bool,
+        report_id: int,
+        contest_id: int,
+        threshold: float,
+        only_ok: bool,
 ):
     async with Session() as db:
         try:
@@ -208,7 +245,7 @@ async def process_plagiarism_report(
 
                 py_sub = plagiarism_cpp.Submission()
                 py_sub.id = str(submission.id)
-                py_sub.language = plagiarism_cpp.ProgrammingLanguage.Cpp
+                py_sub.language = plagiarism_cpp.ProgrammingLanguage.Cpp  # TODO: support more languages
                 decoded_code = b64decode(submission.source).decode('utf-8')
                 py_sub.rawCode = decoded_code
                 py_sub.participant = submission.participant_login or ''
@@ -223,8 +260,8 @@ async def process_plagiarism_report(
                     PairOfBannedSubmissions(
                         contest_id=contest_id,
                         report_id=report_id,
-                        first_submission_id=str(pair['first_submission_id']),
-                        second_submission_id=str(pair['second_submission_id']),
+                        first_submission_id=str(pair.first_submission_id),
+                        second_submission_id=str(pair.second_submission_id),
                         percentage=pair.plagiarism_percent,
                     )
                 )

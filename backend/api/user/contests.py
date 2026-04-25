@@ -1,6 +1,8 @@
 from base64 import b64decode
+from math import ceil
 
 from fastapi import Depends, APIRouter, HTTPException, status
+from fastapi.params import Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +14,8 @@ contest_router = APIRouter()
 
 
 @contest_router.get('/list')
-async def get_user_contests(user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_user_contests(user_id: int = Depends(get_current_user),
+                            db: AsyncSession = Depends(get_db)):
     contests = await db.execute(select(Contest).filter_by(user_id=user_id).order_by(Contest.id.desc()))
     contests = contests.scalars().all()
 
@@ -31,7 +34,9 @@ async def get_user_contests(user_id: int = Depends(get_current_user), db: AsyncS
 
 
 @contest_router.get('/{contest_id}/overview')
-async def get_contest_overview(contest_id: int, db: AsyncSession = Depends(get_db)):
+async def get_contest_overview(contest_id: int,
+                               user_id: int = Depends(get_current_user),
+                               db: AsyncSession = Depends(get_db)):
     contest = await db.execute(select(Contest).filter_by(id=contest_id))
     contest = contest.scalars().first()
 
@@ -57,7 +62,12 @@ async def get_contest_overview(contest_id: int, db: AsyncSession = Depends(get_d
 
 
 @contest_router.get('/{contest_id}/table')
-async def get_contest_table(contest_id: int, db: AsyncSession = Depends(get_db)):
+async def get_contest_table(contest_id: int,
+                            page: int = Query(1, ge=1, description='Номер страницы'),
+                            per_page: int = Query(50, ge=10, le=200, description='Участников на странице'),
+                            search: str = Query("", description='Поиск по имени/логину'),
+                            user_id: int = Depends(get_current_user),
+                            db: AsyncSession = Depends(get_db)):
     contest = await db.execute(select(Contest).filter_by(id=contest_id))
     contest = contest.scalars().first()
 
@@ -69,21 +79,44 @@ async def get_contest_table(contest_id: int, db: AsyncSession = Depends(get_db))
     )
     tasks = tasks.scalars().all()
 
-    participants = await db.execute(
-        select(ContestParticipant)
-        .filter_by(contest_id=contest.id)
-        .order_by(ContestParticipant.score.desc())
-    )
+    participants_query = select(ContestParticipant).filter_by(contest_id=contest.id)
+    count_query = select(func.count(ContestParticipant.id)).filter_by(contest_id=contest.id)
+
+    if search.strip():
+        search_filter = f"%{search.strip().lower()}%"
+        participants_query = participants_query.filter(
+            (func.lower(ContestParticipant.name).like(search_filter)) |
+            (func.lower(ContestParticipant.login).like(search_filter))
+        )
+        count_query = count_query.filter(
+            (func.lower(ContestParticipant.name).like(search_filter)) |
+            (func.lower(ContestParticipant.login).like(search_filter))
+        )
+
+    total = await db.execute(count_query)
+    total = total.scalar()
+    total_pages = ceil(total / per_page) if total > 0 else 1
+
+    offset = (page - 1) * per_page
+    participants_query = participants_query.order_by(ContestParticipant.score.desc()).offset(offset).limit(per_page)
+
+    participants = await db.execute(participants_query)
     participants = participants.scalars().all()
+
+    participant_ids = [participant.id for participant in participants]
+
+    all_results = await db.execute(select(TaskResult).filter(TaskResult.contest_participant_id.in_(participant_ids)))
+    all_results = all_results.scalars().all()
+
+    results_by_participant: dict[int, dict[int, TaskResult]] = {}
+    for result in all_results:
+        if result.contest_participant_id not in results_by_participant:
+            results_by_participant[result.contest_participant_id] = {}
+        results_by_participant[result.contest_participant_id][result.task_id] = result
 
     rows = []
     for participant in participants:
-        results = await db.execute(
-            select(TaskResult).filter_by(contest_participant_id=participant.id)
-        )
-        results = results.scalars().all()
-
-        results_map = {result.task_id: result for result in results}
+        results_map = results_by_participant.get(participant.id, {})
 
         row_results = []
         for task in tasks:
@@ -107,31 +140,71 @@ async def get_contest_table(contest_id: int, db: AsyncSession = Depends(get_db))
         'contest_name': contest.name,
         'contest_type': contest.type,
         'tasks': [{'short_name': t.short_name, 'full_name': t.full_name} for t in tasks],
-        'rows': rows
+        'rows': rows,
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total': total,
+            'total_pages': total_pages
+        }
     }
 
 
 @contest_router.get('/{contest_id}/submissions_list')
-async def get_contest_submissions_headers(contest_id: int, user_id: int = Depends(get_current_user),
+async def get_contest_submissions_headers(contest_id: int,
+                                          page: int = Query(1, ge=1, description='Номер страницы'),
+                                          per_page: int = Query(50, ge=10, le=200,
+                                                                description='Участников на странице'),
+                                          search: str = Query("", description='Поиск по логину, задаче или ID'),
+                                          user_id: int = Depends(get_current_user),
                                           db: AsyncSession = Depends(get_db)):
-    submissions = await db.execute(select(Submission).filter_by(contest_id=contest_id).order_by(Submission.id.desc()))
+    submissions_query = select(Submission).filter_by(contest_id=contest_id)
+    count_query = select(func.count(Submission.id)).filter_by(contest_id=contest_id)
+
+    if search.strip():
+        search_filter = f"%{search.strip().lower()}%"
+        search_condition = (
+                (func.lower(Submission.participant_login).like(search_filter)) |
+                (func.lower(Submission.task_name).like(search_filter)) |
+                (func.cast(Submission.id, func.text()).like(search_filter))
+        )
+        submissions_query = submissions_query.filter(search_condition)
+        count_query = count_query.filter(search_condition)
+
+    total = await db.execute(count_query)
+    total = total.scalar()
+    total_pages = ceil(total / per_page) if total > 0 else 1
+
+    offset = (page - 1) * per_page
+    submissions_query = submissions_query.order_by(Submission.send_time.desc()).offset(offset).limit(per_page)
+
+    submissions = await db.execute(submissions_query)
     submissions = submissions.scalars().all()
 
-    return [
-        {
-            'id': submission.id,
-            'participant_login': submission.participant_login,
-            'task_name': submission.task_name,
-            'send_time': submission.send_time,
-            'language': submission.language,
-            'score': submission.score,
-            'verdict': submission.verdict,
-        } for submission in submissions
-    ]
+    return {
+        'items': [
+            {
+                'id': submission.id,
+                'participant_login': submission.participant_login,
+                'task_name': submission.task_name,
+                'send_time': submission.send_time,
+                'language': submission.language,
+                'score': submission.score,
+                'verdict': submission.verdict,
+            } for submission in submissions
+        ],
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total': total,
+            'total_pages': total_pages
+        }
+    }
 
 
 @contest_router.get('/submissions/{submission_id}/source')
-async def get_submission_source(submission_id: str, user_id: int = Depends(get_current_user),
+async def get_submission_source(submission_id: str,
+                                user_id: int = Depends(get_current_user),
                                 db: AsyncSession = Depends(get_db)):
     submission = await db.execute(select(Submission).filter_by(id=submission_id))
     submission = submission.scalars().first()
