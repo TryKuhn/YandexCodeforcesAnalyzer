@@ -15,12 +15,13 @@ from api.user.auth import auth_router
 from api.user.codeforces import codeforces_router
 from api.user.gpt import gpt_router
 from api.user.polygon.base_polygon import polygon_router
+from api.user.plagiarism import plagiarism_router
 from api.user.yandex import yandex_router
 from app.database import engine, Session
 from app.logging_config import setup_logging, get_logger
 from app.middlewares.log_middleware import LoggingMiddleware
 from models import Role, RefreshToken
-from api.user.plagiarism import plagiarism_router
+from settings import settings
 
 LOG_LEVEL = logging.INFO
 LOG_TO_STDOUT = True
@@ -85,7 +86,7 @@ app.add_middleware(LoggingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
