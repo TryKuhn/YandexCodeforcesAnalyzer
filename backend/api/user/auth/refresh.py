@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.crypt.crypt_password import hash_token
 from api.pydantic_schemas import Token
-from api.user.auth import auth_router, get_tokens
+from api.user.auth.base_auth import router as auth_router
+from api.user.auth.tokens import get_tokens
 from app.database import get_db
 from models import RefreshToken
 

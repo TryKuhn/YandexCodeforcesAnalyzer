@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.crypt import get_current_user
-from api.user.yandex import yandex_router
+from api.user.yandex.base_yandex import router as yandex_router
 from app.database import get_db
 from models import User
 
