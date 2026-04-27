@@ -1,25 +1,22 @@
 from time import time
 
 from aiohttp import ClientSession
-from fastapi import HTTPException, status, Depends
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
-from api.user.polygon import polygon_router, create_signature, get_response, add_source
+from api.user.polygon import create_signature, get_response, add_source
 
-from api.crypt import get_current_user
-from app.database import get_db
 from models import User
 from settings import settings
 
 
-@polygon_router.post('/set_checker')
 async def set_checker(
         problem_id: int,
         name: str,
         checker_file: str,
-        user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+        user_id: int, db: AsyncSession):
     method_name = 'problem.setChecker'
 
     user = await db.execute(select(User).filter_by(id=user_id))

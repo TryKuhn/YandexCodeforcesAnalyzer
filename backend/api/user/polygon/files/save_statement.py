@@ -2,19 +2,16 @@ from time import time
 from typing import Optional
 
 from aiohttp import ClientSession
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
-from api.crypt import get_current_user
-from api.user.polygon import polygon_router, create_signature, get_response
-from app.database import get_db
+from api.user.polygon import create_signature, get_response
 from models import User
 from settings import settings
 
 
-@polygon_router.post('/save_statement')
 async def save_statement(
         problem_id: int,
         lang: str,
@@ -26,7 +23,7 @@ async def save_statement(
         interaction: Optional[str],
         notes: str | None,
         tutorial: str | None,
-        user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+        user_id: int, db: AsyncSession
 ):
 
     user = await db.execute(select(User).filter_by(id=user_id))

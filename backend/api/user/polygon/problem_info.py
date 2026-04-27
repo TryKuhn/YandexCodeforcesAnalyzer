@@ -3,20 +3,17 @@ from time import time
 from aiohttp import ClientSession
 from sqlalchemy import select
 
-from api.user.polygon import create_signature, get_response, polygon_router
-from fastapi import Depends, status, HTTPException
+from api.user.polygon import create_signature, get_response
+from fastapi import status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
-from api.crypt import get_current_user
-from app.database import get_db
 from models import User
 from settings import settings
 
 
-@polygon_router.post('/problem_info')
 async def problem_info(problem_id: int,
-                       user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+                       user_id: int, db: AsyncSession
                        ):
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()

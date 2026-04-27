@@ -1,4 +1,6 @@
 from models.base import Base
+from models.ai.ai_session import AISession
+from models.ai.ai_generated_file import AIGeneratedFile
 from models.contest.contest import Contest
 from models.contest.contest_participant import ContestParticipant
 from models.contest.task import Task
@@ -13,6 +15,8 @@ from models.user.user import User
 
 __all__ = [
     "Base",
+    'AISession',
+    'AIGeneratedFile',
     "Contest",
     "ContestParticipant",
     "Task",

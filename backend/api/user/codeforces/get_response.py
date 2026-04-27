@@ -1,6 +1,7 @@
 import json
 
 from aiohttp import ClientSession
+from fastapi import HTTPException, status
 
 
 async def get_response(client: ClientSession, url, params):
@@ -11,7 +12,10 @@ async def get_response(client: ClientSession, url, params):
             result = json.loads(response_text)
         except json.JSONDecodeError:
             if response.status != 200:
-                raise RuntimeError(f'HTTP {response.status}: {response_text[:200]}')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f'HTTP {response.status}: {response_text[:200]}'
+                )
             else:
                 return {'message': response_text}
 
@@ -22,4 +26,4 @@ async def get_response(client: ClientSession, url, params):
                 return {'message': response_text}
 
         else:
-            raise RuntimeError(result['comment'])
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result['comment'])

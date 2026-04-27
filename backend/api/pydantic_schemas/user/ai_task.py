@@ -1,34 +1,52 @@
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
-
-class StatementData(BaseModel):
-    name: str
-    legend: str
-    input: str
-    output: str
-    notes: Optional[str] = None
-    tutorial: Optional[str] = None
+from typing import Optional, List, Dict, Any
 
 class AIStatementRequest(BaseModel):
     idea: str
-    history: Optional[List[Dict[str, str]]] = None
+    model: str
+    user_prompt: Optional[str] = ""
+    history: Optional[List[Dict]] = []
 
 class AIStatementResponse(BaseModel):
-    statement: StatementData
+    statement: Dict[str, Any]
     session_id: str
+    stage: str
 
 class RefineRequest(BaseModel):
     session_id: str
     feedback: str
 
-class ApproveUploadRequest(BaseModel):
+class ApproveStatementRequest(BaseModel):
+    """Пользователь одобряет условие → запускаем генерацию файлов"""
     session_id: str
-    problem_id: int
-    user_id: int
+
+class GenerateFilesResponse(BaseModel):
+    session_id: str
+    technical_data: Dict[str, Any]
+    stage: str
+
+class RefineFileRequest(BaseModel):
+    """Правка конкретного файла"""
+    session_id: str
+    file_key: str        # 'validator', 'generator', etc.
+    feedback: str        # что именно поправить
+
+class ApproveFilesRequest(BaseModel):
+    """Пользователь одобряет файлы → запускаем загрузку"""
+    session_id: str
+
+class ManualFixRequest(BaseModel):
+    """Пользователь вручную правит файл с ошибкой"""
+    session_id: str
+    file_key: str
+    new_content: str
 
 class UploadProgressResponse(BaseModel):
     status: str
+    stage: str
     current_step: Optional[str] = None
     error: Optional[str] = None
     retries: Optional[int] = None
-    tech_data: Optional[Dict[str, Any]] = None
+    technical_data: Optional[Dict] = None
+    upload_errors: Optional[Dict] = None
+    polygon_problem_id: Optional[int] = None

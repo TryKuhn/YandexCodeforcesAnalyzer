@@ -2,19 +2,15 @@ from time import time
 
 from aiohttp import ClientSession
 from fastapi import HTTPException, status
-from fastapi.params import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
-from api.crypt import get_current_user
-from api.user.polygon import polygon_router, create_signature, get_response
-from app.database import get_db
+from api.user.polygon import create_signature, get_response
 from models import User
 from settings import settings
 
 
-@polygon_router.post('/update_info')
 async def update_info(
         problem_id: int,
         input_file_name: str,
@@ -22,7 +18,7 @@ async def update_info(
         interactive: bool,
         time_limit: int,
         memory_limit: int,
-        user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+        user_id: int, db: AsyncSession
 ):
     method_name = 'problem.updateInfo'
 

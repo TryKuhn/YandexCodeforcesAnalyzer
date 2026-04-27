@@ -17,7 +17,8 @@ import {ContestLayout} from "./components/layout/ContestLayout.tsx";
 import {ContestOverview} from "./pages/ContestOverview.tsx";
 import {ContestSubmissions} from "./pages/ContestSubmissions.tsx";
 import {ContestAnalytics} from "./pages/ContestAnalytics.tsx";
-import {AITasks} from "./pages/AITasks.tsx";
+import {AITasksList} from "./pages/AITasksList.tsx";
+import {AITaskSession} from "./pages/AITaskSession.tsx";
 import {ImportSubmissions} from "./pages/ImportSubmissions.tsx";
 import {SubmissionSource} from "./pages/SubmissionSource.tsx";
 import {PlagiarismReport} from "./pages/PlagiarismReport.tsx";
@@ -51,7 +52,8 @@ function App() {
                         <Route path="analytics/compare/:pairId" element={<PlagiarismComparison />} />
                     </Route>
                     <Route path="participants" element={<div>Страница участников</div>}/>
-                    <Route path="ai-tasks" element={<AITasks/>}/>
+                    <Route path="ai-tasks" element={<AITasksList/>}/>
+                    <Route path="ai-tasks/:sessionId" element={<AITaskSession/>}/>
                     <Route path="profile" element={<Profile/>}/>
                     <Route path="yandex/callback" element={<YandexCallback/>}/>
                     <Route path="codeforces/callback" element={<CodeforcesCallback/>}/>

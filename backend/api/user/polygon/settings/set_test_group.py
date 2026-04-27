@@ -3,24 +3,21 @@ from time import time
 from aiohttp import ClientSession
 from sqlalchemy import select
 
-from api.user.polygon import polygon_router, create_signature, get_response
-from fastapi import Depends, HTTPException, status
+from api.user.polygon import create_signature, get_response
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
-from api.crypt import get_current_user
-from app.database import get_db
 from models import User
 from settings import settings
 
 
-@polygon_router.post('/set_test_group')
 async def set_test_group(
         problem_id: int,
         test_set: str,
         test_group: str,
         test_indicies: str,
-        user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+        user_id: int, db: AsyncSession
 ):
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
