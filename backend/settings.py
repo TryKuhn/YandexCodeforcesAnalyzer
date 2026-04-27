@@ -36,8 +36,6 @@ class Settings(BaseSettings):
     CODEFORCES_HOST: str = "https://codeforces.com/api"
     CF_CLIENT_ID: str
     CF_CLIENT_SECRET: str
-    CODEFORCES_TEST_KEY: str
-    CODEFORCES_TEST_SECRET: str
 
     # Polygon settings
     POLYGON_HOST: str = 'https://polygon.codeforces.com/api'

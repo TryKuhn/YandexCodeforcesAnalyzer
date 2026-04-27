@@ -1,0 +1,182 @@
+name: CI Workflow
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend-lint:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ./backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run ruff
+        run: ruff check .
+
+      - name: Run mypy
+        run: mypy . --ignore-missing-imports --explicit-package-bases
+
+  backend-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd "pg_isready -U test_user -d test_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      POSTGRES_DB: test_db
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_URL: postgresql+asyncpg://test_user:test_password@127.0.0.1:5432/test_db
+
+      SECRET_KEY: test-secret-key
+
+      CF_CLIENT_ID: test
+      CF_CLIENT_SECRET: test
+      YANDEX_CLIENT_ID: test
+      YANDEX_CLIENT_SECRET: test
+      OPENAI_API_KEY: test
+
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ./backend/requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            clang \
+            llvm-dev \
+            libclang-dev \
+            libboost-dev \
+            pybind11-dev \
+            build-essential \
+            libpq-dev
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pybind11 pytest-asyncio
+
+      - name: Build plagiarism extension
+        run: |
+          mkdir -p /tmp/plag-build
+          cmake -S ./plagiarism -B /tmp/plag-build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -Dpybind11_DIR="$(python -m pybind11 --cmakedir)"
+          cmake --build /tmp/plag-build --target plagiarism_cpp -j"$(nproc)"
+
+          SITE_PACKAGES=$(python - <<'PY'
+          import site
+          print(site.getsitepackages()[0])
+          PY
+          )
+
+          find /tmp/plag-build -name "plagiarism_cpp*.so" -exec cp {} "$SITE_PACKAGES" \;
+          ls -la "$SITE_PACKAGES" | grep plagiarism_cpp
+
+      - name: Run migrations
+        run: alembic upgrade head
+
+      - name: Run tests
+        run: pytest tests --cov=app --cov-report=xml --cov-report=term
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./backend/coverage.xml
+          flags: backend
+          fail_ci_if_error: false
+
+  frontend-build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ./frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        env:
+          VITE_API_URL: https://createmanager.duckdns.org/api
+        run: npm run build
+
+      - name: Check build output
+        run: test -f dist/index.html
+
+  all-checks-passed:
+    needs: [backend-lint, backend-test, frontend-build]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check if all jobs passed
+        run: |
+          if [[ "${{ needs.backend-lint.result }}" != "success" ]] || \
+             [[ "${{ needs.backend-test.result }}" != "success" ]] || \
+             [[ "${{ needs.frontend-build.result }}" != "success" ]]; then
+            echo "Some checks failed"
+            exit 1
+          fi
+          echo "All checks passed"

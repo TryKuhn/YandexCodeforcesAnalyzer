@@ -3,19 +3,19 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text, select, delete, update
 from sqlalchemy.exc import OperationalError
 
 from api import health_router
-from api.crypt import verify_token
+from api.crypt import verify_token, get_current_user
 from api.user import contest_router
 from api.user.auth import auth_router
 from api.user.codeforces import codeforces_router
 from api.user.gpt import gpt_router
-from api.user.polygon.base_polygon import polygon_router
 from api.user.plagiarism import plagiarism_router
+from api.user.polygon.base_polygon import polygon_router
 from api.user.yandex import yandex_router
 from app.database import engine, Session
 from app.logging_config import setup_logging, get_logger
@@ -115,11 +115,13 @@ async def update_last_seen_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-app.include_router(health_router, tags=["health"])
-app.include_router(auth_router, prefix="/auth", tags=["auth"])
-app.include_router(contest_router, prefix="/contests", tags=["contest"])
-app.include_router(codeforces_router, prefix="/codeforces", tags=["codeforces"])
-app.include_router(polygon_router, prefix="/polygon", tags=["polygon"])
-app.include_router(gpt_router, prefix="/ai", tags=["gpt"])
-app.include_router(yandex_router, prefix="/yandex", tags=["yandex"])
-app.include_router(plagiarism_router, prefix="/analytics", tags=["plagiarism"])
+app.include_router(health_router, prefix="/api", tags=["health"])
+app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
+app.include_router(contest_router, prefix="/api/contests", tags=["contest"], dependencies=[Depends(get_current_user)])
+app.include_router(codeforces_router, prefix="/api/codeforces", tags=["codeforces"],
+                   dependencies=[Depends(get_current_user)])
+app.include_router(polygon_router, prefix="/api/polygon", tags=["polygon"], dependencies=[Depends(get_current_user)])
+app.include_router(gpt_router, prefix="/api/ai", tags=["gpt"], dependencies=[Depends(get_current_user)])
+app.include_router(yandex_router, prefix="/api/yandex", tags=["yandex"], dependencies=[Depends(get_current_user)])
+app.include_router(plagiarism_router, prefix="/api/analytics", tags=["plagiarism"],
+                   dependencies=[Depends(get_current_user)])

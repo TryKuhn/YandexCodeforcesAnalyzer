@@ -1,14 +1,4 @@
-ifeq ($(OS),Windows_NT)
-	DC_KIND := $(shell docker-compose version >nul 2>nul && echo v1 || echo v2)
-	VENV_ACTIVATE = . .venv/Scripts/activate
-	VENV_PIP = .venv/Scripts/pip
-	PYTHON = python
-else
-	DC_KIND := $(shell command -v docker-compose >/dev/null 2>&1 && echo v1 || echo v2)
-	VENV_ACTIVATE = . .venv/bin/activate
-	VENV_PIP = .venv/bin/pip
-	PYTHON = python3
-endif
+DC_KIND := $(shell command -v docker-compose >/dev/null 2>&1 && echo v1 || echo v2)
 
 ifeq ($(DC_KIND),v1)
 	DOCKER_COMPOSE := docker-compose
@@ -16,52 +6,97 @@ else
 	DOCKER_COMPOSE := docker compose
 endif
 
-up:
-	$(DOCKER_COMPOSE) up -d --build
+DEV := docker-compose.dev.yml
+PROD := docker-compose.prod.yml
 
-down:
-	$(DOCKER_COMPOSE) down
+# Startup and shutdown
 
-logs.be:
-	$(DOCKER_COMPOSE) logs -f backend
+dev.up:
+	$(DOCKER_COMPOSE) -f $(DEV) up -d --build
 
-logs.fe:
-	$(DOCKER_COMPOSE) logs -f frontend
+prod.up:
+	$(DOCKER_COMPOSE) -f $(PROD) up -d --build
 
-lint:
-	$(DOCKER_COMPOSE) exec backend ruff check .
-	$(DOCKER_COMPOSE) exec backend mypy . --ignore-missing-imports --explicit-package-bases
+dev.down:
+	$(DOCKER_COMPOSE) -f $(DEV) down
 
-lint.fix:
-	$(DOCKER_COMPOSE) exec backend black .
-	$(DOCKER_COMPOSE) exec backend isort .
-	$(DOCKER_COMPOSE) exec backend ruff check . --fix
+prod.down:
+	$(DOCKER_COMPOSE) -f $(PROD) down
 
-test:
-	$(DOCKER_COMPOSE) exec backend pytest backend/tests --cov=backend
+prod.restart:
+	$(DOCKER_COMPOSE) -f $(PROD) restart
 
-migrate:
-	$(DOCKER_COMPOSE) exec -T backend alembic revision --autogenerate -m "$(msg)"
+# Logs
 
-migrate.upgrade:
-	$(DOCKER_COMPOSE) exec -T backend alembic upgrade head
+dev.logs:
+	$(DOCKER_COMPOSE) -f $(DEV) logs -f
 
-migrate.downgrade:
-	$(DOCKER_COMPOSE) exec -T backend alembic downgrade -1
+prod.logs:
+	$(DOCKER_COMPOSE) -f $(PROD) logs -f
 
-check.migrations:
-	$(DOCKER_COMPOSE) exec postgres sh -c 'psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "\\dt"'
+dev.logs.be:
+	$(DOCKER_COMPOSE) -f $(DEV) logs -f backend
 
-migrate.status:
-	$(DOCKER_COMPOSE) exec -T backend alembic current
+prod.logs.be:
+	$(DOCKER_COMPOSE) -f $(PROD) logs -f backend
 
-migrate.check:
-	$(MAKE) check.migrations
-	$(MAKE) migrate.status
+dev.logs.fe:
+	$(DOCKER_COMPOSE) -f $(DEV) logs -f frontend
 
-db.shell:
-	$(DOCKER_COMPOSE) exec postgres sh -c 'psql -U $$POSTGRES_USER -d $$POSTGRES_DB'
+prod.logs.fe:
+	$(DOCKER_COMPOSE) -f $(PROD) logs -f frontend
 
-clean:
-	$(DOCKER_COMPOSE) down --rmi all --volumes --remove-orphans
+prod.logs.caddy:
+	$(DOCKER_COMPOSE) -f $(PROD) logs -f caddy
+
+# Testing and linting
+
+dev.test:
+	$(DOCKER_COMPOSE) -f $(DEV) exec backend pytest tests --cov=backend
+
+dev.lint:
+	$(DOCKER_COMPOSE) -f $(DEV) exec backend ruff check .
+	$(DOCKER_COMPOSE) -f $(DEV) exec backend mypy . --ignore-missing-imports --explicit-package-bases
+
+dev.lint.fix:
+	$(DOCKER_COMPOSE) -f $(DEV) exec backend black .
+	$(DOCKER_COMPOSE) -f $(DEV) exec backend isort .
+	$(DOCKER_COMPOSE) -f $(DEV) exec backend ruff check . --fix
+
+# Migrations
+
+dev.migrate:
+	$(DOCKER_COMPOSE) -f $(DEV) exec -T backend alembic revision --autogenerate -m "$(msg)"
+
+dev.migrate.upgrade:
+	$(DOCKER_COMPOSE) -f $(DEV) exec -T backend alembic upgrade head
+
+dev.migrate.downgrade:
+	$(DOCKER_COMPOSE) -f $(DEV) exec -T backend alembic downgrade -1
+
+prod.migrate.downgrade:
+	$(DOCKER_COMPOSE) -f $(PROD) exec -T backend alembic downgrade -1
+
+dev.migrate.check:
+	$(DOCKER_COMPOSE) -f $(DEV) exec postgres sh -c 'psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "\\dt"'
+	$(DOCKER_COMPOSE) -f $(DEV) exec -T backend alembic current
+
+prod.migrate.check:
+	$(DOCKER_COMPOSE) -f $(PROD) exec postgres sh -c 'psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "\\dt"'
+	$(DOCKER_COMPOSE) -f $(PROD) exec -T backend alembic current
+
+# Database shell
+
+dev.db.shell:
+	$(DOCKER_COMPOSE) -f $(DEV) exec postgres sh -c 'psql -U $$POSTGRES_USER -d $$POSTGRES_DB'
+
+prod.db.shell:
+	$(DOCKER_COMPOSE) -f $(PROD) exec postgres sh -c 'psql -U $$POSTGRES_USER -d $$POSTGRES_DB'
+
+# Cleanup
+dev.clean:
+	$(DOCKER_COMPOSE) -f $(DEV) down --rmi all --volumes --remove-orphans
 	docker system prune -af --volumes
+
+prod.clean:
+	$(DOCKER_COMPOSE) -f $(PROD) down --rmi all --volumes --remove-orphans
