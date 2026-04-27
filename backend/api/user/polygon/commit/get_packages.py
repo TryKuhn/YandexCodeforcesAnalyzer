@@ -1,4 +1,3 @@
-import logging
 from time import time
 
 from aiohttp import ClientSession
@@ -7,21 +6,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
+from api.user.polygon import create_signature, get_response
 from models import User
 from settings import settings
 
-from api.user.polygon.create_signature import create_signature
-from api.user.polygon.get_response import get_response
 
-logger = logging.getLogger(__name__)
-
-
-async def add_source(
-        problem_id: int,
-        name: str,
-        file: str,
-        user_id: int, db: AsyncSession):
-    method_name = 'problem.saveFile'
+async def get_packages(problem_id: int, user_id: int, db: AsyncSession):
+    method_name = 'problem.packages'
 
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
@@ -34,10 +25,7 @@ async def add_source(
     params = {
         'apiKey': user.polygon_api_key,
         'time': str(current_time_unix),
-        'type': 'source',
         'problemId': str(problem_id),
-        'name': name,
-        'file': file,
     }
 
     signature = create_signature(method_name, params, user.polygon_api_secret)
@@ -45,5 +33,5 @@ async def add_source(
 
     url = URL(settings.POLYGON_HOST) / method_name
 
-    async with ClientSession() as client:
-        return await get_response(client, url, params)
+    async with ClientSession() as session:
+        return await get_response(session, url, params)

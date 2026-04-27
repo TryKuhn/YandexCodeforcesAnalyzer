@@ -1,8 +1,8 @@
 """
 
-Revision ID: 13d0ccb1e8d6
+Revision ID: 240bb27e187a
 Revises: 
-Create Date: 2026-04-23 08:24:15.736253
+Create Date: 2026-04-26 10:32:19.900584
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '13d0ccb1e8d6'
+revision: str = '240bb27e187a'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -41,6 +41,26 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('login')
     )
+    op.create_table('ai_sessions',
+    sa.Column('id', sa.String(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('model', sa.String(), nullable=False),
+    sa.Column('system_prompt', sa.Text(), nullable=False),
+    sa.Column('history', sa.JSON(), nullable=False),
+    sa.Column('statement', sa.JSON(), nullable=True),
+    sa.Column('technical_data', sa.JSON(), nullable=True),
+    sa.Column('progress', sa.JSON(), nullable=True),
+    sa.Column('stage', sa.String(), nullable=False),
+    sa.Column('polygon_problem_id', sa.Integer(), nullable=True),
+    sa.Column('package_id', sa.Integer(), nullable=True),
+    sa.Column('upload_errors', sa.JSON(), nullable=True),
+    sa.Column('ai_fix_attempts', sa.JSON(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_ai_sessions_id'), 'ai_sessions', ['id'], unique=False)
     op.create_table('contests',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
@@ -57,8 +77,8 @@ def upgrade() -> None:
     op.create_table('participants',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('login', sa.String(length=50), nullable=False),
-    sa.Column('name', sa.String(length=50), nullable=True),
+    sa.Column('login', sa.String(length=255), nullable=False),
+    sa.Column('name', sa.String(length=255), nullable=True),
     sa.Column('rating', sa.Float(), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -75,12 +95,21 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('refresh_hash')
     )
+    op.create_table('ai_generated_files',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('session_id', sa.String(), nullable=False),
+    sa.Column('filename', sa.String(), nullable=False),
+    sa.Column('content', sa.Text(), nullable=False),
+    sa.Column('file_type', sa.String(), nullable=False),
+    sa.ForeignKeyConstraint(['session_id'], ['ai_sessions.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('contest_participants',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('contest_id', sa.Integer(), nullable=False),
     sa.Column('participant_id', sa.Integer(), nullable=False),
-    sa.Column('login', sa.String(length=50), nullable=False),
-    sa.Column('name', sa.String(length=50), nullable=True),
+    sa.Column('login', sa.String(length=255), nullable=False),
+    sa.Column('name', sa.String(length=255), nullable=True),
     sa.Column('score', sa.Float(), nullable=True),
     sa.ForeignKeyConstraint(['contest_id'], ['contests.id'], ),
     sa.ForeignKeyConstraint(['participant_id'], ['participants.id'], ),
@@ -92,6 +121,7 @@ def upgrade() -> None:
     sa.Column('status', sa.String(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('threshold', sa.Float(), nullable=False),
+    sa.Column('only_ok', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['contest_id'], ['contests.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -160,9 +190,12 @@ def downgrade() -> None:
     op.drop_table('tasks')
     op.drop_table('plagiarism_reports')
     op.drop_table('contest_participants')
+    op.drop_table('ai_generated_files')
     op.drop_table('refresh_tokens')
     op.drop_table('participants')
     op.drop_table('contests')
+    op.drop_index(op.f('ix_ai_sessions_id'), table_name='ai_sessions')
+    op.drop_table('ai_sessions')
     op.drop_table('users')
     op.drop_table('roles')
     # ### end Alembic commands ###

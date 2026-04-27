@@ -6,23 +6,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
-from api.user.polygon.base_polygon import polygon_router
 from api.user.polygon.files.gen.add_source_file import add_source
 from api.user.polygon.create_signature import create_signature
 from api.user.polygon.get_response import get_response
 
-from api.crypt import get_current_user
-from app.database import get_db
 from models import User
 from settings import settings
 
 
-@polygon_router.post('/set_validator')
 async def set_validator(
         problem_id: int,
         name: str,
         validator_file: str,
-        user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+        user_id: int, db: AsyncSession
 ):
 
     user = await db.execute(select(User).filter_by(id=user_id))
