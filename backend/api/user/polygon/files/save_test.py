@@ -6,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
-from api.user.polygon import create_signature, get_response
+from api.user.polygon.create_signature import create_signature
+from api.user.polygon.get_response import get_response
 from models import User
 from settings import settings
 

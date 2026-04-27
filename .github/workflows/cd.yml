@@ -81,6 +81,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
+          command_timeout: 30m
           envs: GHCR_USERNAME,GHCR_TOKEN,IMAGE_TAG
           script: |
             set -e
@@ -115,6 +116,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
+          command_timeout: 10m
           script: |
             set -e
 
@@ -126,17 +128,36 @@ jobs:
               DC="docker compose"
             fi
 
-            echo "Checking health..."
-            for i in $(seq 1 12); do
-              if $DC -f docker-compose.prod.yml exec -T backend \
-                  python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" \
-                  > /dev/null 2>&1; then
+            BACKEND_CID=$($DC -f docker-compose.prod.yml ps -q backend)
+
+            if [ -z "$BACKEND_CID" ]; then
+              echo "Backend container not found!"
+              $DC -f docker-compose.prod.yml ps
+              exit 1
+            fi
+
+            echo "Waiting for backend to become healthy..."
+            for i in $(seq 1 36); do
+              STATUS=$(docker inspect \
+                --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                "$BACKEND_CID")
+              echo "Attempt $i/36: backend status = $STATUS"
+
+              if [ "$STATUS" = "healthy" ]; then
                 echo "Backend is healthy!"
                 exit 0
               fi
-              echo "Attempt $i/12 failed, retrying in 5s..."
+
+              if [ "$STATUS" = "exited" ] || [ "$STATUS" = "dead" ]; then
+                echo "Backend container crashed!"
+                $DC -f docker-compose.prod.yml logs --tail=100 backend postgres
+                exit 1
+              fi
+
               sleep 5
             done
 
-            echo "Backend health check failed after 60s"
+            echo "Backend did not become healthy after 3 minutes"
+            $DC -f docker-compose.prod.yml ps
+            $DC -f docker-compose.prod.yml logs --tail=100 backend postgres caddy
             exit 1
