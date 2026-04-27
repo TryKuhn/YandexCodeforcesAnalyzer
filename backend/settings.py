@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     # General settings
     DEFAULT_PAGE_SIZE: int = 100
 
+    # CORS settings
+    CORS_ORIGINS: str = "http://localhost:5173"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
     # JWT settings
     ALGORITHM: str = "HS256"
     SECRET_KEY: str
