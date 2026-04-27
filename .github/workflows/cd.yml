@@ -1,4 +1,4 @@
-name: CD - Deploy to Production
+name: CD - Build and Deploy to Production
 
 on:
   workflow_run:
@@ -8,9 +8,16 @@ on:
 
 permissions:
   contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/trykuhn/yandexcodeforcesanalyzer-backend
+  FRONTEND_IMAGE: ghcr.io/trykuhn/yandexcodeforcesanalyzer-frontend
+  IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
 
 jobs:
-  deploy:
+  build-and-push:
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
@@ -18,31 +25,87 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha,scope=backend-prod
+          cache-to: type=gha,mode=max,scope=backend-prod
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha,scope=frontend-prod
+          cache-to: type=gha,mode=max,scope=frontend-prod
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
+          envs: GHCR_USERNAME,GHCR_TOKEN,IMAGE_TAG
           script: |
             set -e
 
             cd ~/YandexCodeforcesAnalyzer
 
-            echo "Pulling latest changes..."
+            echo "Pulling latest compose/config changes..."
             git fetch origin main
             git reset --hard origin/main
 
-            echo "Rebuilding containers..."
-            make prod.down 2>/dev/null || echo "Nothing to stop"
-            make prod.up
+            echo "Logging into GHCR..."
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
 
-            echo "Cleaning up old images..."
-            docker image prune -af
+            export IMAGE_TAG="$IMAGE_TAG"
+
+            echo "Pulling new images..."
+            docker compose -f docker-compose.prod.yml pull backend frontend
+
+            echo "Restarting services..."
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            echo "Cleaning dangling images..."
+            docker image prune -f
 
             echo "Deployment completed!"
-            docker ps --format "table {{.Names}}\t{{.Status}}"
+            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
 
       - name: Health check
         uses: appleboy/ssh-action@v1.0.3
@@ -63,7 +126,6 @@ jobs:
             fi
 
             echo "Checking health..."
-            echo "Waiting for backend..."
             for i in $(seq 1 12); do
               if $DC -f docker-compose.prod.yml exec -T backend \
                   curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
@@ -73,5 +135,6 @@ jobs:
               echo "Attempt $i/12 failed, retrying in 5s..."
               sleep 5
             done
+
             echo "Backend health check failed after 60s"
             exit 1
