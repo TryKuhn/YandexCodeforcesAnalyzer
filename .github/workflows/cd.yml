@@ -97,7 +97,7 @@ jobs:
             export IMAGE_TAG="$IMAGE_TAG"
 
             echo "Pulling new images..."
-            docker compose -f docker-compose.prod.yml pull backend frontend
+            ddocker compose -f docker-compose.prod.yml pull --quiet backend frontend
 
             echo "Restarting services..."
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
