@@ -14,7 +14,7 @@ prod.up:
 	IMAGE_TAG=$(IMAGE_TAG) $(DOCKER_COMPOSE) -f $(PROD) up -d --remove-orphans
 
 prod.pull:
-	IMAGE_TAG=$(IMAGE_TAG) $(DOCKER_COMPOSE) -f $(PROD) pull backend frontend
+	IMAGE_TAG=$(IMAGE_TAG) $(DOCKER_COMPOSE) -f $(PROD) pull --quiet backend frontend
 
 dev.down:
 	$(DOCKER_COMPOSE) -f $(DEV) down
