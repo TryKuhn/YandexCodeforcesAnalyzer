@@ -11,7 +11,6 @@ permissions:
   packages: write
 
 env:
-  REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/trykuhn/yandexcodeforcesanalyzer-backend
   FRONTEND_IMAGE: ghcr.io/trykuhn/yandexcodeforcesanalyzer-frontend
   IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
@@ -58,6 +57,8 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile.prod
           push: true
+          build-args: |
+            VITE_API_URL=https://createmanager.duckdns.org/api
           tags: |
             ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
             ${{ env.FRONTEND_IMAGE }}:latest
@@ -128,7 +129,8 @@ jobs:
             echo "Checking health..."
             for i in $(seq 1 12); do
               if $DC -f docker-compose.prod.yml exec -T backend \
-                  curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
+                  python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" \
+                  > /dev/null 2>&1; then
                 echo "Backend is healthy!"
                 exit 0
               fi

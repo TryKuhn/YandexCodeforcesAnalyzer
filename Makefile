@@ -3,13 +3,18 @@ DOCKER_COMPOSE := docker compose
 DEV := docker-compose.dev.yml
 PROD := docker-compose.prod.yml
 
+IMAGE_TAG ?= latest
+
 # Startup and shutdown
 
 dev.up:
 	$(DOCKER_COMPOSE) -f $(DEV) up -d --build
 
 prod.up:
-	$(DOCKER_COMPOSE) -f $(PROD) up -d --build
+	IMAGE_TAG=$(IMAGE_TAG) $(DOCKER_COMPOSE) -f $(PROD) up -d --remove-orphans
+
+prod.pull:
+	IMAGE_TAG=$(IMAGE_TAG) $(DOCKER_COMPOSE) -f $(PROD) pull backend frontend
 
 dev.down:
 	$(DOCKER_COMPOSE) -f $(DEV) down
