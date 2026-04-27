@@ -1,38 +1,38 @@
 from time import time
 
 from aiohttp import ClientSession
+from fastapi import HTTPException, status
 from sqlalchemy import select
-
-from api.user.polygon import create_signature, get_response
-from fastapi import status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
+from api.user.polygon import create_signature, get_response
 from models import User
 from settings import settings
 
 
-async def problem_info(problem_id: int,
-                       user_id: int, db: AsyncSession
-                       ):
+async def problem_info(problem_id: int, user_id: int, db: AsyncSession):
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 
     if not user.polygon_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Polygon API is not configured')
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Polygon API is not configured",
+        )
 
-    method_name = 'problem.info'
+    method_name = "problem.info"
 
     current_time_unix = int(time())
 
     params = {
-        'apiKey': user.polygon_api_key,
-        'time': current_time_unix,
-        'problemId': problem_id,
+        "apiKey": user.polygon_api_key,
+        "time": current_time_unix,
+        "problemId": problem_id,
     }
 
     signature = create_signature(method_name, params, user.polygon_api_secret)
-    params['apiSig'] = signature
+    params["apiSig"] = signature
 
     url = URL(settings.POLYGON_HOST) / method_name
 

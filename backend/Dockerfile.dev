@@ -22,12 +22,19 @@ RUN pip install --no-cache-dir pybind11
 
 COPY . .
 
-RUN mkdir -p /tmp/plag-build && \
+RUN LLVM_VERSION=$(ls /usr/lib/ | grep -oP 'llvm-\K[0-9]+' | sort -rn | head -1) && \
+    echo "Found LLVM version: $LLVM_VERSION" && \
+    mkdir -p /tmp/plag-build && \
     cmake -S /app/plagiarism -B /tmp/plag-build \
       -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_C_COMPILER=clang \
+      -DCMAKE_CXX_COMPILER=clang++ \
+      -DClang_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/clang \
+      -DLLVM_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/llvm \
       -Dpybind11_DIR="$(python -m pybind11 --cmakedir)" && \
     cmake --build /tmp/plag-build --target plagiarism_cpp -j"$(nproc)" && \
-    find /tmp/plag-build -name "plagiarism_cpp*.so" -exec cp {} /usr/local/lib/python3.11/site-packages/ \; && \
-    ls -la /usr/local/lib/python3.11/site-packages/ | grep plagiarism_cpp \
+    find /tmp/plag-build -name "plagiarism_cpp*.so" \
+      -exec cp {} /usr/local/lib/python3.11/site-packages/ \; && \
+    ls /usr/local/lib/python3.11/site-packages/ | grep plagiarism_cpp
 
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.server:app --host 0.0.0.0 --port 8000 --reload"]

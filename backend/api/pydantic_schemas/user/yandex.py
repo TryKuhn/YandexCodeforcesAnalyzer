@@ -8,11 +8,11 @@ class Standings(BaseModel):
     count: int
     show_unofficial: bool
 
-    @field_validator('count')
+    @field_validator("count")
     @classmethod
     def count_validator(cls, value: int):
         if value < 1:
-            raise ValueError('Count must be positive')
+            raise ValueError("Count must be positive")
         return value
 
 
@@ -21,16 +21,16 @@ class Submissions(BaseModel):
     from_pos: int
     count: int
 
-    @field_validator('from_pos')
+    @field_validator("from_pos")
     @classmethod
     def from_pos_validator(cls, value: int):
         if value < 1:
-            raise ValueError('From position must be positive')
+            raise ValueError("From position must be positive")
         return value
 
-    @field_validator('count')
+    @field_validator("count")
     @classmethod
     def count_validator(cls, value: int):
         if value < 1:
-            raise ValueError('Count must be positive')
+            raise ValueError("Count must be positive")
         return value

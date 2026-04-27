@@ -17,31 +17,34 @@ class BuildPackageResponse(BaseModel):
 
 
 async def build_package(problem_id: int, user_id: int, db: AsyncSession):
-    method_name = 'problem.buildPackage'
+    method_name = "problem.buildPackage"
 
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 
     if not user.polygon_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Polygon API is not configured')
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Polygon API is not configured",
+        )
 
     current_time_unix = int(time())
 
     params = {
-        'apiKey': user.polygon_api_key,
-        'time': str(current_time_unix),
-        'problemId': str(problem_id),
-        'full': 'true',
-        'verify': 'true',
+        "apiKey": user.polygon_api_key,
+        "time": str(current_time_unix),
+        "problemId": str(problem_id),
+        "full": "true",
+        "verify": "true",
     }
 
     signature = create_signature(method_name, params, user.polygon_api_secret)
 
-    params['apiSig'] = signature
+    params["apiSig"] = signature
 
     url = URL(settings.POLYGON_HOST) / method_name
 
     async with ClientSession() as session:
         await get_response(session, url, params)
 
-        return {'detail': 'Пакет отправлен на сборку'}
+        return {"detail": "Пакет отправлен на сборку"}

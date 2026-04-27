@@ -1,5 +1,6 @@
 from backend.tests.api_tests.test_base import client
 
+
 # Basic successful logout
 def test_logout_success():
     client.post(
@@ -96,6 +97,7 @@ def test_logout_without_refresh_token():
 
     assert response.status_code == 422
 
+
 # User logs in two times and logs out from both sessions
 def test_logout_from_two_sessions():
     client.post(
@@ -149,4 +151,3 @@ def test_logout_from_two_sessions():
 
     assert response_2.status_code == 200
     assert response_2.json() == {"message": "Logout successful!"}
-

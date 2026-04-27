@@ -1,10 +1,4 @@
-DC_KIND := $(shell command -v docker-compose >/dev/null 2>&1 && echo v1 || echo v2)
-
-ifeq ($(DC_KIND),v1)
-	DOCKER_COMPOSE := docker-compose
-else
-	DOCKER_COMPOSE := docker compose
-endif
+DOCKER_COMPOSE := docker compose
 
 DEV := docker-compose.dev.yml
 PROD := docker-compose.prod.yml

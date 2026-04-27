@@ -1,25 +1,24 @@
 import asyncio
-import traceback
+import logging
 import re
+import traceback
 from typing import Dict
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user.gpt.services.ai_service import TaskAIService
-from app.database import Session
-from models.ai.ai_session import AISession, PipelineStage
-
-from api.user.polygon.create_problem import create_problem
-from api.user.polygon.files.save_statement import save_statement
-from api.user.polygon.files.gen.set_validator import set_validator
-from api.user.polygon.files.gen.set_generator import set_generator
-from api.user.polygon.files.gen.set_checker import set_checker
-from api.user.polygon.files.gen.set_solution import set_solution
-from api.user.polygon.files.gen.set_script import set_script
 from api.user.polygon.commit.commit_problem import commit
 from api.user.polygon.commit.get_packages import get_packages
-
-import logging
+from api.user.polygon.create_problem import create_problem
+from api.user.polygon.files.gen.set_checker import set_checker
+from api.user.polygon.files.gen.set_generator import set_generator
+from api.user.polygon.files.gen.set_script import set_script
+from api.user.polygon.files.gen.set_solution import set_solution
+from api.user.polygon.files.gen.set_validator import set_validator
+from api.user.polygon.files.save_statement import save_statement
+from app.database import Session
+from models.ai.ai_session import AISession, PipelineStage
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +29,7 @@ PACKAGE_POLL_TIMEOUT = 600  # максимум 10 минут ждём пакет
 
 async def _update_session(session_id: str, data: Dict, db: AsyncSession):
     """Обновляет поля сессии в БД"""
-    await db.execute(
-        update(AISession)
-        .where(AISession.id == session_id)
-        .values(**data)
-    )
+    await db.execute(update(AISession).where(AISession.id == session_id).values(**data))
     await db.commit()
 
 
@@ -46,15 +41,15 @@ def _make_polygon_name(model: str, statement: Dict, session_id: str) -> str:
     Фикс бага claud--5843: если safe_name пустой — используем 'task'
     """
     # Берём последнюю часть модели (после '/'), убираем спецсимволы, берём до 8 букв
-    model_short = re.sub(r'[^a-z0-9]', '', model.split('/')[-1].lower())[:8]
+    model_short = re.sub(r"[^a-z0-9]", "", model.split("/")[-1].lower())[:8]
 
-    task_name = statement.get('name', '')
+    task_name = statement.get("name", "")
     # Оставляем только латинские буквы и цифры
-    safe_name = re.sub(r'[^a-z0-9]', '', task_name.lower())[:12]
+    safe_name = re.sub(r"[^a-z0-9]", "", task_name.lower())[:12]
 
     # Фикс: если имя задачи пустое или не содержит латиницы — ставим заглушку
     if not safe_name:
-        safe_name = 'task'
+        safe_name = "task"
 
     # Берём первые 4 символа session_id для уникальности
     suffix = session_id[:4]
@@ -85,30 +80,31 @@ async def run_upload_pipeline(session_id: str):
             "error": None,
         }
         await _update_session(
-            session_id,
-            {"progress": progress, "stage": PipelineStage.UPLOADING},
-            db
+            session_id, {"progress": progress, "stage": PipelineStage.UPLOADING}, db
         )
 
         try:
             # 1. Создаём задачу
             polygon_name = _make_polygon_name(model, statement, session_id)
-            problem_id = await create_problem(
-                name=polygon_name, user_id=user_id, db=db
-            )
-            await _update_session(
-                session_id, {"polygon_problem_id": problem_id}, db
-            )
+            problem_id = await create_problem(name=polygon_name, user_id=user_id, db=db)
+            await _update_session(session_id, {"polygon_problem_id": problem_id}, db)
 
             # 2. Условие
             progress["current_step"] = "Загрузка условия..."
             await _update_session(session_id, {"progress": progress}, db)
             await save_statement(
-                problem_id=problem_id, lang="russian",
-                name=statement['name'], legend=statement['legend'],
-                input_legend=statement['input'], output_legend=statement['output'],
-                notes=statement.get('notes'), tutorial=statement.get('tutorial'),
-                scoring="", interaction="", user_id=user_id, db=db
+                problem_id=problem_id,
+                lang="russian",
+                name=statement["name"],
+                legend=statement["legend"],
+                input_legend=statement["input"],
+                output_legend=statement["output"],
+                notes=statement.get("notes"),
+                tutorial=statement.get("tutorial"),
+                scoring="",
+                interaction="",
+                user_id=user_id,
+                db=db,
             )
 
             # 3. Технические файлы с авторетраями
@@ -187,17 +183,15 @@ async def run_upload_pipeline(session_id: str):
                         "upload_errors": upload_errors,
                         "stage": PipelineStage.FIXING_ERRORS,
                     },
-                    db
+                    db,
                 )
                 return  # Выходим — ждём действий пользователя
 
             # 5. Скрипт тестов
-            if tech_data.get('script'):
+            if tech_data.get("script"):
                 progress["current_step"] = "Загрузка скрипта тестов..."
                 await _update_session(session_id, {"progress": progress}, db)
-                await set_script(
-                    problem_id, "tests", tech_data['script'], user_id, db
-                )
+                await set_script(problem_id, "tests", tech_data["script"], user_id, db)
 
             # 6. Коммит
             progress["current_step"] = "Коммит изменений..."
@@ -205,36 +199,31 @@ async def run_upload_pipeline(session_id: str):
             await commit(problem_id, user_id, db)
 
             # 7. Сборка пакета
-            await _build_and_poll_package(
-                session_id, problem_id, user_id, progress, db
-            )
+            await _build_and_poll_package(session_id, problem_id, user_id, progress, db)
 
         except Exception as e:
             progress["status"] = "failed"
             progress["error"] = str(e)
             progress["traceback"] = traceback.format_exc()
             await _update_session(
-                session_id,
-                {"progress": progress, "stage": PipelineStage.FAILED},
-                db
+                session_id, {"progress": progress, "stage": PipelineStage.FAILED}, db
             )
 
 
 async def _build_and_poll_package(
-        session_id: str,
-        problem_id: int,
-        user_id: int,
-        progress: Dict,
-        db: AsyncSession,
+    session_id: str,
+    problem_id: int,
+    user_id: int,
+    progress: Dict,
+    db: AsyncSession,
 ):
-    from api.user.polygon.commit.build_package import build_package as polygon_build_package
+    from api.user.polygon.commit.build_package import \
+        build_package as polygon_build_package
 
     progress["current_step"] = "Запуск сборки пакета..."
     progress["stage"] = PipelineStage.BUILDING_PACKAGE
     await _update_session(
-        session_id,
-        {"progress": progress, "stage": PipelineStage.BUILDING_PACKAGE},
-        db
+        session_id, {"progress": progress, "stage": PipelineStage.BUILDING_PACKAGE}, db
     )
 
     await polygon_build_package(problem_id=problem_id, user_id=user_id, db=db)
@@ -249,13 +238,13 @@ async def _build_and_poll_package(
             continue
 
         latest = packages[-1]
-        state = latest.get('state', 'PENDING')
-        package_id = latest.get('id')
+        state = latest.get("state", "PENDING")
+        package_id = latest.get("id")
 
         progress["current_step"] = f"Сборка пакета: {state}..."
         await _update_session(session_id, {"progress": progress}, db)
 
-        if state == 'READY':
+        if state == "READY":
             progress["status"] = "done"
             progress["current_step"] = (
                 f"Задача создана! Polygon ID: {problem_id}, Package: {package_id}"
@@ -267,12 +256,12 @@ async def _build_and_poll_package(
                     "stage": PipelineStage.DONE,
                     "package_id": package_id,
                 },
-                db
+                db,
             )
             return
 
-        elif state == 'FAILED':
-            error_comment = latest.get('comment', 'Неизвестная ошибка сборки пакета')
+        elif state == "FAILED":
+            error_comment = latest.get("comment", "Неизвестная ошибка сборки пакета")
             progress["status"] = "waiting_manual_fix"
             progress["current_step"] = "Ошибка сборки пакета"
             progress["error"] = error_comment
@@ -288,7 +277,7 @@ async def _build_and_poll_package(
                         }
                     },
                 },
-                db
+                db,
             )
             return
 
@@ -296,9 +285,7 @@ async def _build_and_poll_package(
     progress["status"] = "failed"
     progress["current_step"] = "Таймаут сборки пакета"
     await _update_session(
-        session_id,
-        {"progress": progress, "stage": PipelineStage.FAILED},
-        db
+        session_id, {"progress": progress, "stage": PipelineStage.FAILED}, db
     )
 
 
@@ -323,9 +310,7 @@ async def retry_upload_after_manual_fix(session_id: str):
             "error": None,
         }
         await _update_session(
-            session_id,
-            {"progress": progress, "stage": PipelineStage.UPLOADING},
-            db
+            session_id, {"progress": progress, "stage": PipelineStage.UPLOADING}, db
         )
 
         try:
@@ -389,7 +374,7 @@ async def retry_upload_after_manual_fix(session_id: str):
                         "upload_errors": remaining_errors,
                         "stage": PipelineStage.FIXING_ERRORS,
                     },
-                    db
+                    db,
                 )
                 return
 
@@ -399,15 +384,11 @@ async def retry_upload_after_manual_fix(session_id: str):
             await _update_session(session_id, {"progress": progress}, db)
             await commit(problem_id, user_id, db)
 
-            await _build_and_poll_package(
-                session_id, problem_id, user_id, progress, db
-            )
+            await _build_and_poll_package(session_id, problem_id, user_id, progress, db)
 
         except Exception as e:
             progress["status"] = "failed"
             progress["error"] = str(e)
             await _update_session(
-                session_id,
-                {"progress": progress, "stage": PipelineStage.FAILED},
-                db
+                session_id, {"progress": progress, "stage": PipelineStage.FAILED}, db
             )

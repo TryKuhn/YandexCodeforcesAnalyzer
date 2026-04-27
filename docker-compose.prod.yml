@@ -22,7 +22,6 @@ services:
       dockerfile: Dockerfile.prod
     env_file: .env
     environment:
-      POSTGRES_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       PYTHONUNBUFFERED: 1
     depends_on:
       postgres:

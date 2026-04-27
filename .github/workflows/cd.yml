@@ -35,7 +35,7 @@ jobs:
             git reset --hard origin/main
 
             echo "Rebuilding containers..."
-            make prod.down || true
+            make prod.down 2>/dev/null || echo "Nothing to stop"
             make prod.up
 
             echo "Cleaning up old images..."
@@ -63,6 +63,15 @@ jobs:
             fi
 
             echo "Checking health..."
-            sleep 10
-            $DC -f docker-compose.prod.yml exec -T backend curl -f http://localhost:8000/api/health
-            echo "Backend is healthy!"
+            echo "Waiting for backend..."
+            for i in $(seq 1 12); do
+              if $DC -f docker-compose.prod.yml exec -T backend \
+                  curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
+                echo "Backend is healthy!"
+                exit 0
+              fi
+              echo "Attempt $i/12 failed, retrying in 5s..."
+              sleep 5
+            done
+            echo "Backend health check failed after 60s"
+            exit 1

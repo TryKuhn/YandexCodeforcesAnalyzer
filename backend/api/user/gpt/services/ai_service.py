@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from typing import List, Dict
+from typing import Dict, List
 
 import httpx
 from fastapi import HTTPException
@@ -14,17 +14,23 @@ logger = logging.getLogger(__name__)
 class TaskAIService:
     def __init__(self):
         self.api_key = settings.OPENAI_API_KEY
-        base_url = settings.OPENAI_HOST.rstrip('/')
-        self.url = f"{base_url}/chat/completions" if not base_url.endswith('/chat/completions') else base_url
+        base_url = settings.OPENAI_HOST.rstrip("/")
+        self.url = (
+            f"{base_url}/chat/completions"
+            if not base_url.endswith("/chat/completions")
+            else base_url
+        )
 
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://judge-system.com",
-            "X-Title": "Judge System AI"
+            "X-Title": "Judge System AI",
         }
 
-    async def _base_ask(self, model: str, messages: List[Dict], json_mode: bool = True) -> Dict:
+    async def _base_ask(
+        self, model: str, messages: List[Dict], json_mode: bool = True
+    ) -> Dict:
         payload = {
             "model": model,
             "messages": messages,
@@ -34,21 +40,29 @@ class TaskAIService:
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             try:
-                response = await client.post(self.url, headers=self.headers, json=payload)
+                response = await client.post(
+                    self.url, headers=self.headers, json=payload
+                )
                 if response.status_code != 200:
-                    logger.error(f"AI API Error: {response.status_code} - {response.text}")
-                    raise HTTPException(status_code=500, detail=f"AI Service error: {response.text}")
+                    logger.error(
+                        f"AI API Error: {response.status_code} - {response.text}"
+                    )
+                    raise HTTPException(
+                        status_code=500, detail=f"AI Service error: {response.text}"
+                    )
 
                 result = response.json()
-                content = result['choices'][0]['message']['content']
+                content = result["choices"][0]["message"]["content"]
 
                 if json_mode:
                     content = content.strip()
-                    content = re.sub(r'^```(?:json)?\n?|```$', '', content, flags=re.MULTILINE).strip()
+                    content = re.sub(
+                        r"^```(?:json)?\n?|```$", "", content, flags=re.MULTILINE
+                    ).strip()
                     try:
                         return json.loads(content)
                     except json.JSONDecodeError:
-                        match = re.search(r'\{.*\}', content, re.DOTALL)
+                        match = re.search(r"\{.*\}", content, re.DOTALL)
                         if match:
                             return json.loads(match.group())
                         raise
@@ -58,7 +72,9 @@ class TaskAIService:
                 logger.error(f"AI Service Exception: {str(e)}")
                 raise
 
-    async def generate_statement(self, user_idea: str, model: str, user_prompt: str, history: List[Dict]) -> Dict:
+    async def generate_statement(
+        self, user_idea: str, model: str, user_prompt: str, history: List[Dict]
+    ) -> Dict:
         system_prompt = (
             "Вы — автор задач по спортивному программированию. "
             "ПРАВИЛО: Пишите условия максимально простым и понятным языком, доступным школьнику. "
@@ -75,7 +91,9 @@ class TaskAIService:
 
         return await self._base_ask(model, messages)
 
-    async def generate_technical_stuff(self, approved_statement: Dict, model: str) -> Dict:
+    async def generate_technical_stuff(
+        self, approved_statement: Dict, model: str
+    ) -> Dict:
         system_prompt = (
             "Ты — эксперт по testlib.h и разработке задач для спортивного программирования. "
             "Можешь использовать следующие ресурсы для генерации технических файлов: "
@@ -176,30 +194,34 @@ class TaskAIService:
             "которые соответствуют условию задачи и не выходят за рамки ограничений. "
         )
 
-        user_prompt = f"Problem Statement:\n{json.dumps(approved_statement, ensure_ascii=False)}"
+        user_prompt = (
+            f"Problem Statement:\n{json.dumps(approved_statement, ensure_ascii=False)}"
+        )
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ]
         return await self._base_ask(model, messages)
 
-    async def fix_code(self, error: str, component: str, code: str, statement: Dict, model: str) -> str:
+    async def fix_code(
+        self, error: str, component: str, code: str, statement: Dict, model: str
+    ) -> str:
         system_prompt = f"Fix the {component} code for Polygon. Error: {error}. Return only the corrected code, no explanations."
         user_prompt = f"Statement:\n{json.dumps(statement, ensure_ascii=False)}\n\nBroken code:\n{code}"
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ]
         result = await self._base_ask(model, messages, json_mode=False)
         return result["text"].strip()
 
     async def refine_file(
-            self,
-            file_key: str,
-            current_code: str,
-            feedback: str,
-            statement: Dict,
-            model: str
+        self,
+        file_key: str,
+        current_code: str,
+        feedback: str,
+        statement: Dict,
+        model: str,
     ) -> str:
         """Правка конкретного файла по отзыву пользователя"""
         system_prompt = (
@@ -214,7 +236,7 @@ class TaskAIService:
         )
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ]
         result = await self._base_ask(model, messages, json_mode=False)
         return result["text"].strip()

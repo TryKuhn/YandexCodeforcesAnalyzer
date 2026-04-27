@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Tuple
 
 from api.crypt import create_token
@@ -10,20 +10,21 @@ def get_tokens(user_id: int, session_id: str) -> Tuple[str, str, datetime, datet
     expires_in = created_at + timedelta(minutes=settings.EXPIRES_REFRESH)
 
     data = {
-        'user_id': user_id,
-        'sid': session_id,
+        "user_id": user_id,
+        "sid": session_id,
     }
 
     access_token = create_token(
-        data=data,
-        created_at=created_at,
-        expires_delta=settings.EXPIRES_ACCESS
+        data=data, created_at=created_at, expires_delta=settings.EXPIRES_ACCESS
     )
 
     refresh_token = create_token(
-        data=data,
-        created_at=created_at,
-        expires_delta=settings.EXPIRES_REFRESH
+        data=data, created_at=created_at, expires_delta=settings.EXPIRES_REFRESH
     )
 
-    return access_token, refresh_token, created_at.replace(tzinfo=None), expires_in.replace(tzinfo=None)
+    return (
+        access_token,
+        refresh_token,
+        created_at.replace(tzinfo=None),
+        expires_in.replace(tzinfo=None),
+    )

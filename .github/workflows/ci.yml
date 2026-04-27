@@ -61,7 +61,8 @@ jobs:
       POSTGRES_DB: test_db
       POSTGRES_USER: test_user
       POSTGRES_PASSWORD: test_password
-      POSTGRES_URL: postgresql+asyncpg://test_user:test_password@127.0.0.1:5432/test_db
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: 5432
 
       SECRET_KEY: test-secret-key
 
@@ -90,14 +91,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            cmake \
-            clang \
-            llvm-dev \
-            libclang-dev \
-            libboost-dev \
-            pybind11-dev \
-            build-essential \
-            libpq-dev
+          cmake \
+          clang-17 \
+          llvm-17 \
+          llvm-17-dev \
+          libclang-17-dev \
+          libboost-dev \
+          pybind11-dev \
+          build-essential \
+          libpq-dev
 
       - name: Install Python dependencies
         run: |
@@ -110,17 +112,15 @@ jobs:
           mkdir -p /tmp/plag-build
           cmake -S ./plagiarism -B /tmp/plag-build \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-17 \
+            -DCMAKE_CXX_COMPILER=clang++-17 \
+            -DClang_DIR=/usr/lib/llvm-17/lib/cmake/clang \
+            -DLLVM_DIR=/usr/lib/llvm-17/lib/cmake/llvm \
             -Dpybind11_DIR="$(python -m pybind11 --cmakedir)"
           cmake --build /tmp/plag-build --target plagiarism_cpp -j"$(nproc)"
 
-          SITE_PACKAGES=$(python - <<'PY'
-          import site
-          print(site.getsitepackages()[0])
-          PY
-          )
-
+          SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
           find /tmp/plag-build -name "plagiarism_cpp*.so" -exec cp {} "$SITE_PACKAGES" \;
-          ls -la "$SITE_PACKAGES" | grep plagiarism_cpp
 
       - name: Run migrations
         run: alembic upgrade head
@@ -129,12 +129,12 @@ jobs:
         run: pytest tests --cov=app --cov-report=xml --cov-report=term
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: coverallsapp/github-action@v2
         if: always()
         with:
-          files: ./backend/coverage.xml
-          flags: backend
-          fail_ci_if_error: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: ./backend/coverage.xml
+          format: cobertura
 
   frontend-build:
     runs-on: ubuntu-latest

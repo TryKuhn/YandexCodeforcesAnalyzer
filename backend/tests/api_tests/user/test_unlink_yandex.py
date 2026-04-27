@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
-from backend.tests.api_tests.test_base import client
 from backend.app.database import get_db
+from backend.tests.api_tests.test_base import client
+
 from models.user.refresh_token import RefreshToken
 from models.user.user import User
 

@@ -7,39 +7,39 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
 from api.user.polygon import create_signature, get_response
-
 from models import User
 from settings import settings
 
 
-async def enable_groups(problem_id: int,
-                        test_set: str,
-                        enable: bool,
-                        user_id: int, db: AsyncSession
+async def enable_groups(
+    problem_id: int, test_set: str, enable: bool, user_id: int, db: AsyncSession
 ):
 
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 
     if not user.polygon_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Polygon API is not configured')
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Polygon API is not configured",
+        )
 
-    method_name = 'problem.enableGroups'
+    method_name = "problem.enableGroups"
 
     current_time_unix = int(time())
 
     params = {
-        'apiKey': user.polygon_api_key,
-        'time': current_time_unix,
-        'problemId': problem_id,
-        'testset': test_set,
+        "apiKey": user.polygon_api_key,
+        "time": current_time_unix,
+        "problemId": problem_id,
+        "testset": test_set,
     }
 
     if enable:
-        params['enable'] = 'true'
+        params["enable"] = "true"
 
     signature = create_signature(method_name, params, user.polygon_api_secret)
-    params['apiSig'] = signature
+    params["apiSig"] = signature
 
     url = URL(settings.POLYGON_HOST) / method_name
 

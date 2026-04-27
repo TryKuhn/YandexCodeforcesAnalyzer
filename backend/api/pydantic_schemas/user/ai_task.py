@@ -1,5 +1,7 @@
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+
 
 class AIStatementRequest(BaseModel):
     idea: str
@@ -7,39 +9,51 @@ class AIStatementRequest(BaseModel):
     user_prompt: Optional[str] = ""
     history: Optional[List[Dict]] = []
 
+
 class AIStatementResponse(BaseModel):
     statement: Dict[str, Any]
     session_id: str
     stage: str
 
+
 class RefineRequest(BaseModel):
     session_id: str
     feedback: str
 
+
 class ApproveStatementRequest(BaseModel):
     """Пользователь одобряет условие → запускаем генерацию файлов"""
+
     session_id: str
+
 
 class GenerateFilesResponse(BaseModel):
     session_id: str
     technical_data: Dict[str, Any]
     stage: str
 
+
 class RefineFileRequest(BaseModel):
     """Правка конкретного файла"""
+
     session_id: str
-    file_key: str        # 'validator', 'generator', etc.
-    feedback: str        # что именно поправить
+    file_key: str  # 'validator', 'generator', etc.
+    feedback: str  # что именно поправить
+
 
 class ApproveFilesRequest(BaseModel):
     """Пользователь одобряет файлы → запускаем загрузку"""
+
     session_id: str
+
 
 class ManualFixRequest(BaseModel):
     """Пользователь вручную правит файл с ошибкой"""
+
     session_id: str
     file_key: str
     new_content: str
+
 
 class UploadProgressResponse(BaseModel):
     status: str

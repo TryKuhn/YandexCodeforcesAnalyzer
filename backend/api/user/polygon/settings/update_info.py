@@ -12,43 +12,47 @@ from settings import settings
 
 
 async def update_info(
-        problem_id: int,
-        input_file_name: str,
-        output_file_name: str,
-        interactive: bool,
-        time_limit: int,
-        memory_limit: int,
-        user_id: int, db: AsyncSession
+    problem_id: int,
+    input_file_name: str,
+    output_file_name: str,
+    interactive: bool,
+    time_limit: int,
+    memory_limit: int,
+    user_id: int,
+    db: AsyncSession,
 ):
-    method_name = 'problem.updateInfo'
+    method_name = "problem.updateInfo"
 
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 
     if not user.polygon_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Polygon API is not configured')
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Polygon API is not configured",
+        )
 
     current_time_unix = int(time())
 
     params = {
-        'apiKey': user.polygon_api_key,
-        'time': current_time_unix,
-        'problemId': problem_id,
+        "apiKey": user.polygon_api_key,
+        "time": current_time_unix,
+        "problemId": problem_id,
     }
 
     if input_file_name:
-        params['inputFile'] = input_file_name
+        params["inputFile"] = input_file_name
     if output_file_name:
-        params['outputFile'] = output_file_name
+        params["outputFile"] = output_file_name
     if interactive:
-        params['interactive'] = interactive
+        params["interactive"] = interactive
     if time_limit:
-        params['timeLimit'] = time_limit
+        params["timeLimit"] = time_limit
     if memory_limit:
-        params['memoryLimit'] = memory_limit
+        params["memoryLimit"] = memory_limit
 
     signature = create_signature(method_name, params, user.polygon_api_secret)
-    params['apiSig'] = signature
+    params["apiSig"] = signature
 
     url = URL(settings.POLYGON_HOST) / method_name
 

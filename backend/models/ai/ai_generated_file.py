@@ -1,6 +1,7 @@
 from sqlalchemy import ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from models import Base
+
+from models.base import Base
 
 
 class AIGeneratedFile(Base):

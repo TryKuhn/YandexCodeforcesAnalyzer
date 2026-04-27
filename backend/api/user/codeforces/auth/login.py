@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,11 +9,11 @@ from app.database import get_db
 from models import User
 
 
-@codeforces_router.post('/link')
+@codeforces_router.post("/link")
 async def link_codeforces(
-        payload: LinkCodeforces,
-        user_id: int = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
+    payload: LinkCodeforces,
+    user_id: int = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
@@ -24,14 +24,15 @@ async def link_codeforces(
 
     await db.commit()
 
-    return {'message': 'Codeforces account successfully linked'}
+    return {"message": "Codeforces account successfully linked"}
+
 
 # def generate_pkce():
-    # verifier = secrets.token_urlsafe(32)
-    # challenge = base64.urlsafe_b64encode(
-    #     hashlib.sha256(verifier.encode()).digest()
-    # ).decode().rstrip("=")
-    # return verifier, challenge
+# verifier = secrets.token_urlsafe(32)
+# challenge = base64.urlsafe_b64encode(
+#     hashlib.sha256(verifier.encode()).digest()
+# ).decode().rstrip("=")
+# return verifier, challenge
 #
 #
 # class CodeforcesCallbackRequest(BaseModel):

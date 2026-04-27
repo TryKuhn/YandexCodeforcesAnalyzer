@@ -9,38 +9,38 @@ from app.database import get_db
 from models import User
 
 
-@auth_router.post('/change_password')
-async def change_password(payload: ChangePassword,
-                          user_id: int = Depends(get_current_user),
-                          db: AsyncSession = Depends(get_db)) -> dict:
+@auth_router.post("/change_password")
+async def change_password(
+    payload: ChangePassword,
+    user_id: int = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found.'
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
         )
 
     if not verify_password(payload.old_password, user.password):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid password.'
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid password."
         )
 
     if payload.old_password == payload.new_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='New password can\'t be the same.'
+            detail="New password can't be the same.",
         )
 
     if payload.new_password != payload.confirm_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='New password and confirmation do not match.'
+            detail="New password and confirmation do not match.",
         )
 
     user.password = hash_password(payload.new_password)
     await db.commit()
 
-    return {'message': 'Successfully changed password.'}
+    return {"message": "Successfully changed password."}

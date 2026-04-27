@@ -1,12 +1,12 @@
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
     PROJECT_ROOT: Path = Path(__file__).parent.parent
@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     CF_CLIENT_SECRET: str
 
     # Polygon settings
-    POLYGON_HOST: str = 'https://polygon.codeforces.com/api'
+    POLYGON_HOST: str = "https://polygon.codeforces.com/api"
 
     # OpenAI settings
     OPENAI_HOST: str = "https://openrouter.ai/api/v1"
@@ -53,6 +53,14 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return URL.create(
+            drivername="postgresql+asyncpg",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD,
+            host=self.POSTGRES_HOST,
+            port=self.POSTGRES_PORT,
+            database=self.POSTGRES_DB,
+        ).render_as_string(hide_password=False)
+
 
 settings = Settings()

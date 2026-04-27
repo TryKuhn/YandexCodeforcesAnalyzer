@@ -1,5 +1,6 @@
 import uuid
-from typing import Dict, Any
+from typing import Any, Dict
+
 
 class SessionStore:
     _sessions: Dict[str, Dict[str, Any]] = {}

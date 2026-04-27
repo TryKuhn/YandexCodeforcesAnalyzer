@@ -2,22 +2,23 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base
 
 if TYPE_CHECKING:
     from models.contest.task_result import TaskResult
-    from models.plagiarism.pair_of_banned_submissions import PairOfBannedSubmissions
+    from models.plagiarism.pair_of_banned_submissions import \
+        PairOfBannedSubmissions
 
 
 class Submission(Base):
-    __tablename__ = 'submissions'
+    __tablename__ = "submissions"
 
     id: Mapped[str] = mapped_column(primary_key=True)
 
-    contest_id: Mapped[int] = mapped_column(ForeignKey('contests.id'))
-    task_result_id: Mapped[int] = mapped_column(ForeignKey('task_results.id'))
+    contest_id: Mapped[int] = mapped_column(ForeignKey("contests.id"))
+    task_result_id: Mapped[int] = mapped_column(ForeignKey("task_results.id"))
 
     participant_login: Mapped[str] = mapped_column(String(50))
     task_name: Mapped[str] = mapped_column(String(50))
@@ -36,13 +37,13 @@ class Submission(Base):
 
     source: Mapped[str | None] = mapped_column()
 
-    task_result: Mapped["TaskResult"] = relationship(back_populates='submissions')
+    task_result: Mapped["TaskResult"] = relationship(back_populates="submissions")
 
     banned_as_first: Mapped[list["PairOfBannedSubmissions"]] = relationship(
         primaryjoin="Submission.id==PairOfBannedSubmissions.first_submission_id",
-        back_populates='first_submission'
+        back_populates="first_submission",
     )
     banned_as_second: Mapped[list["PairOfBannedSubmissions"]] = relationship(
         primaryjoin="Submission.id==PairOfBannedSubmissions.second_submission_id",
-        back_populates='second_submission'
+        back_populates="second_submission",
     )

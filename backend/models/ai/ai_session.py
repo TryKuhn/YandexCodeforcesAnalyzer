@@ -1,10 +1,10 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Text, JSON
+from sqlalchemy import JSON, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from models import Base
+from models.base import Base
 
 
 class PipelineStage(str, enum.Enum):
@@ -26,12 +26,11 @@ class AISession(Base):
     history: Mapped[list] = mapped_column(JSON, default=list)
     statement: Mapped[dict] = mapped_column(JSON, nullable=True)
     technical_data: Mapped[dict] = mapped_column(JSON, nullable=True)
-    progress: Mapped[dict] = mapped_column(JSON, default=lambda: {"status": "idle"}, nullable=True)
-
-    stage: Mapped[str] = mapped_column(
-        default=PipelineStage.STATEMENT,
-        nullable=False
+    progress: Mapped[dict] = mapped_column(
+        JSON, default=lambda: {"status": "idle"}, nullable=True
     )
+
+    stage: Mapped[str] = mapped_column(default=PipelineStage.STATEMENT, nullable=False)
 
     polygon_problem_id: Mapped[int] = mapped_column(nullable=True)
     package_id: Mapped[int] = mapped_column(nullable=True)
