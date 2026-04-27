@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.crypt import get_current_user
 from api.pydantic_schemas import LinkCodeforces
-from api.user.codeforces import codeforces_router
+from api.user.codeforces.base_codeforces import router as codeforces_router
 from app.database import get_db
 from models import User
 

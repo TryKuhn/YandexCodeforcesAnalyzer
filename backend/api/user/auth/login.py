@@ -7,7 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.crypt import hash_password, verify_password
 from api.crypt.crypt_password import hash_token
 from api.pydantic_schemas import Token, UserLogin, UserRegister
-from api.user.auth import auth_router, get_location, get_tokens
+from api.user.auth.base_auth import router as auth_router
+from api.user.auth.tokens import get_tokens
+from api.user.auth.location import get_location
 from app.database import get_db
 from models import RefreshToken, Role, User
 
