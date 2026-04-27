@@ -137,9 +137,7 @@ def test_change_password_confirmation_mismatch():
     )
 
     assert response.status_code == 400
-    assert response.json() == {
-        "detail": "New password and confirmation do not match"
-    }
+    assert response.json() == {"detail": "New password and confirmation do not match"}
 
 
 # New password is too short
@@ -178,9 +176,7 @@ def test_change_password_too_short_new_password():
     )
 
     assert response.status_code == 400
-    assert response.json() == {
-        "detail": "Password must be at least 8 characters long"
-    }
+    assert response.json() == {"detail": "Password must be at least 8 characters long"}
 
 
 # Old password should not work after password change
@@ -371,6 +367,7 @@ def test_change_password_without_token():
     )
 
     assert response.status_code == 422
+
 
 # New password has no digit
 def test_change_password_without_digit():

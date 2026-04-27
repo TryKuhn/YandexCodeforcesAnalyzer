@@ -1,7 +1,7 @@
 from time import time
 
 from aiohttp import ClientSession
-from fastapi import status, HTTPException
+from fastapi import HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,41 +17,43 @@ class CommitResponse(BaseModel):
 
 
 async def commit(problem_id: int, user_id: int, db: AsyncSession):
-    method_name = 'problem.commitChanges'
+    method_name = "problem.commitChanges"
 
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 
     if not user.polygon_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Polygon API is not configured')
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Polygon API is not configured",
+        )
 
     current_time_unix = int(time())
 
     params = {
-        'apiKey': user.polygon_api_key,
-        'time': str(current_time_unix),
-        'problemId': str(problem_id),
-        'minorChanges': 'true',
-        'message': 'gpt-generated-task',
+        "apiKey": user.polygon_api_key,
+        "time": str(current_time_unix),
+        "problemId": str(problem_id),
+        "minorChanges": "true",
+        "message": "gpt-generated-task",
     }
 
     signature = create_signature(method_name, params, user.polygon_api_secret)
 
-    params['apiSig'] = signature
+    params["apiSig"] = signature
 
     url = URL(settings.POLYGON_HOST) / method_name
 
     async with ClientSession() as session:
         response = await get_response(session, url, params)
-        if response['conflictOccurred']:
+        if response["conflictOccurred"]:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail='Conflict occurred while committing changes to the problem.'
+                detail="Conflict occurred while committing changes to the problem.",
             )
-        if not response['committed']:
+        if not response["committed"]:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=response['message']
+                status_code=status.HTTP_403_FORBIDDEN, detail=response["message"]
             )
 
-        return {'detail': response['message']}
+        return {"detail": response["message"]}

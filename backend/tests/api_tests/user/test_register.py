@@ -1,5 +1,6 @@
 from backend.tests.api_tests.test_base import client
 
+
 # Basic successful case
 def test_register_success():
     response = client.post(
@@ -89,7 +90,9 @@ def test_register_password_without_lowercase_latin_letter():
         },
     )
     assert response.status_code == 400
-    assert response.json() == {"detail": "Password must contain at least one lowercase Latin letter"}
+    assert response.json() == {
+        "detail": "Password must contain at least one lowercase Latin letter"
+    }
 
 
 # No uppercase latin letter
@@ -103,7 +106,9 @@ def test_register_password_without_uppercase_latin_letter():
         },
     )
     assert response.status_code == 400
-    assert response.json() == {"detail": "Password must contain at least one uppercase Latin letter"}
+    assert response.json() == {
+        "detail": "Password must contain at least one uppercase Latin letter"
+    }
 
 
 # No special symbol
@@ -117,7 +122,9 @@ def test_register_password_without_special_symbol():
         },
     )
     assert response.status_code == 400
-    assert response.json() == {"detail": "Password must contain at least one special symbol"}
+    assert response.json() == {
+        "detail": "Password must contain at least one special symbol"
+    }
 
 
 # Password has only digits

@@ -12,32 +12,32 @@ from settings import settings
 
 
 async def set_script(
-        problem_id: int,
-        testset: str,
-        script_file: str,
-        user_id: int, db: AsyncSession
+    problem_id: int, testset: str, script_file: str, user_id: int, db: AsyncSession
 ):
 
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 
     if not user.polygon_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Polygon API is not configured')
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Polygon API is not configured",
+        )
 
-    method_name = 'problem.saveScript'
+    method_name = "problem.saveScript"
 
     current_time_unix = int(time())
 
     params = {
-        'apiKey': user.polygon_api_key,
-        'time': str(current_time_unix),
-        'problemId': str(problem_id),
-        'testset': testset,
-        'source': script_file,
+        "apiKey": user.polygon_api_key,
+        "time": str(current_time_unix),
+        "problemId": str(problem_id),
+        "testset": testset,
+        "source": script_file,
     }
 
     signature = create_signature(method_name, params, user.polygon_api_secret)
-    params['apiSig'] = signature
+    params["apiSig"] = signature
 
     url = URL(settings.POLYGON_HOST) / method_name
 

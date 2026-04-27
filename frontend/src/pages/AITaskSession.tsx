@@ -87,9 +87,6 @@ const EDITABLE_STAGES: PipelineStage[] = [
 const canEditFiles = (stage: PipelineStage) =>
     EDITABLE_STAGES.includes(stage);
 
-const canRetryUpload = (stage: PipelineStage) =>
-    ['files_review', 'fixing_errors', 'failed'].includes(stage);
-
 // ─────────────────────── StepBadge ─────────────────────────────────────────
 
 const StepBadge = ({ stage }: { stage: PipelineStage }) => {
@@ -148,8 +145,8 @@ export const AITaskSession = () => {
     const navigate = useNavigate();
     const { load: loadSettings } = useAISettings();
 
-    const [selectedModel, setSelectedModel] = useState(() => loadSettings().model);
-    const [systemPrompt, setSystemPrompt]   = useState(() => loadSettings().systemPrompt);
+    const [_selectedModel, setSelectedModel] = useState(() => loadSettings().model);
+    const [_systemPrompt, setSystemPrompt]   = useState(() => loadSettings().systemPrompt);
 
     const [messages, setMessages]   = useState<{ role: 'user' | 'assistant' | 'system'; content: string }[]>([]);
     const [inputValue, setInputValue] = useState('');
@@ -461,7 +458,6 @@ export const AITaskSession = () => {
 
     const isUploading = stage === 'uploading' || stage === 'building_package';
     const isEditable  = canEditFiles(stage);
-    const showRetry   = canRetryUpload(stage) && techData;
 
     if (initialLoading) {
         return (

@@ -2,19 +2,18 @@ import json
 import logging
 
 from aiohttp import ClientSession
-from fastapi import HTTPException, status
 
 logger = logging.getLogger(__name__)
 
 
 class PolygonAPIError(Exception):
     def __init__(
-            self,
-            message: str,
-            *,
-            http_status: int | None = None,
-            method: str | None = None,
-            raw_response: str | None = None,
+        self,
+        message: str,
+        *,
+        http_status: int | None = None,
+        method: str | None = None,
+        raw_response: str | None = None,
     ):
         super().__init__(message)
         self.message = message
@@ -39,13 +38,13 @@ async def get_response(client: ClientSession, url, params):
                     raw_response=response_text,
                 )
             else:
-                return {'message': response_text}
+                return {"message": response_text}
 
-        if result['status'] == 'OK':
+        if result["status"] == "OK":
             try:
-                return result['result']
+                return result["result"]
             except KeyError:
-                return {'message': response_text}
+                return {"message": response_text}
 
         comment = result.get("comment", "Unknown Polygon error")
         raise PolygonAPIError(

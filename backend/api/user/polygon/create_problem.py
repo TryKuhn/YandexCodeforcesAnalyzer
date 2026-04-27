@@ -16,28 +16,29 @@ class CreateProblemResponse(BaseModel):
     problemId: int
 
 
-async def create_problem(name: str,
-                         user_id: int, db: AsyncSession
-                         ):
+async def create_problem(name: str, user_id: int, db: AsyncSession):
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 
     if not user.polygon_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Polygon API is not configured')
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Polygon API is not configured",
+        )
 
-    method_name = 'problem.create'
+    method_name = "problem.create"
 
     current_time_unix = int(time())
 
     params = {
-        'apiKey': user.polygon_api_key,
-        'time': current_time_unix,
-        'name': name,
+        "apiKey": user.polygon_api_key,
+        "time": current_time_unix,
+        "name": name,
     }
 
     signature = create_signature(method_name, params, user.polygon_api_secret)
 
-    params['apiSig'] = signature
+    params["apiSig"] = signature
 
     url = URL(settings.POLYGON_HOST) / method_name
 
@@ -46,7 +47,6 @@ async def create_problem(name: str,
             response = await get_response(session, url, params)
 
             # CHECK
-            return response['id']
+            return response["id"]
         except RuntimeError as e:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                                detail=str(e))
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

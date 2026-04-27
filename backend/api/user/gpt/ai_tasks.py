@@ -1,31 +1,30 @@
 # api/user/gpt/router.py
 
-from datetime import datetime, timezone
-import uuid
 import json
+import uuid
+from datetime import datetime, timezone
 
-from fastapi import Depends, BackgroundTasks, HTTPException
+from fastapi import BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user.gpt import gpt_router
-from app.database import get_db
 from api.crypt import get_current_user
-from models.ai.ai_session import AISession, PipelineStage
+from api.pydantic_schemas.user.ai_task import (AIStatementRequest,
+                                               AIStatementResponse,
+                                               ApproveFilesRequest,
+                                               ApproveStatementRequest,
+                                               ManualFixRequest,
+                                               RefineFileRequest,
+                                               RefineRequest)
+from api.user.gpt import gpt_router
 from api.user.gpt.services.ai_service import TaskAIService
 from api.user.gpt.services.upload_orchestrator import (
-    run_upload_pipeline,
-    retry_upload_after_manual_fix,
-)
-from api.pydantic_schemas.user.ai_task import (
-    AIStatementRequest, AIStatementResponse,
-    RefineRequest, ApproveStatementRequest,
-    RefineFileRequest, ApproveFilesRequest,
-    ManualFixRequest,
-)
-
+    retry_upload_after_manual_fix, run_upload_pipeline)
+from app.database import get_db
+from models.ai.ai_session import AISession, PipelineStage
 
 # ─────────────────── Вспомогательные функции ────────────────────────────────
+
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -73,6 +72,7 @@ def remove_from_json_field(session: AISession, field: str, key: str) -> dict:
 
 # ─────────────────────────── Список сессий ──────────────────────────────────
 
+
 @gpt_router.get("/sessions")
 async def list_sessions(
     user_id: int = Depends(get_current_user),
@@ -91,9 +91,7 @@ async def list_sessions(
             "session_id": s.id,
             "stage": s.stage,
             "name": (
-                s.statement.get("name", "Без названия")
-                if s.statement
-                else "Черновик"
+                s.statement.get("name", "Без названия") if s.statement else "Черновик"
             ),
             "model": s.model,
             "polygon_problem_id": s.polygon_problem_id,
@@ -105,6 +103,7 @@ async def list_sessions(
 
 
 # ─────────────────────── Создание сессии ────────────────────────────────────
+
 
 @gpt_router.post("/create-session", response_model=AIStatementResponse)
 async def create_session(
@@ -149,6 +148,7 @@ async def create_session(
 
 # ─────────────────────── Удаление сессии ────────────────────────────────────
 
+
 @gpt_router.delete("/session/{session_id}")
 async def delete_session(
     session_id: str,
@@ -163,6 +163,7 @@ async def delete_session(
 
 # ─────────────────────────── ЭТАП 1: Условие ────────────────────────────────
 
+
 @gpt_router.post("/refine-statement", response_model=AIStatementResponse)
 async def refine_statement(
     request: RefineRequest,
@@ -174,16 +175,17 @@ async def refine_statement(
 
     if session.stage != PipelineStage.STATEMENT:
         raise HTTPException(
-            400,
-            f"Нельзя редактировать условие на этапе '{session.stage}'"
+            400, f"Нельзя редактировать условие на этапе '{session.stage}'"
         )
 
     # Строим историю: предыдущий ответ ИИ + новый фидбек пользователя
     history = list(session.history or [])
-    history.append({
-        "role": "assistant",
-        "content": json.dumps(session.statement, ensure_ascii=False),
-    })
+    history.append(
+        {
+            "role": "assistant",
+            "content": json.dumps(session.statement, ensure_ascii=False),
+        }
+    )
     history.append({"role": "user", "content": request.feedback})
 
     ai = TaskAIService()
@@ -208,6 +210,7 @@ async def refine_statement(
 
 # ─────────────────── ЭТАП 2: Одобрение условия ──────────────────────────────
 
+
 @gpt_router.post("/approve-statement")
 async def approve_statement(
     request: ApproveStatementRequest,
@@ -221,10 +224,7 @@ async def approve_statement(
     session = await get_session_or_404(request.session_id, user_id, db)
 
     if session.stage not in (PipelineStage.STATEMENT, PipelineStage.FAILED):
-        raise HTTPException(
-            400,
-            f"Нельзя одобрить условие на этапе '{session.stage}'"
-        )
+        raise HTTPException(400, f"Нельзя одобрить условие на этапе '{session.stage}'")
 
     session.stage = PipelineStage.FILES_REVIEW
     session.progress = {
@@ -236,9 +236,7 @@ async def approve_statement(
 
     try:
         ai = TaskAIService()
-        tech_data = await ai.generate_technical_stuff(
-            session.statement, session.model
-        )
+        tech_data = await ai.generate_technical_stuff(session.statement, session.model)
 
         session.technical_data = tech_data
         session.progress = {
@@ -268,6 +266,7 @@ async def approve_statement(
 
 # ─────────────────── ЭТАП 3: Правка файлов ──────────────────────────────────
 
+
 @gpt_router.post("/refine-file")
 async def refine_file(
     request: RefineFileRequest,
@@ -280,10 +279,7 @@ async def refine_file(
     tech_data = dict(session.technical_data or {})
     current_code = tech_data.get(request.file_key)
     if current_code is None:
-        raise HTTPException(
-            400,
-            f"Файл '{request.file_key}' не найден в сессии"
-        )
+        raise HTTPException(400, f"Файл '{request.file_key}' не найден в сессии")
 
     ai = TaskAIService()
     new_code = await ai.refine_file(
@@ -340,6 +336,7 @@ async def manual_fix_file(
 
 # ─────────────────── ЭТАП 4: Одобрение файлов ───────────────────────────────
 
+
 @gpt_router.post("/approve-files")
 async def approve_files(
     request: ApproveFilesRequest,
@@ -356,8 +353,7 @@ async def approve_files(
         PipelineStage.FIXING_ERRORS,
     ):
         raise HTTPException(
-            400,
-            f"Нельзя запустить загрузку на этапе '{session.stage}'"
+            400, f"Нельзя запустить загрузку на этапе '{session.stage}'"
         )
 
     if not session.technical_data:
@@ -377,6 +373,7 @@ async def approve_files(
 
 # ──────────────── ЭТАП 5: Повтор после ручного фикса ────────────────────────
 
+
 @gpt_router.post("/retry-after-manual-fix")
 async def retry_after_manual_fix_endpoint(
     request: ApproveFilesRequest,
@@ -392,8 +389,7 @@ async def retry_after_manual_fix_endpoint(
         PipelineStage.FAILED,
     ):
         raise HTTPException(
-            400,
-            f"Повтор загрузки недоступен на этапе '{session.stage}'"
+            400, f"Повтор загрузки недоступен на этапе '{session.stage}'"
         )
 
     session.stage = PipelineStage.UPLOADING
@@ -412,6 +408,7 @@ async def retry_after_manual_fix_endpoint(
 
 # ──────────────────────────── Прогресс ──────────────────────────────────────
 
+
 @gpt_router.get("/upload-progress/{session_id}")
 async def get_upload_progress(
     session_id: str,
@@ -424,20 +421,21 @@ async def get_upload_progress(
     progress = session.progress or {}
 
     return {
-        "status":             progress.get("status", "idle"),
-        "stage":              session.stage,
-        "current_step":       progress.get("current_step"),
-        "error":              progress.get("error"),
-        "retries":            progress.get("retries"),
-        "upload_errors":      session.upload_errors or {},
+        "status": progress.get("status", "idle"),
+        "stage": session.stage,
+        "current_step": progress.get("current_step"),
+        "error": progress.get("error"),
+        "retries": progress.get("retries"),
+        "upload_errors": session.upload_errors or {},
         "polygon_problem_id": session.polygon_problem_id,
         # Возвращаем technical_data чтобы фронт мог обновить файлы
         # если ИИ что-то поправил автоматически
-        "technical_data":     session.technical_data,
+        "technical_data": session.technical_data,
     }
 
 
 # ──────────────── Получение сессии (загрузка страницы) ──────────────────────
+
 
 @gpt_router.get("/session/{session_id}")
 async def get_session(
@@ -449,14 +447,14 @@ async def get_session(
     session = await get_session_or_404(session_id, user_id, db)
 
     return {
-        "session_id":         session.id,
-        "stage":              session.stage,
-        "statement":          session.statement,
-        "technical_data":     session.technical_data,
-        "history":            session.history or [],
-        "model":              session.model,
-        "system_prompt":      session.system_prompt,
-        "progress":           session.progress or {"status": "idle"},
-        "upload_errors":      session.upload_errors or {},
+        "session_id": session.id,
+        "stage": session.stage,
+        "statement": session.statement,
+        "technical_data": session.technical_data,
+        "history": session.history or [],
+        "model": session.model,
+        "system_prompt": session.system_prompt,
+        "progress": session.progress or {"status": "idle"},
+        "upload_errors": session.upload_errors or {},
         "polygon_problem_id": session.polygon_problem_id,
     }
