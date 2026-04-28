@@ -8,7 +8,7 @@ from yarl import URL
 
 from api.user.polygon.create_signature import create_signature
 from api.user.polygon.get_response import get_response
-from api.user.polygon import add_source
+from api.user.polygon.files.gen.add_source_file import add_source
 from models import User
 from settings import settings
 
