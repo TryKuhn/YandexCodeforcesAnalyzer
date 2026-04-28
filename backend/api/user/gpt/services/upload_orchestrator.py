@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import time
 import traceback
 from typing import Dict
 
@@ -34,27 +35,13 @@ async def _update_session(session_id: str, data: Dict, db: AsyncSession):
 
 
 def _make_polygon_name(model: str, statement: Dict, session_id: str) -> str:
-    """
-    Формирует корректное имя для задачи в Polygon.
-
-    Пример: claude-twosum-a3f1
-    Фикс бага claud--5843: если safe_name пустой — используем 'task'
-    """
-    # Берём последнюю часть модели (после '/'), убираем спецсимволы, берём до 8 букв
     model_short = re.sub(r"[^a-z0-9]", "", model.split("/")[-1].lower())[:8]
 
-    task_name = statement.get("name", "")
-    # Оставляем только латинские буквы и цифры
-    safe_name = re.sub(r"[^a-z0-9]", "", task_name.lower())[:12]
-
-    # Фикс: если имя задачи пустое или не содержит латиницы — ставим заглушку
-    if not safe_name:
-        safe_name = "task"
-
-    # Берём первые 4 символа session_id для уникальности
     suffix = session_id[:4]
 
-    return f"{model_short}-{safe_name}-{suffix}"
+    timestamp = str(int(time.time()))[-5:]
+
+    return f"{model_short}-task-{suffix}-{timestamp}"
 
 
 async def run_upload_pipeline(session_id: str):

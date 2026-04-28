@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user.polygon import add_source
+from api.user.polygon.files.gen.add_source_file import add_source
 
 
 async def set_generator(

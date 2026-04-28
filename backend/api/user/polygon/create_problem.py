@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
 from api.user.polygon.create_signature import create_signature
-from api.user.polygon.get_response import get_response
+from api.user.polygon.get_response import get_response, PolygonAPIError
 from models import User
 from settings import settings
 
@@ -47,7 +47,9 @@ async def create_problem(name: str, user_id: int, db: AsyncSession):
         try:
             response = await get_response(session, url, params)
 
-            # CHECK
+            if response["id"] == "":
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to create problem")
+
             return response["id"]
-        except RuntimeError as e:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        except PolygonAPIError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
