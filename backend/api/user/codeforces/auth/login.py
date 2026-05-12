@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +9,8 @@ from api.pydantic_schemas import LinkCodeforces
 from api.user.codeforces.base_codeforces import router as codeforces_router
 from app.database import get_db
 from models import User
+
+logger = logging.getLogger(__name__)
 
 
 @codeforces_router.post("/link")
@@ -24,6 +28,7 @@ async def link_codeforces(
 
     await db.commit()
 
+    logger.info(f"Codeforces API key linked: user_id={user_id}")
     return {"message": "Codeforces account successfully linked"}
 
 
