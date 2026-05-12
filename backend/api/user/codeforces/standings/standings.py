@@ -8,7 +8,8 @@ from yarl import URL
 
 from api.crypt import get_current_user
 from api.pydantic_schemas import Standings
-from api.user.codeforces import codeforces_router, create_signature
+from api.user.codeforces import codeforces_router
+from api.user.codeforces.create_signature import create_signature
 from api.user.codeforces.format import format_codeforces_standings
 from api.user.codeforces.get_response import get_response
 from api.user.merge_table import merge_table
