@@ -3,6 +3,43 @@ import re
 from pydantic import BaseModel, EmailStr, field_validator
 
 
+def _validate_password_rules(value: str) -> str:
+    if " " in value:
+        raise ValueError("Password must not contain spaces")
+
+    if any(c.isalpha() and not c.isascii() for c in value):
+        raise ValueError("Password must contain only Latin letters")
+
+    has_lower = bool(re.search("[a-z]", value))
+    has_upper = bool(re.search("[A-Z]", value))
+    has_digit = bool(re.search("[0-9]", value))
+    has_special = bool(re.search(r"[.,<>_?!@#$%^&*()]", value))
+
+    if has_lower and not has_upper and not has_digit and not has_special:
+        raise ValueError("Only lowercase letters!")
+    if has_upper and not has_lower and not has_digit and not has_special:
+        raise ValueError("Only uppercase letters!")
+    if not has_lower and not has_upper and not has_special:
+        raise ValueError("Password format is invalid")
+    if not has_lower and not has_upper and not has_digit:
+        raise ValueError("Password format is invalid")
+
+    if len(value) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+    if len(value) > 30:
+        raise ValueError("Password length must not exceed 30 characters")
+    if not has_lower:
+        raise ValueError("Password must contain at least one lowercase Latin letter")
+    if not has_upper:
+        raise ValueError("Password must contain at least one uppercase Latin letter")
+    if not has_digit:
+        raise ValueError("Password must contain at least one digit")
+    if not has_special:
+        raise ValueError("Password must contain at least one special symbol")
+
+    return value
+
+
 class UserRegister(BaseModel):
     login: str
     password: str
@@ -25,20 +62,7 @@ class UserRegister(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str):
-        if len(value) < 8:
-            raise ValueError("Password length must contain at least 8 characters")
-        if len(value) > 30:
-            raise ValueError("Password length must contain at most 30 characters")
-        if not re.search("[a-z]", value):
-            raise ValueError("Password must contain lowercase letters")
-        if not re.search("[A-Z]", value):
-            raise ValueError("Password must contain uppercase letters")
-        if not re.search("[0-9]", value):
-            raise ValueError("Password must contain numbers")
-        if not re.search(r"[.,<>_?!@#$%^&*()]", value):
-            raise ValueError("Password must contain special characters")
-
-        return value
+        return _validate_password_rules(value)
 
 
 class UserLogin(BaseModel):
@@ -52,6 +76,14 @@ class Token(BaseModel):
     token_type: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str
+
+
 class Authorization(BaseModel):
     Bearer: str
 
@@ -63,18 +95,5 @@ class ChangePassword(BaseModel):
 
     @field_validator("new_password")
     @classmethod
-    def validate_password(cls, value: str):
-        if len(value) < 8:
-            raise ValueError("Password length must contain at least 8 characters")
-        if len(value) > 30:
-            raise ValueError("Password length must contain at most 30 characters")
-        if not re.search("[a-z]", value):
-            raise ValueError("Password must contain lowercase letters")
-        if not re.search("[A-Z]", value):
-            raise ValueError("Password must contain uppercase letters")
-        if not re.search("[0-9]", value):
-            raise ValueError("Password must contain numbers")
-        if not re.search(r"[.,<>_?!@#$%^&*()]", value):
-            raise ValueError("Password must contain special characters")
-
-        return value
+    def validate_new_password(cls, value: str):
+        return _validate_password_rules(value)

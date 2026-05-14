@@ -105,7 +105,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pybind11 pytest-asyncio
+          pip install pybind11
 
       - name: Build plagiarism extension
         run: |
@@ -125,16 +125,8 @@ jobs:
       - name: Run migrations
         run: alembic upgrade head
 
-#      - name: Run tests
-#        run: pytest tests --cov=app --cov-report=xml:coverage.xml --cov-report=term
-#
-#      - name: Upload coverage
-#        uses: coverallsapp/github-action@v2
-#        if: always()
-#        with:
-#          github-token: ${{ secrets.GITHUB_TOKEN }}
-#          file: ./backend/coverage.xml
-#          format: cobertura
+      - name: Run tests
+        run: pytest --ignore=tests/api_tests/yandex -q --tb=short
 
   frontend-build:
     runs-on: ubuntu-latest

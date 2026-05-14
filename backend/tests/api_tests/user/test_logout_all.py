@@ -1,248 +1,77 @@
-from backend.tests.api_tests.test_base import client
+from tests.api_tests.test_base import client
+
+BASE = "/api/auth"
 
 
-# Basic successful logout all
+def _register_and_login(login, password="Aa1!aaaa"):
+    client.post(f"{BASE}/register", json={"login": login, "password": password, "email": f"{login}@example.com"})
+    r = client.post(f"{BASE}/login", json={"login": login, "password": password})
+    return r.json()
+
+
+def _logout_all(refresh_token):
+    return client.post(f"{BASE}/logout_all", json={"refresh_token": refresh_token})
+
+
+def _logout(refresh_token):
+    return client.post(f"{BASE}/logout", json={"refresh_token": refresh_token})
+
+
 def test_logout_all_success():
-    client.post(
-        "/register",
-        json={
-            "login": "logout_all_success_user",
-            "password": "Aa1!aaaa",
-            "email": "logout_all_success_user@example.com",
-        },
-    )
-
-    login_response = client.post(
-        "/login",
-        json={
-            "login": "logout_all_success_user",
-            "password": "Aa1!aaaa",
-        },
-    )
-
-    refresh_token = login_response.json()["refresh_token"]
-
-    response = client.post(
-        "/logout_all",
-        json={
-            "refresh_token": refresh_token,
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.json() == {"message": "Logout all successful!"}
+    tokens = _register_and_login("logout_all_success_user")
+    r = _logout_all(tokens["refresh_token"])
+    assert r.status_code == 200
+    assert r.json() == {"message": "Logout all successful!"}
 
 
-# Refresh token does not exist
 def test_logout_all_invalid_refresh_token():
-    response = client.post(
-        "/logout_all",
-        json={
-            "refresh_token": "invalid_refresh_token",
-        },
-    )
-
-    assert response.status_code == 400
-    assert response.json() == {"detail": "Invalid refresh token"}
+    r = _logout_all("invalid_refresh_token")
+    assert r.status_code == 400
+    assert r.json() == {"detail": "Invalid refresh token"}
 
 
-# User logs in two times and logs out from all sessions
 def test_logout_all_removes_all_user_sessions():
-    client.post(
-        "/register",
-        json={
-            "login": "logout_all_two_sessions_user",
-            "password": "Aa1!aaaa",
-            "email": "logout_all_two_sessions_user@example.com",
-        },
-    )
+    _register_and_login("logout_all_two_sessions_user")
+    rt1 = client.post(f"{BASE}/login", json={"login": "logout_all_two_sessions_user", "password": "Aa1!aaaa"}).json()["refresh_token"]
+    rt2 = client.post(f"{BASE}/login", json={"login": "logout_all_two_sessions_user", "password": "Aa1!aaaa"}).json()["refresh_token"]
 
-    login_response_1 = client.post(
-        "/login",
-        json={
-            "login": "logout_all_two_sessions_user",
-            "password": "Aa1!aaaa",
-        },
-    )
+    r = _logout_all(rt1)
+    assert r.status_code == 200
+    assert r.json() == {"message": "Logout all successful!"}
 
-    login_response_2 = client.post(
-        "/login",
-        json={
-            "login": "logout_all_two_sessions_user",
-            "password": "Aa1!aaaa",
-        },
-    )
-
-    refresh_token_1 = login_response_1.json()["refresh_token"]
-    refresh_token_2 = login_response_2.json()["refresh_token"]
-
-    logout_all_response = client.post(
-        "/logout_all",
-        json={
-            "refresh_token": refresh_token_1,
-        },
-    )
-
-    logout_response_1 = client.post(
-        "/logout",
-        json={
-            "refresh_token": refresh_token_1,
-        },
-    )
-
-    logout_response_2 = client.post(
-        "/logout",
-        json={
-            "refresh_token": refresh_token_2,
-        },
-    )
-
-    assert logout_all_response.status_code == 200
-    assert logout_all_response.json() == {"message": "Logout all successful!"}
-
-    assert logout_response_1.status_code == 400
-    assert logout_response_1.json() == {"detail": "Invalid refresh token"}
-
-    assert logout_response_2.status_code == 400
-    assert logout_response_2.json() == {"detail": "Invalid refresh token"}
+    assert _logout(rt1).status_code == 400
+    assert _logout(rt2).status_code == 400
 
 
-# Logout all should not affect another user
 def test_logout_all_does_not_affect_another_user():
-    client.post(
-        "/register",
-        json={
-            "login": "first_logout_all_user",
-            "password": "Aa1!aaaa",
-            "email": "first_logout_all_user@example.com",
-        },
-    )
+    _register_and_login("first_logout_all_user")
+    tokens2 = _register_and_login("second_logout_all_user", password="Bb2@bbbb")
+    rt1a = client.post(f"{BASE}/login", json={"login": "first_logout_all_user", "password": "Aa1!aaaa"}).json()["refresh_token"]
+    rt1b = client.post(f"{BASE}/login", json={"login": "first_logout_all_user", "password": "Aa1!aaaa"}).json()["refresh_token"]
 
-    client.post(
-        "/register",
-        json={
-            "login": "second_logout_all_user",
-            "password": "Bb2@bbbb",
-            "email": "second_logout_all_user@example.com",
-        },
-    )
+    r = _logout_all(rt1a)
+    assert r.status_code == 200
 
-    first_login_response_1 = client.post(
-        "/login",
-        json={
-            "login": "first_logout_all_user",
-            "password": "Aa1!aaaa",
-        },
-    )
+    assert _logout(rt1a).status_code == 400
+    assert _logout(rt1b).status_code == 400
 
-    first_login_response_2 = client.post(
-        "/login",
-        json={
-            "login": "first_logout_all_user",
-            "password": "Aa1!aaaa",
-        },
-    )
-
-    second_login_response = client.post(
-        "/login",
-        json={
-            "login": "second_logout_all_user",
-            "password": "Bb2@bbbb",
-        },
-    )
-
-    first_refresh_token_1 = first_login_response_1.json()["refresh_token"]
-    first_refresh_token_2 = first_login_response_2.json()["refresh_token"]
-    second_refresh_token = second_login_response.json()["refresh_token"]
-
-    logout_all_response = client.post(
-        "/logout_all",
-        json={
-            "refresh_token": first_refresh_token_1,
-        },
-    )
-
-    first_logout_response_1 = client.post(
-        "/logout",
-        json={
-            "refresh_token": first_refresh_token_1,
-        },
-    )
-
-    first_logout_response_2 = client.post(
-        "/logout",
-        json={
-            "refresh_token": first_refresh_token_2,
-        },
-    )
-
-    second_logout_response = client.post(
-        "/logout",
-        json={
-            "refresh_token": second_refresh_token,
-        },
-    )
-
-    assert logout_all_response.status_code == 200
-    assert logout_all_response.json() == {"message": "Logout all successful!"}
-
-    assert first_logout_response_1.status_code == 400
-    assert first_logout_response_1.json() == {"detail": "Invalid refresh token"}
-
-    assert first_logout_response_2.status_code == 400
-    assert first_logout_response_2.json() == {"detail": "Invalid refresh token"}
-
-    assert second_logout_response.status_code == 200
-    assert second_logout_response.json() == {"message": "Logout successful!"}
+    # Second user unaffected
+    r2 = _logout(tokens2["refresh_token"])
+    assert r2.status_code == 200
+    assert r2.json() == {"message": "Logout successful!"}
 
 
-# Same refresh token is used again after logout all
 def test_logout_all_twice_with_same_refresh_token():
-    client.post(
-        "/register",
-        json={
-            "login": "logout_all_twice_user",
-            "password": "Aa1!aaaa",
-            "email": "logout_all_twice_user@example.com",
-        },
-    )
-
-    login_response = client.post(
-        "/login",
-        json={
-            "login": "logout_all_twice_user",
-            "password": "Aa1!aaaa",
-        },
-    )
-
-    refresh_token = login_response.json()["refresh_token"]
-
-    response_1 = client.post(
-        "/logout_all",
-        json={
-            "refresh_token": refresh_token,
-        },
-    )
-
-    response_2 = client.post(
-        "/logout_all",
-        json={
-            "refresh_token": refresh_token,
-        },
-    )
-
-    assert response_1.status_code == 200
-    assert response_1.json() == {"message": "Logout all successful!"}
-
-    assert response_2.status_code == 400
-    assert response_2.json() == {"detail": "Invalid refresh token"}
+    tokens = _register_and_login("logout_all_twice_user")
+    rt = tokens["refresh_token"]
+    r1 = _logout_all(rt)
+    r2 = _logout_all(rt)
+    assert r1.status_code == 200
+    assert r1.json() == {"message": "Logout all successful!"}
+    assert r2.status_code == 400
+    assert r2.json() == {"detail": "Invalid refresh token"}
 
 
-# Missing refresh token field
 def test_logout_all_without_refresh_token():
-    response = client.post(
-        "/logout_all",
-        json={},
-    )
-
-    assert response.status_code == 422
+    r = client.post(f"{BASE}/logout_all", json={})
+    assert r.status_code == 422

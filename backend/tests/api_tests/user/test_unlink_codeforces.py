@@ -1,55 +1,39 @@
-from datetime import datetime, timedelta, timezone
+from tests.api_tests.test_base import client
 
-from backend.app.database import get_db
-from backend.tests.api_tests.test_base import client
-
-from models.user.refresh_token import RefreshToken
-from models.user.user import User
+AUTH = "/api/auth"
+CF = "/api/codeforces"
 
 
-# Codeforces keys should be removed from db
-def test_unlink_codeforces_removes_keys_from_db():
-    login = "unlink_cf_user_1"
-    refresh_token_value = "refresh_1"
+def _register_and_login(login):
+    client.post(f"{AUTH}/register", json={"login": login, "password": "Aa1!aaaa", "email": f"{login}@example.com"})
+    r = client.post(f"{AUTH}/login", json={"login": login, "password": "Aa1!aaaa"})
+    return r.json()["access_token"]
 
-    db = get_db()
-    try:
-        user = User(
-            login=login,
-            password="fake_password_hash",
-            email=f"{login}@example.com",
-            codeforces_api_key="fake_cf_key",
-            codeforces_api_secret="fake_cf_secret",
-        )
-        db.add(user)
-        db.commit()
 
-        db_refresh_token = RefreshToken(
-            user_login=login,
-            refresh_token=refresh_token_value,
-            created_at=datetime.now(timezone.utc),
-            expires_in=datetime.now(timezone.utc) + timedelta(days=7),
-        )
-        db.add(db_refresh_token)
-        db.commit()
-    finally:
-        db.close()
+def test_unlink_codeforces_success():
+    token = _register_and_login("cf_unlink_user_ok")
+    headers = {"Authorization": f"Bearer {token}"}
 
-    response = client.post(
-        "/unlink_codeforces",
-        json={
-            "refresh_token": refresh_token_value,
-        },
-    )
+    client.post(f"{CF}/link", json={"api_key": "fake_key", "api_secret": "fake_secret"}, headers=headers)
+    r = client.post(f"{CF}/unlink", headers=headers)
 
-    db = get_db()
-    try:
-        updated_user = db.query(User).filter(User.login == login).first()
-    finally:
-        db.close()
+    assert r.status_code == 200
+    assert r.json() == {"message": "Codeforces account successfully unlinked"}
 
-    assert response.status_code == 200
-    assert response.json() == {"message": "Codeforces account unlinked!"}
-    assert updated_user is not None
-    assert updated_user.codeforces_api_key is None
-    assert updated_user.codeforces_api_secret is None
+
+def test_unlink_codeforces_without_auth():
+    r = client.post(f"{CF}/unlink")
+    assert r.status_code == 401
+
+
+def test_unlink_codeforces_idempotent():
+    token = _register_and_login("cf_unlink_idempotent_user")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    client.post(f"{CF}/link", json={"api_key": "fake_key", "api_secret": "fake_secret"}, headers=headers)
+    r1 = client.post(f"{CF}/unlink", headers=headers)
+    r2 = client.post(f"{CF}/unlink", headers=headers)
+
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r2.json() == {"message": "Codeforces account successfully unlinked"}

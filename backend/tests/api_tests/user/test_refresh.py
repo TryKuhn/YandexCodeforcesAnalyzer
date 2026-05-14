@@ -1,212 +1,69 @@
-from backend.tests.api_tests.test_base import client
+from tests.api_tests.test_base import client
+
+BASE = "/api/auth"
 
 
-def assert_refresh_response_json(response):
+def _register_and_login(login, password="Aa1!aaaa"):
+    client.post(f"{BASE}/register", json={"login": login, "password": password, "email": f"{login}@example.com"})
+    r = client.post(f"{BASE}/login", json={"login": login, "password": password})
+    return r.json()
+
+
+def _refresh(refresh_token):
+    return client.post(f"{BASE}/refresh", json={"refresh_token": refresh_token})
+
+
+def _assert_token_response(response):
     data = response.json()
-
     assert response.status_code == 200
     assert "access_token" in data
     assert "refresh_token" in data
     assert "token_type" in data
-    assert data["token_type"] == "bearer"
+    assert data["token_type"] == "Bearer"
 
 
-# Basic successful refresh
 def test_refresh_success():
-    client.post(
-        "/register",
-        json={
-            "login": "refresh_success_user",
-            "password": "Aa1!aaaa",
-            "email": "refresh_success_user@example.com",
-        },
-    )
-
-    login_response = client.post(
-        "/login",
-        json={
-            "login": "refresh_success_user",
-            "password": "Aa1!aaaa",
-        },
-    )
-
-    old_refresh_token = login_response.json()["refresh_token"]
-
-    response = client.post(
-        "/refresh",
-        json={
-            "refresh_token": old_refresh_token,
-        },
-    )
-
-    assert response.status_code == 200
+    tokens = _register_and_login("refresh_success_user")
+    assert _refresh(tokens["refresh_token"]).status_code == 200
 
 
-# Check full json after refresh
 def test_refresh_returns_correct_json():
-    client.post(
-        "/register",
-        json={
-            "login": "refresh_json_user",
-            "password": "Aa1!aaaa",
-            "email": "refresh_json_user@example.com",
-        },
-    )
-
-    login_response = client.post(
-        "/login",
-        json={
-            "login": "refresh_json_user",
-            "password": "Aa1!aaaa",
-        },
-    )
-
-    old_refresh_token = login_response.json()["refresh_token"]
-
-    response = client.post(
-        "/refresh",
-        json={
-            "refresh_token": old_refresh_token,
-        },
-    )
-
-    assert_refresh_response_json(response)
+    tokens = _register_and_login("refresh_json_user")
+    _assert_token_response(_refresh(tokens["refresh_token"]))
 
 
-# New refresh token should be different from old one
 def test_refresh_returns_new_refresh_token():
-    client.post(
-        "/register",
-        json={
-            "login": "refresh_new_token_user",
-            "password": "Aa1!aaaa",
-            "email": "refresh_new_token_user@example.com",
-        },
-    )
-
-    login_response = client.post(
-        "/login",
-        json={
-            "login": "refresh_new_token_user",
-            "password": "Aa1!aaaa",
-        },
-    )
-
-    old_refresh_token = login_response.json()["refresh_token"]
-
-    refresh_response = client.post(
-        "/refresh",
-        json={
-            "refresh_token": old_refresh_token,
-        },
-    )
-
-    new_refresh_token = refresh_response.json()["refresh_token"]
-
-    assert refresh_response.status_code == 200
-    assert new_refresh_token != old_refresh_token
+    tokens = _register_and_login("refresh_new_token_user")
+    r = _refresh(tokens["refresh_token"])
+    assert r.status_code == 200
+    assert r.json()["refresh_token"] != tokens["refresh_token"]
 
 
-# Old refresh token should not work after refresh
 def test_refresh_old_token_is_invalid_after_refresh():
-    client.post(
-        "/register",
-        json={
-            "login": "refresh_old_token_user",
-            "password": "Aa1!aaaa",
-            "email": "refresh_old_token_user@example.com",
-        },
-    )
-
-    login_response = client.post(
-        "/login",
-        json={
-            "login": "refresh_old_token_user",
-            "password": "Aa1!aaaa",
-        },
-    )
-
-    old_refresh_token = login_response.json()["refresh_token"]
-
-    first_refresh_response = client.post(
-        "/refresh",
-        json={
-            "refresh_token": old_refresh_token,
-        },
-    )
-
-    second_refresh_response = client.post(
-        "/refresh",
-        json={
-            "refresh_token": old_refresh_token,
-        },
-    )
-
-    assert first_refresh_response.status_code == 200
-    assert second_refresh_response.status_code == 401
-    assert second_refresh_response.json() == {"detail": "Invalid refresh token"}
+    tokens = _register_and_login("refresh_old_token_user")
+    old_rt = tokens["refresh_token"]
+    r1 = _refresh(old_rt)
+    r2 = _refresh(old_rt)
+    assert r1.status_code == 200
+    assert r2.status_code == 401
+    assert r2.json() == {"detail": "Invalid refresh token"}
 
 
-# New refresh token should work too
 def test_refresh_new_token_can_be_used_again():
-    client.post(
-        "/register",
-        json={
-            "login": "refresh_again_user",
-            "password": "Aa1!aaaa",
-            "email": "refresh_again_user@example.com",
-        },
-    )
-
-    login_response = client.post(
-        "/login",
-        json={
-            "login": "refresh_again_user",
-            "password": "Aa1!aaaa",
-        },
-    )
-
-    first_refresh_token = login_response.json()["refresh_token"]
-
-    first_refresh_response = client.post(
-        "/refresh",
-        json={
-            "refresh_token": first_refresh_token,
-        },
-    )
-
-    second_refresh_token = first_refresh_response.json()["refresh_token"]
-
-    second_refresh_response = client.post(
-        "/refresh",
-        json={
-            "refresh_token": second_refresh_token,
-        },
-    )
-
-    assert first_refresh_response.status_code == 200
-    assert second_refresh_response.status_code == 200
-    assert_refresh_response_json(second_refresh_response)
+    tokens = _register_and_login("refresh_again_user")
+    r1 = _refresh(tokens["refresh_token"])
+    r2 = _refresh(r1.json()["refresh_token"])
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    _assert_token_response(r2)
 
 
-# Refresh token does not exist
 def test_refresh_invalid_refresh_token():
-    response = client.post(
-        "/refresh",
-        json={
-            "refresh_token": "invalid_refresh_token",
-        },
-    )
-
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid refresh token"}
+    r = _refresh("invalid_refresh_token")
+    assert r.status_code == 401
+    assert r.json() == {"detail": "Invalid refresh token"}
 
 
-# Missing refresh token field
 def test_refresh_without_refresh_token():
-    response = client.post(
-        "/refresh",
-        json={},
-    )
-
-    assert response.status_code == 422
+    r = client.post(f"{BASE}/refresh", json={})
+    assert r.status_code == 422

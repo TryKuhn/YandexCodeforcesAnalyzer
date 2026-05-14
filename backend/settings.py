@@ -63,4 +63,4 @@ class Settings(BaseSettings):
         ).render_as_string(hide_password=False)
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

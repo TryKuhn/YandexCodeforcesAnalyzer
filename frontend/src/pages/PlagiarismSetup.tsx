@@ -1,30 +1,110 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShieldCheck, ArrowLeft, Settings2, Zap, AlertCircle } from 'lucide-react';
+import { ShieldCheck, ArrowLeft, Settings2, Zap, AlertCircle, Code2, ListChecks } from 'lucide-react';
 import { api } from '../api/instance';
+
+interface Meta {
+    languages: string[];
+    tasks: string[];
+}
+
+const MultiSelect = ({
+    label,
+    icon,
+    items,
+    selected,
+    onChange,
+}: {
+    label: string;
+    icon: React.ReactNode;
+    items: string[];
+    selected: string[];
+    onChange: (v: string[]) => void;
+}) => {
+    const allSelected = selected.length === 0;
+
+    const toggle = (item: string) => {
+        if (selected.includes(item)) {
+            const next = selected.filter((s) => s !== item);
+            onChange(next);
+        } else {
+            onChange([...selected, item]);
+        }
+    };
+
+    const selectAll = () => onChange([]);
+
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg">
+                    {icon}
+                </div>
+                <span className="font-bold text-sm dark:text-slate-300">{label}</span>
+                <button
+                    onClick={selectAll}
+                    className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded transition-colors ${
+                        allSelected
+                            ? 'bg-blue-600 text-white'
+                            : 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                    }`}
+                >
+                    Все
+                </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {items.map((item) => {
+                    const active = selected.includes(item);
+                    return (
+                        <button
+                            key={item}
+                            onClick={() => toggle(item)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                                active
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                            }`}
+                        >
+                            {item}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
 
 export const PlagiarismSetup = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    const [meta, setMeta] = useState<Meta>({ languages: [], tasks: [] });
 
     const [config, setConfig] = useState({
         threshold: 70,
-        onlyOk: true
+        onlyOk: true,
+        languages: [] as string[],
+        tasks: [] as string[],
     });
+
+    useEffect(() => {
+        api.get(`/analytics/contests/${id}/submissions/meta`)
+            .then((r) => setMeta(r.data))
+            .catch(() => {});
+    }, [id]);
 
     const startCheck = async () => {
         setLoading(true);
         try {
-            // Передаем порог как дробь 0.7 для C++, либо как 70 — как настроен бек
             const res = await api.post(`/analytics/contests/${id}/check`, {
                 threshold: config.threshold / 100,
-                onlyOk: config.onlyOk
+                onlyOk: config.onlyOk,
+                languages: config.languages.length > 0 ? config.languages : null,
+                tasks: config.tasks.length > 0 ? config.tasks : null,
             });
-            // Переходим на страницу отчета (report_id берем из ответа бека)
             navigate(`/contests/${id}/analytics/reports/${res.data.reportId}`);
         } catch (e) {
-            alert("Ошибка при запуске анализа");
+            alert('Ошибка при запуске анализа');
         } finally {
             setLoading(false);
         }
@@ -58,7 +138,7 @@ export const PlagiarismSetup = () => {
                             type="range" min="10" max="100" step="5"
                             className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600"
                             value={config.threshold}
-                            onChange={(e) => setConfig({...config, threshold: parseInt(e.target.value)})}
+                            onChange={(e) => setConfig({ ...config, threshold: parseInt(e.target.value) })}
                         />
                     </div>
 
@@ -78,10 +158,36 @@ export const PlagiarismSetup = () => {
                                 type="checkbox"
                                 className="w-6 h-6 rounded-lg border-none bg-slate-200 dark:bg-slate-700 text-blue-600 focus:ring-0"
                                 checked={config.onlyOk}
-                                onChange={(e) => setConfig({...config, onlyOk: e.target.checked})}
+                                onChange={(e) => setConfig({ ...config, onlyOk: e.target.checked })}
                             />
                         </label>
                     </div>
+
+                    {/* Фильтр по языкам */}
+                    {meta.languages.length > 0 && (
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+                            <MultiSelect
+                                label="Языки программирования"
+                                icon={<Code2 size={16} />}
+                                items={meta.languages}
+                                selected={config.languages}
+                                onChange={(v) => setConfig({ ...config, languages: v })}
+                            />
+                        </div>
+                    )}
+
+                    {/* Фильтр по задачам */}
+                    {meta.tasks.length > 0 && (
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+                            <MultiSelect
+                                label="Задачи"
+                                icon={<ListChecks size={16} />}
+                                items={meta.tasks}
+                                selected={config.tasks}
+                                onChange={(v) => setConfig({ ...config, tasks: v })}
+                            />
+                        </div>
+                    )}
 
                     <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 dark:border-amber-800/30 flex gap-3">
                         <AlertCircle className="text-amber-600 shrink-0" size={20} />

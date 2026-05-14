@@ -1,3 +1,4 @@
+import logging
 from base64 import b64encode
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
@@ -7,13 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Contest, ContestParticipant, Submission, Task, TaskResult
 
+logger = logging.getLogger(__name__)
+
 
 def format_yandex_standings(
     contest_info: dict, standings: Dict[str, dict], user_id: int, unofficial: bool
-) -> Tuple[Contest, List[Task], List[ContestParticipant]]:
+) -> Tuple[Contest, List[Task], List[Tuple[ContestParticipant, List[TaskResult]]]]:
     contest = contest_info
-    problems = standings.get("titles", [])
-    rows = standings.get("rows", [])
+    problems: list[Any] = standings.get("titles", [])  # type: ignore[assignment]
+    rows: list[Any] = standings.get("rows", [])  # type: ignore[assignment]
 
     start_time = None
     if "startTime" in contest:
@@ -28,15 +31,16 @@ def format_yandex_standings(
     best_scores = [0.0] * len(problems)
     for row in rows:
         for idx, problem in enumerate(row["problemResults"]):
-            if problem["score"] == "":
-                points = int(problem["status"] == "ACCEPTED")
-            else:
-                points = float(problem["score"])
+            points: float = (
+                float(int(problem["status"] == "ACCEPTED"))
+                if problem["score"] == ""
+                else float(problem["score"])
+            )
 
             if points > best_scores[idx]:
                 best_scores[idx] = points
 
-    print(best_scores)
+    logger.debug(f"Best scores per problem: {best_scores}")
 
     formatted_contest = Contest(
         external_id=contest["id"],
@@ -63,7 +67,7 @@ def format_yandex_standings(
         )
 
     merged_participants = {}
-    merged_results = {}
+    merged_results: dict[str, dict[str, TaskResult]] = {}
 
     for row in rows:
         login = row["participantInfo"]["login"]
@@ -77,10 +81,11 @@ def format_yandex_standings(
 
         for idx, problem in enumerate(row["problemResults"]):
             task_id = formatted_problems[idx].id
-            if problem["score"] == "":
-                points = int(problem["status"] == "ACCEPTED")
-            else:
-                points = float(problem["score"])
+            points = (
+                float(int(problem["status"] == "ACCEPTED"))
+                if problem["score"] == ""
+                else float(problem["score"])
+            )
             tries = int(problem.get("submissionCount", 1)) - 1
 
             success_time = None
@@ -90,7 +95,7 @@ def format_yandex_standings(
             if task_id in merged_results[login]:
                 old_res = merged_results[login][task_id]
 
-                if points > old_res.score:
+                if points > (old_res.score or 0):
                     old_res.score = points
                     old_res.last_success_time = success_time
                 elif points == old_res.score and success_time:
@@ -100,7 +105,7 @@ def format_yandex_standings(
                     ):
                         old_res.last_success_time = success_time
 
-                old_res.tries_count += tries
+                old_res.tries_count = (old_res.tries_count or 0) + tries
             else:
                 merged_results[login][task_id] = TaskResult(
                     task_id=task_id,
@@ -121,14 +126,14 @@ def format_yandex_standings(
             if not res:
                 continue
 
-            if res.score > 0:
+            if (res.score or 0) > 0:
                 res.verdict = "OK" if res.score == problem.max_score else "PARTIAL"
-            elif res.tries_count > 0:
+            elif (res.tries_count or 0) > 0:
                 res.verdict = "WA"
             else:
                 res.verdict = "NULL"
 
-            total_score += res.score
+            total_score += res.score or 0.0
             task_results_list.append(res)
 
         contest_participant.score = total_score
@@ -142,41 +147,46 @@ async def format_yandex_submissions(
 ) -> List[Submission]:
     formatted_submissions = []
     for submission in submissions:
-        print(submission)
+        logger.debug(f"Processing submission id={submission.get('id')}")
 
-        problem = await db.execute(
+        _problem_q = await db.execute(
             select(Task).filter_by(
                 short_name=submission["problemAlias"], contest_id=contest_id
             )
         )
-        problem = problem.scalars().first()
+        problem = _problem_q.scalars().first()
+
+        if not problem:
+            continue
 
         participant_name = submission["author"]
 
-        participant = await db.execute(
+        _participant_q = await db.execute(
             select(ContestParticipant).filter_by(
                 contest_id=contest_id, name=participant_name
             )
         )
-        participant = participant.scalars().first()
+        participant = _participant_q.scalars().first()
 
         if not participant:
             continue
 
-        task_result = await db.execute(
+        _task_result_q = await db.execute(
             select(TaskResult).filter_by(
-                task_id=problem.id, contest_participant_id=participant.id
+                task_id=problem.id,
+                contest_participant_id=participant.id,
             )
         )
-        task_result = task_result.scalars().first()
+        task_result = _task_result_q.scalars().first()
 
         if not task_result:
             continue
 
-        if submission["score"] == "" or submission["score"] is None:
-            points = int(submission["verdict"] == "ACCEPTED")
-        else:
-            points = float(submission["score"])
+        points: float = (
+            float(int(submission["verdict"] == "ACCEPTED"))
+            if (submission["score"] == "" or submission["score"] is None)
+            else float(submission["score"])
+        )
 
         formatted_submission = Submission(
             id=f'yandex_{user_id}_{contest_id}_{submission["id"]}',

@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from fastapi import Depends, HTTPException, status
@@ -5,25 +6,28 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.crypt.crypt_password import hash_token
-from api.pydantic_schemas import Token
+from api.pydantic_schemas import RefreshRequest, Token
 from api.user.auth.base_auth import router as auth_router
 from api.user.auth.tokens import get_tokens
 from app.database import get_db
 from models import RefreshToken
 
+logger = logging.getLogger(__name__)
+
 
 @auth_router.post("/refresh", response_model=Token)
-async def refresh(payload: Token, db: AsyncSession = Depends(get_db)):
+async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
     old_refresh_hash = hash_token(payload.refresh_token)
 
-    db_token = await db.execute(
+    _r = await db.execute(
         select(RefreshToken).filter_by(refresh_hash=old_refresh_hash)
     )
-    db_token = db_token.scalars().first()
+    db_token = _r.scalars().first()
 
     if not db_token:
+        logger.warning("Token refresh failed: invalid refresh token")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token."
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
         )
 
     new_sid = uuid.uuid4()
@@ -41,6 +45,8 @@ async def refresh(payload: Token, db: AsyncSession = Depends(get_db)):
     db_token.expires_in = expires_in
 
     await db.commit()
+
+    logger.debug(f"Token refreshed: user_id={user_id}")
 
     return Token(
         access_token=access_token, refresh_token=refresh_token, token_type="Bearer"

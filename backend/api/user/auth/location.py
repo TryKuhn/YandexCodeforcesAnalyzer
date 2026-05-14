@@ -2,7 +2,7 @@ import httpx
 
 
 async def get_location(ip: str) -> str:
-    if ip in ("127.0.0.1", "localhost") or ip.startswith("172."):
+    if ip in ("127.0.0.1", "localhost", "testclient") or ip.startswith("172."):
         return "Локальная сеть"
 
     try:

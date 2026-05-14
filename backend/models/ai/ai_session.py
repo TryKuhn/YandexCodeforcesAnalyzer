@@ -25,7 +25,6 @@ class AISession(Base):
     system_prompt: Mapped[str] = mapped_column(Text)
     history: Mapped[list] = mapped_column(JSON, default=list)
     statement: Mapped[dict] = mapped_column(JSON, nullable=True)
-    technical_data: Mapped[dict] = mapped_column(JSON, nullable=True)
     progress: Mapped[dict] = mapped_column(
         JSON, default=lambda: {"status": "idle"}, nullable=True
     )

@@ -4,7 +4,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
@@ -40,7 +42,7 @@ async def cleanup_expired_tokens():
                 await db.execute(stmt)
                 await db.commit()
         except Exception as e:
-            print(f"--- [CRON] Cleanup failed: {e} ---")
+            logger.error(f"Token cleanup failed: {e}")
 
         await asyncio.sleep(86400)
 
@@ -81,6 +83,23 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    value_errors = [e for e in errors if e.get("type") == "value_error"]
+    if value_errors:
+        msg = value_errors[0].get("ctx", {}).get("error", "Validation failed")
+        return JSONResponse(status_code=400, content={"detail": str(msg)})
+    return JSONResponse(status_code=422, content={"detail": "Validation error"})
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled error on {request.method} {request.url.path}: {exc}")
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 
 app.add_middleware(LoggingMiddleware)
 

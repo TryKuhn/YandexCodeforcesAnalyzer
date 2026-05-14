@@ -51,7 +51,7 @@ prod.logs.caddy:
 # Testing and linting
 
 dev.test:
-	$(DOCKER_COMPOSE) -f $(DEV) exec backend pytest tests --cov=backend
+	$(DOCKER_COMPOSE) -f $(DEV) exec backend pytest -q --tb=short
 
 dev.lint:
 	$(DOCKER_COMPOSE) -f $(DEV) exec backend ruff check .
@@ -72,6 +72,9 @@ dev.migrate.upgrade:
 
 dev.migrate.downgrade:
 	$(DOCKER_COMPOSE) -f $(DEV) exec -T backend alembic downgrade -1
+
+prod.migrate.upgrade:
+	$(DOCKER_COMPOSE) -f $(PROD) exec -T backend alembic upgrade head
 
 prod.migrate.downgrade:
 	$(DOCKER_COMPOSE) -f $(PROD) exec -T backend alembic downgrade -1

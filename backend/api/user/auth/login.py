@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from fastapi import Depends, HTTPException, Request, status
@@ -13,24 +14,28 @@ from api.user.auth.location import get_location
 from app.database import get_db
 from models import RefreshToken, Role, User
 
+logger = logging.getLogger(__name__)
+
 
 @auth_router.post("/register", response_model=Token)
 async def register(
     payload: UserRegister, request: Request, db: AsyncSession = Depends(get_db)
 ):
-    user = await db.execute(select(User).filter_by(login=payload.login))
-    user = user.scalars().first()
+    _r = await db.execute(select(User).filter_by(login=payload.login))
+    user = _r.scalars().first()
 
     if user:
+        logger.warning(f"Registration failed: login '{payload.login}' already exists")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with such login already exists.",
+            detail="User with this login already exists",
         )
 
-    role = await db.execute(select(Role).filter_by(name="Admin"))
-    role = role.scalars().first()
+    _r = await db.execute(select(Role).filter_by(name="Admin"))
+    role = _r.scalars().first()
 
     if not role:
+        logger.error("Registration failed: system role 'Admin' not found in DB")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Default system role "Admin" not found. Contact developer.',
@@ -49,6 +54,8 @@ async def register(
     await db.commit()
     await db.refresh(new_user)
 
+    logger.info(f"New user registered: '{payload.login}' (id={new_user.id})")
+
     return await login(
         UserLogin(login=payload.login, password=payload.password),
         request=request,
@@ -60,25 +67,29 @@ async def register(
 async def login(
     payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)
 ) -> Token:
-    user = await db.execute(select(User).filter_by(login=payload.login))
-    user = user.scalars().first()
+    client_ip = request.client.host if request.client else "unknown"
 
-    if not user:
+    _r = await db.execute(select(User).filter_by(login=payload.login))
+    user = _r.scalars().first()
+
+    if not user or not user.password:
+        logger.warning(f"Login failed: unknown login '{payload.login}' from {client_ip}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid login or password.",
+            detail="Invalid login or password",
         )
 
     if not verify_password(payload.password, user.password):
+        logger.warning(f"Login failed: wrong password for '{payload.login}' from {client_ip}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid login or password.",
+            detail="Invalid login or password",
         )
 
     user_id: int = user.id
     session_id = uuid.uuid4()
 
-    location = await get_location(request.client.host)
+    location = await get_location(request.client.host if request.client else "unknown")
     user_agent = f'{location} | {request.headers.get("user-agent", "Unknown")}'
 
     access_token, refresh_token, created_at, expires_in = get_tokens(
@@ -98,6 +109,8 @@ async def login(
 
     db.add(refresh_token_sub)
     await db.commit()
+
+    logger.info(f"Login successful: user_id={user_id} ('{payload.login}') from {client_ip}")
 
     return Token(
         access_token=access_token, refresh_token=refresh_token, token_type="Bearer"

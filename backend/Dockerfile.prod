@@ -1,6 +1,7 @@
-FROM python:3.11-slim
+# ── Stage 1: Build plagiarism C++ extension ──────────────────────────────────
+FROM python:3.11-slim AS builder
 
-WORKDIR /app
+WORKDIR /build
 
 RUN apt-get update && apt-get install -y \
     cmake \
@@ -11,21 +12,16 @@ RUN apt-get update && apt-get install -y \
     libboost-dev \
     pybind11-dev \
     build-essential \
-    libpq-dev \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-
-RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir pybind11
 
-COPY . .
+COPY plagiarism ./plagiarism
 
 RUN LLVM_VERSION=$(ls /usr/lib/ | grep -oP 'llvm-\K[0-9]+' | sort -rn | head -1) && \
     echo "Found LLVM version: $LLVM_VERSION" && \
-    mkdir -p /tmp/plag-build && \
-    cmake -S /app/plagiarism -B /tmp/plag-build \
+    mkdir -p /tmp/plag-build /tmp/plag-dist && \
+    cmake -S /build/plagiarism -B /tmp/plag-build \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_C_COMPILER=clang \
       -DCMAKE_CXX_COMPILER=clang++ \
@@ -33,8 +29,25 @@ RUN LLVM_VERSION=$(ls /usr/lib/ | grep -oP 'llvm-\K[0-9]+' | sort -rn | head -1)
       -DLLVM_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/llvm \
       -Dpybind11_DIR="$(python -m pybind11 --cmakedir)" && \
     cmake --build /tmp/plag-build --target plagiarism_cpp -j"$(nproc)" && \
-    find /tmp/plag-build -name "plagiarism_cpp*.so" \
-      -exec cp {} /usr/local/lib/python3.11/site-packages/ \; && \
-    rm -rf /tmp/plag-build
+    find /tmp/plag-build -name "plagiarism_cpp*.so" -exec cp {} /tmp/plag-dist/ \; && \
+    ls /tmp/plag-dist/
+
+# ── Stage 2: Runtime image ────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy compiled plagiarism extension (full filename with ABI tag preserved)
+COPY --from=builder /tmp/plag-dist/ /usr/local/lib/python3.11/site-packages/
+
+COPY . .
 
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.server:app --host 0.0.0.0 --port 8000"]

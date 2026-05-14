@@ -1,6 +1,8 @@
+import logging
+
 import httpx
 from fastapi import HTTPException
-from fastapi.params import Depends
+from fastapi import Depends
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +13,8 @@ from api.user.yandex.base_yandex import router as yandex_router
 from app.database import get_db
 from models import User
 from settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 @yandex_router.get("/auth_url")
@@ -33,18 +37,29 @@ async def yandex_callback(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "https://oauth.yandex.ru/token",
-            data={
-                "grant_type": "authorization_code",
-                "code": payload.code,
-                "client_id": settings.YANDEX_CLIENT_ID,
-                "client_secret": settings.YANDEX_CLIENT_SECRET,
-            },
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://oauth.yandex.ru/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": payload.code,
+                    "client_id": settings.YANDEX_CLIENT_ID,
+                    "client_secret": settings.YANDEX_CLIENT_SECRET,
+                },
+            )
+    except httpx.RequestError as e:
+        logger.error(f"Yandex OAuth network error for user_id={user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to connect to Yandex OAuth server",
         )
 
     if response.status_code != 200:
+        logger.error(
+            f"Yandex OAuth failed for user_id={user_id}: "
+            f"status={response.status_code} body={response.text[:200]}"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to login with Yandex API",
@@ -53,10 +68,13 @@ async def yandex_callback(
     data = response.json()
     token = data.get("access_token")
 
-    user = await db.execute(select(User).filter_by(id=user_id))
-    user = user.scalars().first()
+    _r = await db.execute(select(User).filter_by(id=user_id))
+    user = _r.scalars().first()
 
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user.yandex_access_token = token
     await db.commit()
 
+    logger.info(f"Yandex account linked: user_id={user_id}")
     return {"message": "Yandex account successfully linked"}

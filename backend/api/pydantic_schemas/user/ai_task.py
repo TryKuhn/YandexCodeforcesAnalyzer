@@ -4,10 +4,15 @@ from pydantic import BaseModel
 
 
 class AIStatementRequest(BaseModel):
-    idea: str
+    idea: Optional[str] = ""
     model: str
     user_prompt: Optional[str] = ""
     history: Optional[List[Dict]] = []
+
+
+class UpdateSessionSettingsRequest(BaseModel):
+    model: Optional[str] = None
+    system_prompt: Optional[str] = None
 
 
 class AIStatementResponse(BaseModel):
@@ -53,6 +58,16 @@ class ManualFixRequest(BaseModel):
     session_id: str
     file_key: str
     new_content: str
+
+
+class PostBuildRefineRequest(BaseModel):
+    session_id: str
+    message: str
+
+
+class ImportFromPolygonRequest(BaseModel):
+    polygon_problem_id: int
+    model: str
 
 
 class UploadProgressResponse(BaseModel):

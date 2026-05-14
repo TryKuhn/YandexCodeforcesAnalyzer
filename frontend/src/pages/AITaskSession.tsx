@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Send, Sparkles, Loader2, CheckCircle, AlertCircle,
-    FileText, UploadCloud, Code,
+    FileText, UploadCloud, Code, BookOpen,
     Terminal, RefreshCw, Edit3, Check, X, Package,
     AlertTriangle, ChevronRight, ArrowLeft
 } from 'lucide-react';
@@ -12,8 +12,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { api } from '../api/instance';
-import { useAISettings } from '../components/layout/MainLayout';
+import { useAISettings, AI_MODELS } from '../components/layout/MainLayout';
 
 // ─────────────────────────── Константы ──────────────────────────────────────
 
@@ -22,12 +24,25 @@ const FILE_LABELS: Record<string, string> = {
     generator:    'generator.cpp',
     checker:      'checker.cpp',
     solution_cpp: 'solution.cpp',
-    solution_py:  'solution.py',
+    solution_py:  'solution_py.py',
     wa_sol:       'wa.cpp',
     tl_sol:       'tl.cpp',
     re_sol:       're.cpp',
     ml_sol:       'ml.cpp',
     script:       'script.txt',
+};
+
+const FILE_LANGUAGES: Record<string, string> = {
+    validator:    'cpp',
+    generator:    'cpp',
+    checker:      'cpp',
+    solution_cpp: 'cpp',
+    solution_py:  'python',
+    wa_sol:       'cpp',
+    tl_sol:       'cpp',
+    re_sol:       'cpp',
+    ml_sol:       'cpp',
+    script:       'ftl',
 };
 
 // ─────────────────────────── Типы ───────────────────────────────────────────
@@ -82,6 +97,7 @@ const EDITABLE_STAGES: PipelineStage[] = [
     'files_review',
     'fixing_errors',
     'failed',
+    'done',
 ];
 
 const canEditFiles = (stage: PipelineStage) =>
@@ -140,15 +156,17 @@ const StepBadge = ({ stage }: { stage: PipelineStage }) => {
 
 // ─────────────────────────── Основной компонент ──────────────────────────────
 
+type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
+
 export const AITaskSession = () => {
     const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
     const navigate = useNavigate();
-    const { load: loadSettings } = useAISettings();
+    const { load: loadSettings, save: saveSettings } = useAISettings();
 
-    const [_selectedModel, setSelectedModel] = useState(() => loadSettings().model);
-    const [_systemPrompt, setSystemPrompt]   = useState(() => loadSettings().systemPrompt);
+    // Модель сессии (инициализируется из localStorage, потом из данных сессии)
+    const [sessionModel, setSessionModel] = useState<string>(() => loadSettings().model);
 
-    const [messages, setMessages]   = useState<{ role: 'user' | 'assistant' | 'system'; content: string }[]>([]);
+    const [messages, setMessages]     = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [loading, setLoading]       = useState(false);
 
@@ -161,18 +179,30 @@ export const AITaskSession = () => {
     const [progress, setProgress]                 = useState<Progress>({ status: 'idle' });
     const [initialLoading, setInitialLoading]     = useState(true);
 
-    const [viewMode, setViewMode]             = useState<'statement' | 'files'>('statement');
-    const [selectedFile, setSelectedFile]     = useState<keyof TechnicalData>('solution_cpp');
-    const [editingFile, setEditingFile]       = useState<string | null>(null);
-    const [editContent, setEditContent]       = useState('');
-    const [fileRefeedback, setFileRefeedback] = useState('');
-    const [refiningFile, setRefiningFile]     = useState<string | null>(null);
+    const [viewMode, setViewMode]         = useState<'statement' | 'tutorial' | 'files'>('statement');
+    const [selectedFile, setSelectedFile] = useState<keyof TechnicalData>('solution_cpp');
+    const [editingFile, setEditingFile]   = useState<string | null>(null);
+    const [editContent, setEditContent]   = useState('');
+    const [refiningFile, setRefiningFile] = useState<string | null>(null);
+
+    // Per-file chat state
+    const [fileChatHistories, setFileChatHistories] = useState<Record<string, ChatMessage[]>>({});
+    const [fileInput, setFileInput]                 = useState('');
+
+    // Контекст чата — независимо от выбранного файла в просмотре
+    const [chatContext, setChatContext] = useState<'statement' | string>('statement');
 
     const chatEndRef = useRef<HTMLDivElement>(null);
     const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // ── Автоскролл ──
     useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+    useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [fileChatHistories, chatContext]);
+
+    // Синхронизируем контекст чата при переходе на этап условия
+    useEffect(() => {
+        if (stage === 'statement') setChatContext('statement');
+    }, [stage]);
 
     // ── Загрузка сессии ──
     useEffect(() => {
@@ -185,8 +215,7 @@ export const AITaskSession = () => {
                 setStage(d.stage);
                 setStatement(d.statement);
                 setTechData(d.technical_data);
-                setSelectedModel(d.model);
-                setSystemPrompt(d.system_prompt || '');
+                setSessionModel(d.model);
                 setProgress(d.progress || { status: 'idle' });
                 if (d.upload_errors && Object.keys(d.upload_errors).length)
                     setUploadErrors(d.upload_errors);
@@ -208,15 +237,17 @@ export const AITaskSession = () => {
             .finally(() => setInitialLoading(false));
     }, [urlSessionId]);
 
-    useEffect(() => {
-        const handler = () => {
-            const s = loadSettings();
-            setSelectedModel(s.model);
-            setSystemPrompt(s.systemPrompt);
-        };
-        window.addEventListener('storage', handler);
-        return () => window.removeEventListener('storage', handler);
-    }, []);
+    // Обработчик смены модели в чате
+    const handleModelChange = async (newModel: string) => {
+        setSessionModel(newModel);
+        const settings = loadSettings();
+        saveSettings({ ...settings, model: newModel });
+        if (sessionId) {
+            try {
+                await api.patch(`/ai/session/${sessionId}/settings`, { model: newModel });
+            } catch { /* non-critical */ }
+        }
+    };
 
     useEffect(() => () => { if (pollingRef.current) clearInterval(pollingRef.current); }, []);
 
@@ -310,7 +341,7 @@ export const AITaskSession = () => {
         setLoading(true);
 
         try {
-            if (stage === 'statement' && sessionId) {
+            if ((stage === 'statement' || chatContext === 'statement') && sessionId && stage === 'statement') {
                 const res = await api.post('/ai/refine-statement', {
                     session_id: sessionId,
                     feedback: userMsg,
@@ -319,6 +350,22 @@ export const AITaskSession = () => {
                 setMessages(prev => [...prev, {
                     role: 'assistant',
                     content: '✏️ Обновил условие. Проверьте.',
+                }]);
+            } else if (stage === 'done' && sessionId) {
+                const fileHint = chatContext !== 'statement'
+                    ? ` (фокус на файле ${FILE_LABELS[chatContext] || chatContext})`
+                    : '';
+                const res = await api.post('/ai/post-build-refine', {
+                    session_id: sessionId,
+                    message: userMsg + fileHint,
+                });
+                if (res.data.technical_data) setTechData(res.data.technical_data);
+                const updated: string[] = res.data.updated_files || [];
+                setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: updated.length
+                        ? `✅ Обновлено: ${updated.map(k => FILE_LABELS[k] || k).join(', ')}. Нажмите «Дообновить», чтобы загрузить в Polygon.`
+                        : '🤔 Не нашёл, что изменить. Уточните запрос.',
                 }]);
             }
         } catch {
@@ -359,21 +406,36 @@ export const AITaskSession = () => {
 
     // ─────────────────── Правка файлов ──────────────────────────────────────
 
-    const handleRefineFile = async (fileKey: string) => {
-        if (!sessionId || !fileRefeedback.trim()) return;
-        setRefiningFile(fileKey);
+    const addFileMessage = (fileKey: string, msg: ChatMessage) => {
+        setFileChatHistories(prev => ({
+            ...prev,
+            [fileKey]: [...(prev[fileKey] || []), msg],
+        }));
+    };
+
+    const handleFileChatSend = async (overrideKey?: string) => {
+        if (!sessionId || !fileInput.trim() || refiningFile) return;
+
+        const msg = fileInput.trim();
+        setFileInput('');
+        const key = overrideKey ?? (chatContext !== 'statement' ? chatContext : selectedFile as string);
+
+        addFileMessage(key, { role: 'user', content: msg });
+        setRefiningFile(key);
 
         try {
             const res = await api.post('/ai/refine-file', {
                 session_id: sessionId,
-                file_key: fileKey,
-                feedback: fileRefeedback,
+                file_key: key,
+                feedback: msg,
             });
-            setTechData(prev => prev ? { ...prev, [fileKey]: res.data.new_code } : prev);
-            setFileRefeedback('');
-            addSystemMessage(`✅ ${FILE_LABELS[fileKey] || fileKey} обновлён через ИИ.`);
+            setTechData(prev => prev ? { ...prev, [key]: res.data.new_code } : prev);
+            addFileMessage(key, {
+                role: 'assistant',
+                content: `✅ ${FILE_LABELS[key] || key} обновлён.`,
+            });
         } catch {
-            addSystemMessage('❌ Не удалось обновить файл.');
+            addFileMessage(key, { role: 'assistant', content: '❌ Не удалось обновить файл.' });
         } finally {
             setRefiningFile(null);
         }
@@ -477,43 +539,53 @@ export const AITaskSession = () => {
             <div className="flex-1 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden shadow-xl">
 
                 {/* Хедер */}
-                <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-2 bg-slate-50/50 dark:bg-slate-800/50">
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => navigate('/ai-tasks')}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-                        >
-                            <ArrowLeft size={14} /> Назад
-                        </button>
+                <div className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+                    <div className="p-3 flex flex-wrap justify-between items-center gap-2">
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => navigate('/ai-tasks')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                            >
+                                <ArrowLeft size={14} /> Назад
+                            </button>
 
-                        <div className="flex bg-slate-200/50 dark:bg-slate-800 p-1 rounded-xl">
-                            <button
-                                onClick={() => setViewMode('statement')}
-                                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                                    viewMode === 'statement'
-                                        ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600'
-                                        : 'text-slate-500'
-                                }`}
-                            >
-                                <FileText size={16} /> Условие
-                            </button>
-                            <button
-                                onClick={() => setViewMode('files')}
-                                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                                    viewMode === 'files'
-                                        ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600'
-                                        : 'text-slate-500'
-                                }`}
-                            >
-                                <Code size={16} /> Файлы
-                                {techData && <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />}
-                            </button>
+                            <div className="flex bg-slate-200/50 dark:bg-slate-800 p-1 rounded-xl">
+                                <button
+                                    onClick={() => setViewMode('statement')}
+                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                                        viewMode === 'statement'
+                                            ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600'
+                                            : 'text-slate-500'
+                                    }`}
+                                >
+                                    <FileText size={16} /> Условие
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('tutorial')}
+                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                                        viewMode === 'tutorial'
+                                            ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600'
+                                            : 'text-slate-500'
+                                    }`}
+                                >
+                                    <BookOpen size={16} /> Разбор
+                                    {statement?.tutorial && <span className="w-2 h-2 bg-purple-500 rounded-full" />}
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('files')}
+                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                                        viewMode === 'files'
+                                            ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600'
+                                            : 'text-slate-500'
+                                    }`}
+                                >
+                                    <Code size={16} /> Файлы
+                                    {techData && <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />}
+                                </button>
+                            </div>
                         </div>
 
-                        {sessionId && <StepBadge stage={stage} />}
-                    </div>
-
-                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
                         {/* Утвердить условие */}
                         {statement && stage === 'statement' && (
                             <button
@@ -561,23 +633,60 @@ export const AITaskSession = () => {
                         )}
 
                         {/* Готово */}
-                        {stage === 'done' && polygonProblemId && (
-                            <a
-                                href={`https://polygon.codeforces.com/problems/${polygonProblemId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-2xl text-sm font-black transition-all shadow-lg"
-                            >
-                                <Package size={16} />
-                                Открыть в Polygon
-                            </a>
+                        {stage === 'done' && (
+                            <>
+                                <button
+                                    onClick={handleRetryUpload}
+                                    className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-2xl text-sm font-bold transition-all shadow-lg"
+                                >
+                                    <UploadCloud size={16} />
+                                    Дообновить
+                                </button>
+                                {polygonProblemId && (
+                                    <a
+                                        href={`https://polygon.codeforces.com/problems/${polygonProblemId}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-2xl text-sm font-black transition-all shadow-lg"
+                                    >
+                                        <Package size={16} />
+                                        Открыть в Polygon
+                                    </a>
+                                )}
+                            </>
                         )}
                     </div>
+                    </div>
+                    {sessionId && (
+                        <div className="px-3 pb-2 flex items-center">
+                            <StepBadge stage={stage} />
+                        </div>
+                    )}
                 </div>
 
                 {/* Контент */}
                 <div className="flex-1 overflow-y-auto">
-                    {viewMode === 'statement' ? (
+                    {viewMode === 'tutorial' ? (
+                        <div className="p-8 prose dark:prose-invert max-w-none">
+                            {statement?.tutorial ? (
+                                <div className="animate-in fade-in duration-500 dark:text-white">
+                                    <h2 className="text-2xl font-black text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+                                        <BookOpen size={24} className="text-purple-500" />
+                                        Текстовый разбор задачи
+                                    </h2>
+                                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                        {statement.tutorial}
+                                    </ReactMarkdown>
+                                </div>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center text-slate-400 py-20">
+                                    <BookOpen size={64} className="mb-4 opacity-10" />
+                                    <p className="font-bold text-lg">Разбор пока не сгенерирован</p>
+                                    <p className="text-sm mt-2 text-slate-400">Разбор появится после генерации условия с полем tutorial</p>
+                                </div>
+                            )}
+                        </div>
+                    ) : viewMode === 'statement' ? (
                         <div className="p-8 prose dark:prose-invert max-w-none">
                             {statement ? (
                                 <div className="animate-in fade-in duration-500 dark:text-white">
@@ -700,39 +809,19 @@ export const AITaskSession = () => {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="flex-1 bg-slate-950 p-4 font-mono text-sm overflow-auto text-slate-300">
-                                                <pre><code>{techData[selectedFile]}</code></pre>
+                                            <div className="flex-1 overflow-auto">
+                                                <SyntaxHighlighter
+                                                    language={FILE_LANGUAGES[selectedFile] ?? 'text'}
+                                                    style={vscDarkPlus}
+                                                    customStyle={{ margin: 0, borderRadius: 0, height: '100%', fontSize: '0.8125rem' }}
+                                                    showLineNumbers
+                                                    wrapLongLines={false}
+                                                >
+                                                    {techData[selectedFile] ?? ''}
+                                                </SyntaxHighlighter>
                                             </div>
                                         )}
 
-                                        {/* Панель правки через ИИ — доступна на всех редактируемых этапах */}
-                                        {isEditable && (
-                                            <div className="border-t dark:border-slate-700 bg-slate-900 p-3 flex gap-2">
-                                                <input
-                                                    value={fileRefeedback}
-                                                    onChange={e => setFileRefeedback(e.target.value)}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                                            e.preventDefault();
-                                                            handleRefineFile(selectedFile);
-                                                        }
-                                                    }}
-                                                    placeholder={`Попросить ИИ исправить ${FILE_LABELS[selectedFile] || selectedFile}...`}
-                                                    className="flex-1 bg-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2 outline-none border border-slate-700 focus:border-blue-500 transition-colors"
-                                                />
-                                                <button
-                                                    onClick={() => handleRefineFile(selectedFile)}
-                                                    disabled={!fileRefeedback.trim() || refiningFile === selectedFile}
-                                                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all"
-                                                >
-                                                    {refiningFile === selectedFile
-                                                        ? <Loader2 size={14} className="animate-spin" />
-                                                        : <Sparkles size={14} />
-                                                    }
-                                                    Исправить
-                                                </button>
-                                            </div>
-                                        )}
                                     </>
                                 ) : (
                                     <div className="flex-1 flex items-center justify-center text-slate-600 italic text-sm bg-slate-950">
@@ -745,89 +834,221 @@ export const AITaskSession = () => {
                 </div>
             </div>
 
-            {/* ── Правая часть: Чат + Прогресс ── */}
+            {/* ── Правая часть: Чат ── */}
             <div className="w-95 flex flex-col gap-3">
 
-                {/* Чат */}
                 <div className="flex-1 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden shadow-sm">
-                    <div className="p-4 border-b dark:border-slate-800 font-black text-sm uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-slate-200">
-                        <Terminal size={18} className="text-blue-500" />
-                        AI Agent
+
+                    {/* Хедер чата с выбором модели и контекста */}
+                    <div className="p-3 border-b dark:border-slate-800 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <Terminal size={16} className="text-blue-500 shrink-0" />
+                            {/* Контекст-селектор: показываем если есть файлы и этап не statement */}
+                            {techData && stage !== 'statement' ? (
+                                <select
+                                    value={chatContext}
+                                    onChange={e => setChatContext(e.target.value)}
+                                    className="text-xs font-bold bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-200 outline-none cursor-pointer min-w-0"
+                                >
+                                    <option value="statement">📝 Условие</option>
+                                    {Object.keys(techData).map(key => (
+                                        <option key={key} value={key}>
+                                            {FILE_LABELS[key] || key}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <span className="font-black text-xs uppercase tracking-widest text-slate-700 dark:text-slate-200 truncate">
+                                    {stage === 'statement' ? 'Условие' : 'AI Agent'}
+                                </span>
+                            )}
+                        </div>
+                        <select
+                            value={sessionModel}
+                            onChange={e => handleModelChange(e.target.value)}
+                            className="text-[10px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-slate-600 dark:text-slate-300 outline-none cursor-pointer shrink-0"
+                        >
+                            {AI_MODELS.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                        </select>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                        {messages.length === 0 && (
-                            <div className="text-center text-slate-400 text-xs py-8">
-                                <Sparkles size={32} className="mx-auto mb-2 opacity-20" />
-                                Работаем с задачей
-                            </div>
-                        )}
-                        {messages.map((m, i) => (
-                            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                {m.role === 'system' ? (
-                                    <div className="w-full text-center">
-                                        <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
-                                            {m.content}
-                                        </span>
-                                    </div>
-                                ) : (
-                                    <div className={`
-                                        max-w-[90%] px-4 py-2.5 rounded-2xl text-sm
-                                        ${m.role === 'user'
-                                        ? 'bg-blue-600 text-white shadow-md rounded-br-sm'
-                                        : 'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 rounded-bl-sm'}
-                                    `}>
-                                        {m.content}
+                    {/* Определяем режим чата: условие или конкретный файл */}
+                    {(() => {
+                        // В стейдже statement — всегда чат про условие
+                        const isStatementChat = stage === 'statement' || chatContext === 'statement';
+                        // В стейджах files_review/fixing_errors/done — файловый чат если выбран файл
+                        const isFileChat = !isStatementChat && chatContext !== 'statement' && (
+                            canEditFiles(stage) || stage === 'done'
+                        );
+                        const activeChatFile = chatContext !== 'statement' ? chatContext : (selectedFile as string);
+
+                        if (isStatementChat) return (
+                        /* ── Чат для обсуждения условия / пост-билд доработки (контекст: условие) ── */
+                        <>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                {messages.length === 0 && (
+                                    <div className="text-center text-slate-400 text-xs py-8">
+                                        <Sparkles size={32} className="mx-auto mb-2 opacity-20" />
+                                        {stage === 'done'
+                                            ? 'Опишите, что доработать в задаче'
+                                            : statement
+                                                ? 'Опишите правки к условию'
+                                                : 'Опишите идею задачи, чтобы начать'}
                                     </div>
                                 )}
-                            </div>
-                        ))}
-                        {loading && (
-                            <div className="flex justify-start">
-                                <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-2xl">
-                                    <div className="flex gap-1">
-                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" />
-                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0.2s]" />
-                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0.4s]" />
+                                {messages.map((m, i) => (
+                                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        {m.role === 'system' ? (
+                                            <div className="w-full text-center">
+                                                <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
+                                                    {m.content}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className={`max-w-[90%] px-4 py-2.5 rounded-2xl text-sm
+                                                ${m.role === 'user'
+                                                    ? 'bg-blue-600 text-white shadow-md rounded-br-sm'
+                                                    : 'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 rounded-bl-sm'}`}>
+                                                {m.content}
+                                            </div>
+                                        )}
                                     </div>
+                                ))}
+                                {loading && (
+                                    <div className="flex justify-start">
+                                        <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-2xl">
+                                            <div className="flex gap-1">
+                                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" />
+                                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0.2s]" />
+                                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0.4s]" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={chatEndRef} />
+                            </div>
+                            <div className="p-3 border-t dark:border-slate-800">
+                                <div className="relative">
+                                    <textarea
+                                        value={inputValue}
+                                        onChange={e => setInputValue(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleSendMessage();
+                                            }
+                                        }}
+                                        placeholder={stage === 'done' ? 'Что доработать в задаче...' : statement ? 'Предложите правки к условию...' : 'Опишите идею задачи...'}
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 rounded-2xl p-3 pr-12 text-sm outline-none dark:text-white transition-all resize-none h-20 shadow-inner"
+                                    />
+                                    <button
+                                        onClick={handleSendMessage}
+                                        disabled={loading || !inputValue.trim()}
+                                        className="absolute right-2 bottom-2 p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg"
+                                    >
+                                        <Send size={16} />
+                                    </button>
                                 </div>
                             </div>
-                        )}
-                        <div ref={chatEndRef} />
-                    </div>
+                        </>
+                        );
 
-                    {/* Инпут */}
-                    <div className="p-3 border-t dark:border-slate-800">
-                        {stage === 'statement' ? (
-                            <div className="relative">
-                                <textarea
-                                    value={inputValue}
-                                    onChange={e => setInputValue(e.target.value)}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                            e.preventDefault();
-                                            handleSendMessage();
-                                        }
-                                    }}
-                                    placeholder="Предложите правки к условию..."
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 rounded-2xl p-3 pr-12 text-sm outline-none dark:text-white transition-all resize-none h-20 shadow-inner"
-                                />
-                                <button
-                                    onClick={handleSendMessage}
-                                    disabled={loading || !inputValue.trim()}
-                                    className="absolute right-2 bottom-2 p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg"
-                                >
-                                    <Send size={16} />
-                                </button>
+                        if (isFileChat) return (
+                        /* ── Чат для работы с конкретным файлом ── */
+                        <>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                {(fileChatHistories[activeChatFile] || []).length === 0 && (
+                                    <div className="text-center text-slate-400 text-xs py-8">
+                                        <Code size={32} className="mx-auto mb-2 opacity-20" />
+                                        Спросите ИИ по{' '}
+                                        <span className="font-bold">{FILE_LABELS[activeChatFile] || activeChatFile}</span>
+                                    </div>
+                                )}
+                                {(fileChatHistories[activeChatFile] || []).map((m, i) => (
+                                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-[90%] px-4 py-2.5 rounded-2xl text-sm
+                                            ${m.role === 'user'
+                                                ? 'bg-blue-600 text-white shadow-md rounded-br-sm'
+                                                : 'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 rounded-bl-sm'}`}>
+                                            {m.content}
+                                        </div>
+                                    </div>
+                                ))}
+                                {refiningFile === activeChatFile && (
+                                    <div className="flex justify-start">
+                                        <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-2xl">
+                                            <div className="flex gap-1">
+                                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" />
+                                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0.2s]" />
+                                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0.4s]" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={chatEndRef} />
                             </div>
-                        ) : (
-                            <div className="text-center text-xs text-slate-400 py-2">
-                                {isEditable && 'Используйте панель правки в редакторе файлов'}
+                            <div className="p-3 border-t dark:border-slate-800">
+                                <div className="relative">
+                                    <textarea
+                                        value={fileInput}
+                                        onChange={e => setFileInput(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleFileChatSend();
+                                            }
+                                        }}
+                                        placeholder={`Что исправить в ${FILE_LABELS[activeChatFile] || activeChatFile}...`}
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 rounded-2xl p-3 pr-12 text-sm outline-none dark:text-white transition-all resize-none h-20 shadow-inner"
+                                    />
+                                    <button
+                                        onClick={() => handleFileChatSend()}
+                                        disabled={!fileInput.trim() || !!refiningFile}
+                                        className="absolute right-2 bottom-2 p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg"
+                                    >
+                                        {refiningFile === activeChatFile
+                                            ? <Loader2 size={16} className="animate-spin" />
+                                            : <Sparkles size={16} />}
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                        );
+
+                        // isStatusChat — загрузка/сборка пакета
+                        return (
+                        /* ── Статус: загрузка / готово ── */
+                        <>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                {messages.map((m, i) => (
+                                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        {m.role === 'system' ? (
+                                            <div className="w-full text-center">
+                                                <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
+                                                    {m.content}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className={`max-w-[90%] px-4 py-2.5 rounded-2xl text-sm
+                                                ${m.role === 'user'
+                                                    ? 'bg-blue-600 text-white shadow-md rounded-br-sm'
+                                                    : 'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 rounded-bl-sm'}`}>
+                                                {m.content}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                <div ref={chatEndRef} />
+                            </div>
+                            <div className="p-3 border-t dark:border-slate-800 text-center text-xs text-slate-400">
                                 {isUploading && 'Загрузка в процессе...'}
                                 {stage === 'done' && '🎉 Задача успешно создана!'}
                             </div>
-                        )}
-                    </div>
+                        </>
+                        )
+                    })()}
                 </div>
 
                 {/* Прогресс-бар */}
@@ -852,26 +1073,22 @@ export const AITaskSession = () => {
                                 {polygonProblemId && <span className="text-[10px] text-slate-400">ID: {polygonProblemId}</span>}
                             </div>
                         </div>
-
                         <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mb-2 overflow-hidden">
                             <div className={`h-full transition-all duration-700 ${
                                 progress.status === 'failed' ? 'bg-red-500 w-full' :
-                                    stage === 'fixing_errors' ? 'bg-amber-500 w-3/4' :
-                                        progress.status === 'done' ? 'bg-green-500 w-full' :
-                                            'bg-blue-500 w-2/3 animate-pulse'
+                                stage === 'fixing_errors' ? 'bg-amber-500 w-3/4' :
+                                progress.status === 'done' ? 'bg-green-500 w-full' :
+                                'bg-blue-500 w-2/3 animate-pulse'
                             }`} />
                         </div>
-
                         <p className="text-[10px] font-bold text-slate-500 uppercase truncate">
                             {progress.current_step}
                         </p>
-
                         {progress.error && (
                             <p className="text-[10px] text-red-400 mt-1 font-mono break-all">
                                 {progress.error}
                             </p>
                         )}
-
                         {progress.retries !== undefined && progress.retries > 0 && (
                             <p className="text-[10px] text-amber-400 mt-1">
                                 Попытка исправления: {progress.retries}/3
