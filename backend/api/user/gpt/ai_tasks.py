@@ -249,7 +249,6 @@ async def approve_statement(
             "session_id": session.id,
             "stage": session.stage,
             "technical_data": tech_data,
-            "technical_data": tech_data,
         }
 
     except Exception as e:

@@ -8,6 +8,9 @@ import types
 import os
 from typing import Any
 
+import api.crypt.crypt_password as _crypt_mod
+from passlib.context import CryptContext
+
 # Ensure the backend directory itself is importable regardless of where
 # pytest is invoked from (project root, backend/, IDE, etc.)
 _backend_dir = os.path.dirname(os.path.abspath(__file__))
@@ -39,8 +42,6 @@ sys.modules["plagiarism_cpp"] = _mock_plagiarism
 os.environ.setdefault("SECRET_KEY", "test-secret-key-do-not-use-in-production")
 
 # Use minimal bcrypt rounds so password hashing doesn't dominate test runtime
-import api.crypt.crypt_password as _crypt_mod
-from passlib.context import CryptContext
 _crypt_mod.pwd_context = CryptContext(schemes=["bcrypt"], bcrypt__rounds=4)
 os.environ.setdefault("YANDEX_CLIENT_ID", "test-yandex-client-id")
 os.environ.setdefault("YANDEX_CLIENT_SECRET", "test-yandex-client-secret")
