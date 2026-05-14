@@ -20,8 +20,8 @@ class Submission(Base):
     contest_id: Mapped[int] = mapped_column(ForeignKey("contests.id"))
     task_result_id: Mapped[int] = mapped_column(ForeignKey("task_results.id"))
 
-    participant_login: Mapped[str] = mapped_column(String(50))
-    task_name: Mapped[str] = mapped_column(String(50))
+    participant_login: Mapped[str] = mapped_column(String(255))
+    task_name: Mapped[str] = mapped_column(String(500))
 
     send_time: Mapped[datetime] = mapped_column()
 

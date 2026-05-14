@@ -26,6 +26,9 @@ async def yandex_submissions(
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     if not user.yandex_access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -52,9 +55,11 @@ async def yandex_submissions(
                 detail="Contest standings are not available",
             )
         elif submissions_info.status_code == 401:
+            user.yandex_access_token = None
+            await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Your token expired or invalid",
+                detail="Your Yandex token has expired and was automatically unlinked. Please re-connect your account.",
             )
         elif submissions_info.status_code == 403:
             raise HTTPException(
@@ -95,6 +100,12 @@ async def yandex_submissions(
         select(Contest).filter_by(external_id=submissions.contest_id)
     )
     contest = contest.scalars().first()
+
+    if not contest:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contest not found in database",
+        )
 
     submissions_result = await format_yandex_submissions(
         submissions_info, user_id, contest.id, db

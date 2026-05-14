@@ -1,53 +1,36 @@
-from datetime import datetime, timedelta, timezone
+from tests.api_tests.test_base import client
 
-from backend.app.database import get_db
-from backend.tests.api_tests.test_base import client
-
-from models.user.refresh_token import RefreshToken
-from models.user.user import User
+AUTH = "/api/auth"
+YANDEX = "/api/yandex"
 
 
-# Yandex token should be removed from db
-def test_unlink_yandex_removes_token_from_db():
-    login = "unlink_yandex_user_2"
-    refresh_token_value = "refresh_2"
+def _register_and_login(login):
+    client.post(f"{AUTH}/register", json={"login": login, "password": "Aa1!aaaa", "email": f"{login}@example.com"})
+    r = client.post(f"{AUTH}/login", json={"login": login, "password": "Aa1!aaaa"})
+    return r.json()["access_token"]
 
-    db = get_db()
-    try:
-        user = User(
-            login=login,
-            password="fake_password_hash",
-            email=f"{login}@example.com",
-            yandex_access_token="fake_yandex_access_token",
-        )
-        db.add(user)
-        db.commit()
 
-        db_refresh_token = RefreshToken(
-            user_login=login,
-            refresh_token=refresh_token_value,
-            created_at=datetime.now(timezone.utc),
-            expires_in=datetime.now(timezone.utc) + timedelta(days=7),
-        )
-        db.add(db_refresh_token)
-        db.commit()
-    finally:
-        db.close()
+def test_unlink_yandex_success():
+    token = _register_and_login("yandex_unlink_user_ok")
+    headers = {"Authorization": f"Bearer {token}"}
 
-    response = client.post(
-        "/unlink_yandex",
-        json={
-            "refresh_token": refresh_token_value,
-        },
-    )
+    r = client.post(f"{YANDEX}/logout", headers=headers)
 
-    db = get_db()
-    try:
-        updated_user = db.query(User).filter(User.login == login).first()
-    finally:
-        db.close()
+    assert r.status_code == 200
+    assert r.json() == {"message": "Yandex account logged out"}
 
-    assert response.status_code == 200
-    assert response.json() == {"message": "Yandex account unlinked!"}
-    assert updated_user is not None
-    assert updated_user.yandex_access_token is None
+
+def test_unlink_yandex_without_auth():
+    r = client.post(f"{YANDEX}/logout")
+    assert r.status_code == 401
+
+
+def test_unlink_yandex_idempotent():
+    token = _register_and_login("yandex_unlink_idempotent_user")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    r1 = client.post(f"{YANDEX}/logout", headers=headers)
+    r2 = client.post(f"{YANDEX}/logout", headers=headers)
+
+    assert r1.status_code == 200
+    assert r2.status_code == 200

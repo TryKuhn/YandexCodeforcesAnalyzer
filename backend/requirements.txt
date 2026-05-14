@@ -28,7 +28,10 @@ uliweb-alembic>=0.6.9
 pytest>=9.0.2
 pytest-asyncio
 pytest-cov>=7.0.0
+aiosqlite>=0.20.0
 pyjwt
+
+colorlog>=6.7.0
 
 ruff>=0.9.0
 mypy>=1.14.0

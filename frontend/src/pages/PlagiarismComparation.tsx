@@ -28,23 +28,27 @@ export const PlagiarismComparison = () => {
 
     if (!data) return null;
 
-    const CodeHeader = ({user, subId}: any) => (
-        <div className="p-4 bg-white dark:bg-slate-900 border-b dark:border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center font-bold">
-                    {user ? user[0].toUpperCase() : '?'}
+    const CodeHeader = ({user, userName, subId}: any) => {
+        const displayName = userName || user || 'Неизвестный';
+        return (
+            <div className="p-4 bg-white dark:bg-slate-900 border-b dark:border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center font-bold">
+                        {displayName[0]?.toUpperCase() || '?'}
+                    </div>
+                    <div>
+                        <p className="font-bold text-sm dark:text-white">{displayName}</p>
+                        {userName && <p className="text-xs text-slate-400">{user}</p>}
+                        <p className="text-[10px] text-slate-400">ID Посылки: {subId?.split('_').pop() || '—'}</p>
+                    </div>
                 </div>
-                <div>
-                    <p className="font-bold text-sm dark:text-white">{user || 'Неизвестный'}</p>
-                    <p className="text-[10px] text-slate-400">ID Посылки: {subId?.split('_').pop() || '—'}</p>
-                </div>
+                <button onClick={() => navigator.clipboard.writeText(displayName)}
+                        className="p-2 text-slate-400 hover:text-blue-500">
+                    <Copy size={16}/>
+                </button>
             </div>
-            <button onClick={() => user && navigator.clipboard.writeText(user)}
-                    className="p-2 text-slate-400 hover:text-blue-500">
-                <Copy size={16}/>
-            </button>
-        </div>
-    );
+        );
+    };
 
     return (
         <div className="h-full flex flex-col space-y-4 animate-in fade-in duration-300">
@@ -66,7 +70,7 @@ export const PlagiarismComparison = () => {
             <div className="grid grid-cols-2 gap-4 flex-1 min-h-0 overflow-hidden">
                 <div
                     className="flex flex-col rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden bg-slate-950">
-                    <CodeHeader user={data.user1} subId={data.sub1_id}/>
+                    <CodeHeader user={data.user1} userName={data.user1_name} subId={data.sub1_id}/>
                     <div className="flex-1 p-6 overflow-auto font-mono text-[11px] leading-relaxed text-slate-300">
                         <pre><code>{data.code1}</code></pre>
                     </div>
@@ -74,7 +78,7 @@ export const PlagiarismComparison = () => {
 
                 <div
                     className="flex flex-col rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden bg-slate-950">
-                    <CodeHeader user={data.user2} subId={data.sub2_id}/>
+                    <CodeHeader user={data.user2} userName={data.user2_name} subId={data.sub2_id}/>
                     <div className="flex-1 p-6 overflow-auto font-mono text-[11px] leading-relaxed text-slate-300">
                         <pre><code>{data.code2}</code></pre>
                     </div>

@@ -32,7 +32,7 @@ async def set_script(
     params = {
         "apiKey": user.polygon_api_key,
         "time": str(current_time_unix),
-        "problemId": str(problem_id),
+        "problemId": str(int(problem_id)),
         "testset": testset,
         "source": script_file,
     }

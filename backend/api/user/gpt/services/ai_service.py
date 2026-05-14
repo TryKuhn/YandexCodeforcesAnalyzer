@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import httpx
 from fastapi import HTTPException
@@ -9,6 +9,14 @@ from fastapi import HTTPException
 from settings import settings
 
 logger = logging.getLogger(__name__)
+
+MAX_IDEA_CHARS = 50_000
+
+_CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\r?\n?|```\s*$", re.MULTILINE)
+
+
+def _strip_code_fences(code: str) -> str:
+    return _CODE_FENCE_RE.sub("", code).strip()
 
 
 class TaskAIService:
@@ -31,7 +39,7 @@ class TaskAIService:
     async def _base_ask(
         self, model: str, messages: List[Dict], json_mode: bool = True
     ) -> Dict:
-        payload = {
+        payload: Dict[str, Any] = {
             "model": model,
             "messages": messages,
         }
@@ -75,6 +83,15 @@ class TaskAIService:
     async def generate_statement(
         self, user_idea: str, model: str, user_prompt: str, history: List[Dict]
     ) -> Dict:
+        if len(user_idea) > MAX_IDEA_CHARS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Текст слишком длинный ({len(user_idea)} символов). "
+                    f"Максимум — {MAX_IDEA_CHARS} символов."
+                ),
+            )
+
         system_prompt = (
             "Вы — автор задач по спортивному программированию. "
             "ПРАВИЛО: Пишите условия максимально простым и понятным языком, доступным школьнику. "
@@ -100,13 +117,34 @@ class TaskAIService:
             "https://codeforces.com/blog/entry/18289 (статья о testlib), "
             "https://codeforces.com/blog/entry/18291 (статья о генерации тестов), "
             "https://codeforces.com/blog/entry/18426 (статья о валидаторах), "
-            "https://codeforces.com/blog/entry/18431 (статья о чекерах), "
+            "https://codeforces.com/blog/entry/18431 (статья о чекерах). "
             "На основе условия задачи создай технические файлы для Polygon. "
             "Нужно сгенерировать: validator.cpp, generator.cpp, checker.cpp, "
-            "solution.cpp (Main), а также решения с тегами: "
-            "WA (Wrong Answer), TL (Time Limit Exceeded), RE (Runtime Error), ML (Memory Limit). "
+            "solution.cpp (Main, C++), solution.py (Python-решение, тег OK), а также решения с тегами: "
+            "WA, TL, RE, ML. "
+            "\n\nПРАВИЛА ДЛЯ НЕКОРРЕКТНЫХ РЕШЕНИЙ (ОБЯЗАТЕЛЬНО СОБЛЮДАТЬ):"
+            "\n- tl_sol (TL): Напиши ПРАВИЛЬНОЕ решение задачи, но используй заведомо медленный алгоритм — "
+            "вложенные циклы O(n²) или O(n³) там, где возможен O(n log n) или O(n). "
+            "Например: сортировка пузырьком, перебор всех пар, полный перебор подмножеств. "
+            "ЗАПРЕЩЕНО: sleep(), busy-loop, искусственные задержки. "
+            "Результат должен быть ВЕРНЫМ на малых тестах, но превышать TL на больших."
+            "\n- ml_sol (ML): Напиши ПРАВИЛЬНОЕ решение задачи, но с избыточным расходом памяти — "
+            "используй O(n²) памяти там, где достаточно O(n). "
+            "Например: храни всю матрицу пар вместо одномерного массива, "
+            "или создавай n копий входного массива, или используй map/set с парами. "
+            "ЗАПРЕЩЕНО: new int[1000000000], искусственное выделение памяти не по алгоритму. "
+            "Результат должен быть ВЕРНЫМ на малых тестах, но превышать ML на больших."
+            "\n- wa_sol (WA): Напиши НЕВЕРНОЕ решение — алгоритм с правдоподобной, но ошибочной логикой. "
+            "Например: жадный алгоритм там, где нужна DP; игнорирование граничных случаев; "
+            "неверная формула для подсчёта. Решение должно давать WA хотя бы на части тестов."
+            "\n- re_sol (RE): Напиши решение, которое вызовет Runtime Error на некоторых тестах — "
+            "например, обращение к вектору по индексу без проверки границ, деление на ноль при определённых входных данных, "
+            "stack overflow от рекурсии без базового случая. "
             "Выведи JSON: {validator, generator, checker, solution_py, solution_cpp,"
-            "wa_sol, tl_sol, re_sol, ml_sol, script}."
+            "wa_sol, tl_sol, re_sol, ml_sol, script}. "
+            "КРИТИЧЕСКИ ВАЖНО: все строковые значения в JSON — это чистый исходный код. "
+            "НЕ оборачивай код в markdown (никаких ```cpp, ```, ~~~ и т.п.). "
+            "Только сырой текст файла, без какого-либо форматирования."
             "Обрати внимание на правила использования script для генерации тестов в Polygon: "
             "Freemarker Template Engine is an engine, created to process text files. "
             "It process only parts of text files, that are surrounded with special Freemarker directives. "
@@ -201,19 +239,73 @@ class TaskAIService:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-        return await self._base_ask(model, messages)
+        result = await self._base_ask(model, messages)
+        return {
+            k: _strip_code_fences(v) if isinstance(v, str) else v
+            for k, v in result.items()
+        }
 
     async def fix_code(
-        self, error: str, component: str, code: str, statement: Dict, model: str
+        self,
+        error: str,
+        component: str,
+        code: str,
+        statement: Dict,
+        model: str,
+        previous_errors: List[str] | None = None,
     ) -> str:
-        system_prompt = f"Fix the {component} code for Polygon. Error: {error}. Return only the corrected code, no explanations."
-        user_prompt = f"Statement:\n{json.dumps(statement, ensure_ascii=False)}\n\nBroken code:\n{code}"
+        history_note = ""
+        if previous_errors:
+            history_note = (
+                "\n\nПРЕДЫДУЩИЕ ПОПЫТКИ ИСПРАВЛЕНИЯ ТОЖЕ НЕ ПОМОГЛИ:\n"
+                + "\n".join(f"- {e}" for e in previous_errors)
+                + "\nПопробуй принципиально другой подход."
+            )
+        system_prompt = (
+            f"Fix the {component} code for the Polygon judge system. "
+            f"Current error: {error}{history_note} "
+            "Return ONLY the corrected code without any explanation or markdown."
+        )
+        user_prompt = (
+            f"Statement:\n{json.dumps(statement, ensure_ascii=False)}\n\nBroken code:\n{code}"
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
         result = await self._base_ask(model, messages, json_mode=False)
         return result["text"].strip()
+
+    async def post_build_refine(
+        self,
+        message: str,
+        statement: Dict,
+        current_files: Dict[str, str],
+        model: str,
+    ) -> Dict[str, str]:
+        files_text = "\n\n".join(
+            f"=== {key} ===\n{content}"
+            for key, content in current_files.items()
+        )
+        system_prompt = (
+            "Ты — эксперт по задачам Polygon. Пользователь хочет доработать уже созданную задачу. "
+            "Проанализируй его запрос и обнови только те файлы, которых касаются изменения. "
+            "Верни JSON, где ключи — имена изменённых файлов (из набора: "
+            "validator, generator, checker, solution_cpp, solution_py, wa_sol, tl_sol, re_sol, ml_sol, script), "
+            "а значения — полные обновлённые версии этих файлов. "
+            "Не включай в ответ файлы, которые не нужно менять."
+        )
+        user_prompt = (
+            f"Условие задачи:\n{json.dumps(statement, ensure_ascii=False)}\n\n"
+            f"Текущие файлы:\n{files_text}\n\n"
+            f"Запрос пользователя: {message}"
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        result = await self._base_ask(model, messages, json_mode=True)
+        return {k: v for k, v in result.items() if isinstance(v, str) and v.strip()}
 
     async def refine_file(
         self,
@@ -223,7 +315,6 @@ class TaskAIService:
         statement: Dict,
         model: str,
     ) -> str:
-        """Правка конкретного файла по отзыву пользователя"""
         system_prompt = (
             f"Ты — эксперт по разработке задач для Polygon. "
             f"Пользователь хочет внести правки в файл '{file_key}'. "

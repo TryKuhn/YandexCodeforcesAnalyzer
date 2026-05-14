@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     Plus, Sparkles, Loader2, Trash2, ExternalLink,
     FileText, Code, UploadCloud, Package, CheckCircle,
-    AlertCircle, Clock, ChevronRight
+    AlertCircle, Clock, ChevronRight, Download, X
 } from 'lucide-react';
 import { api } from '../api/instance';
 import { useAISettings } from '../components/layout/MainLayout';
@@ -77,9 +77,12 @@ export const AITasksList = () => {
     const [sessions, setSessions] = useState<SessionSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
-    const [newTaskIdea, setNewTaskIdea] = useState('');
-    const [showNewForm, setShowNewForm] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+
+    const [showImportDialog, setShowImportDialog] = useState(false);
+    const [importProblemId, setImportProblemId] = useState('');
+    const [importing, setImporting] = useState(false);
+    const [importError, setImportError] = useState<string | null>(null);
 
     // Загрузка списка сессий
     const fetchSessions = async () => {
@@ -98,24 +101,42 @@ export const AITasksList = () => {
         fetchSessions();
     }, []);
 
-    // Создание новой сессии
+    // Создание новой пустой сессии
     const handleCreate = async () => {
-        if (!newTaskIdea.trim() || creating) return;
-
+        if (creating) return;
         setCreating(true);
         try {
             const settings = loadSettings();
             const res = await api.post('/ai/create-session', {
-                idea: newTaskIdea.trim(),
+                idea: '',
                 model: settings.model,
                 user_prompt: settings.systemPrompt,
-                history: [],
             });
             navigate(`/ai-tasks/${res.data.session_id}`);
         } catch (e) {
             console.error('Failed to create session', e);
         } finally {
             setCreating(false);
+        }
+    };
+
+    // Импорт из Polygon
+    const handleImport = async () => {
+        const id = parseInt(importProblemId.trim(), 10);
+        if (!id || isNaN(id)) { setImportError('Введите корректный ID задачи'); return; }
+        setImporting(true);
+        setImportError(null);
+        try {
+            const settings = loadSettings();
+            const res = await api.post('/ai/import-from-polygon', {
+                polygon_problem_id: id,
+                model: settings.model,
+            });
+            navigate(`/ai-tasks/${res.data.session_id}`);
+        } catch (e: any) {
+            setImportError(e?.response?.data?.detail || 'Ошибка импорта. Проверьте ID и настройки Polygon.');
+        } finally {
+            setImporting(false);
         }
     };
 
@@ -155,6 +176,7 @@ export const AITasksList = () => {
     };
 
     return (
+        <>
         <div className="min-h-[calc(100vh-80px)] bg-slate-50 dark:bg-slate-950 p-6">
             <div className="max-w-4xl mx-auto">
 
@@ -170,75 +192,34 @@ export const AITasksList = () => {
                         </p>
                     </div>
 
-                    <button
-                        onClick={() => setShowNewForm(true)}
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700
-                                   text-white px-6 py-3 rounded-2xl font-bold
-                                   transition-all shadow-lg shadow-blue-500/20
-                                   hover:shadow-xl hover:shadow-blue-500/30
-                                   active:scale-95"
-                    >
-                        <Plus size={20} />
-                        Новая задача
-                    </button>
-                </div>
-
-                {/* Форма создания новой задачи */}
-                {showNewForm && (
-                    <div className="mb-6 bg-white dark:bg-slate-900 rounded-2xl border-2
-                                    border-blue-200 dark:border-blue-800 p-6 shadow-xl
-                                    animate-in slide-in-from-top-4 duration-300">
-                        <h3 className="font-bold text-sm text-slate-700 dark:text-slate-200 mb-3">
-                            Опишите идею задачи
-                        </h3>
-                        <textarea
-                            value={newTaskIdea}
-                            onChange={e => setNewTaskIdea(e.target.value)}
-                            onKeyDown={e => {
-                                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                    handleCreate();
-                                }
-                            }}
-                            placeholder="Например: задача на бинарный поиск по ответу, где нужно распределить задания между работниками..."
-                            className="w-full bg-slate-50 dark:bg-slate-800 border-2
-                                       border-transparent focus:border-blue-500
-                                       rounded-xl p-4 text-sm outline-none dark:text-white
-                                       transition-all resize-none h-28"
-                            autoFocus
-                        />
-                        <div className="flex justify-end gap-2 mt-3">
-                            <button
-                                onClick={() => {
-                                    setShowNewForm(false);
-                                    setNewTaskIdea('');
-                                }}
-                                className="px-4 py-2 text-sm text-slate-500
-                                           hover:text-slate-700 dark:hover:text-slate-300
-                                           rounded-xl transition-all"
-                            >
-                                Отмена
-                            </button>
-                            <button
-                                onClick={handleCreate}
-                                disabled={!newTaskIdea.trim() || creating}
-                                className="flex items-center gap-2 bg-blue-600
-                                           hover:bg-blue-700 text-white px-5 py-2
-                                           rounded-xl font-bold text-sm transition-all
-                                           disabled:opacity-50 shadow-lg"
-                            >
-                                {creating ? (
-                                    <Loader2 size={16} className="animate-spin" />
-                                ) : (
-                                    <Sparkles size={16} />
-                                )}
-                                Создать
-                            </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400 mt-2">
-                            Ctrl+Enter для быстрой отправки
-                        </p>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => { setShowImportDialog(true); setImportError(null); setImportProblemId(''); }}
+                            className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800
+                                       hover:bg-slate-200 dark:hover:bg-slate-700
+                                       text-slate-700 dark:text-slate-300 px-5 py-3 rounded-2xl font-bold
+                                       transition-all active:scale-95"
+                        >
+                            <Download size={18} />
+                            Из Polygon
+                        </button>
+                        <button
+                            onClick={handleCreate}
+                            disabled={creating}
+                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700
+                                       text-white px-6 py-3 rounded-2xl font-bold
+                                       transition-all shadow-lg shadow-blue-500/20
+                                       hover:shadow-xl hover:shadow-blue-500/30
+                                       active:scale-95 disabled:opacity-60"
+                        >
+                            {creating
+                                ? <Loader2 size={20} className="animate-spin" />
+                                : <Plus size={20} />
+                            }
+                            Новая задача
+                        </button>
                     </div>
-                )}
+                </div>
 
                 {/* Список сессий */}
                 {loading ? (
@@ -382,5 +363,46 @@ export const AITasksList = () => {
                 )}
             </div>
         </div>
+
+        {/* Диалог импорта из Polygon */}
+        {showImportDialog && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 w-full max-w-md shadow-2xl">
+                    <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-xl font-black dark:text-white flex items-center gap-2">
+                            <Download size={20} className="text-blue-500" />
+                            Импорт из Polygon
+                        </h2>
+                        <button onClick={() => setShowImportDialog(false)} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                            <X size={18} />
+                        </button>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-6">
+                        Введите ID задачи из Polygon. Условие будет импортировано как стартовая точка для AI-генерации.
+                    </p>
+                    <input
+                        type="number"
+                        value={importProblemId}
+                        onChange={e => setImportProblemId(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleImport(); }}
+                        placeholder="ID задачи (например, 12345)"
+                        className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-2xl px-4 py-3 text-sm dark:text-white outline-none focus:border-blue-500 transition-all mb-3"
+                        autoFocus
+                    />
+                    {importError && (
+                        <p className="text-sm text-red-500 mb-3">{importError}</p>
+                    )}
+                    <button
+                        onClick={handleImport}
+                        disabled={importing || !importProblemId.trim()}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                    >
+                        {importing ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                        Импортировать
+                    </button>
+                </div>
+            </div>
+        )}
+        </>
     );
 };

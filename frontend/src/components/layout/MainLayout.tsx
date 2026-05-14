@@ -4,13 +4,13 @@ import {
     LogOut, ChevronRight, Sparkles, Settings, X,
     Check
 } from 'lucide-react';
+// Settings, X, Check — используются только в AISettingsPopup (системный промпт)
 import { useAuthStore } from '../../store/useAuthStore';
 import { ThemeToggle } from '../ThemeToggle';
 import { api } from "../../api/instance.ts";
 import { useState, useRef, useEffect } from 'react';
 
-// Список моделей (дублируем чтобы не зависеть от AITasks)
-const AI_MODELS = [
+export const AI_MODELS = [
     { id: 'anthropic/claude-opus-4.7',       name: 'Claude 4.7 Opus' },
     { id: 'anthropic/claude-opus-4.6-fast',  name: 'Claude 4.6 Fast' },
     { id: 'google/gemini-3.1-pro-preview',   name: 'Gemini 3.1 Pro' },
@@ -172,9 +172,6 @@ export const MainLayout = () => {
     const navigate  = useNavigate();
     const { user, logout } = useAuthStore();
 
-    const [showAISettings, setShowAISettings] = useState(false);
-
-    const isAIPage = location.pathname === '/ai-tasks';
 
     const handleLogout = async () => {
         const { accessToken, refreshToken, tokenType } = useAuthStore.getState();
@@ -257,32 +254,6 @@ export const MainLayout = () => {
                         <span className="text-slate-500 dark:text-slate-400 font-medium">
                             {currentLabel}
                         </span>
-
-                        {/* Кнопка настроек ИИ — только на странице AI */}
-                        {isAIPage && (
-                            <div>
-                                <button
-                                    onClick={() => setShowAISettings(prev => !prev)}
-                                    className={`
-                                        flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold
-                                        border transition-all
-                                        ${showAISettings
-                                        ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-700'
-                                        : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800'
-                                    }
-                                    `}
-                                >
-                                    <Settings size={14} className={showAISettings ? 'animate-spin' : ''} />
-                                    Настройки
-                                </button>
-
-                                {showAISettings && (
-                                    <AISettingsPopup
-                                        onClose={() => setShowAISettings(false)}
-                                    />
-                                )}
-                            </div>
-                        )}
                     </div>
 
                     <div className="flex items-center gap-6">

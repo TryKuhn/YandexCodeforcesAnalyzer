@@ -8,6 +8,9 @@ export default defineConfig({
       react(),
       tailwindcss(),
   ],
+  optimizeDeps: {
+      include: ['react-syntax-highlighter', 'react-syntax-highlighter/dist/cjs/styles/prism'],
+  },
     server: {
         host: '0.0.0.0',
         port: 5173,

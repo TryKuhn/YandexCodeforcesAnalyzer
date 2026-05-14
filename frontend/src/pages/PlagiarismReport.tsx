@@ -17,7 +17,9 @@ interface Pair {
     sub1: string;
     sub2: string;
     user1: string;
+    user1_name?: string | null;
     user2: string;
+    user2_name?: string | null;
     task_name: string;
     percent: number;
 }
@@ -28,6 +30,16 @@ interface PaginationData {
     total: number;
     total_pages: number;
 }
+
+const ParticipantLabel = ({ login, name }: { login: string; name?: string | null }) => (
+    <div className="flex items-center gap-2 text-sm font-bold dark:text-white">
+        <User size={14} className="text-blue-500 shrink-0" />
+        <div>
+            <div>{name || login}</div>
+            {name && <div className="text-xs font-normal text-slate-400">{login}</div>}
+        </div>
+    </div>
+);
 
 export const PlagiarismReport = () => {
     const { id, reportId } = useParams();
@@ -74,14 +86,22 @@ export const PlagiarismReport = () => {
         } catch {
             setStatus('failed');
         } finally {
-            if (!silent) setIsLoading(false);
+            // Always clear loading — including silent calls that transition from
+            // 'processing' to 'completed', so the spinner doesn't stay forever.
+            setIsLoading(false);
         }
     }, [reportId, page, perPage, selectedTask]);
+
+    // Initial load + re-fetch when page / perPage / selectedTask changes
+    useEffect(() => {
+        fetchReport();
+    }, [fetchReport]);
 
     useEffect(() => {
         setPage(1);
     }, [selectedTask]);
 
+    // Polling while the report is still being processed
     useEffect(() => {
         if (status !== 'processing') return;
 
@@ -187,20 +207,14 @@ export const PlagiarismReport = () => {
                             <div className="flex items-center gap-6">
                                 <div className="text-left">
                                     <p className="text-xs text-slate-400 font-bold mb-1">УЧАСТНИК 1</p>
-                                    <div className="flex items-center gap-2 text-sm font-bold dark:text-white">
-                                        <User size={14} className="text-blue-500" />
-                                        {pair.user1}
-                                    </div>
+                                    <ParticipantLabel login={pair.user1} name={pair.user1_name} />
                                 </div>
 
                                 <div className="h-10 w-px bg-slate-100 dark:bg-slate-800"></div>
 
                                 <div className="text-left">
                                     <p className="text-xs text-slate-400 font-bold mb-1">УЧАСТНИК 2</p>
-                                    <div className="flex items-center gap-2 text-sm font-bold dark:text-white">
-                                        <User size={14} className="text-blue-500" />
-                                        {pair.user2}
-                                    </div>
+                                    <ParticipantLabel login={pair.user2} name={pair.user2_name} />
                                 </div>
                             </div>
 
