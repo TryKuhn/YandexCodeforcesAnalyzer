@@ -882,7 +882,6 @@ export const AITaskSession = () => {
                         const isFileChat = !isStatementChat && chatContext !== 'statement' && (
                             canEditFiles(stage) || stage === 'done'
                         );
-                        const isStatusChat = !isStatementChat && !isFileChat;
                         const activeChatFile = chatContext !== 'statement' ? chatContext : (selectedFile as string);
 
                         if (isStatementChat) return (

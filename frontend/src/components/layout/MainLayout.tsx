@@ -1,14 +1,12 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Trophy, Users, User,
-    LogOut, ChevronRight, Sparkles, Settings, X,
-    Check
+    LogOut, ChevronRight, Sparkles,
 } from 'lucide-react';
 // Settings, X, Check — используются только в AISettingsPopup (системный промпт)
 import { useAuthStore } from '../../store/useAuthStore';
 import { ThemeToggle } from '../ThemeToggle';
 import { api } from "../../api/instance.ts";
-import { useState, useRef, useEffect } from 'react';
 
 export const AI_MODELS = [
     { id: 'anthropic/claude-opus-4.7',       name: 'Claude 4.7 Opus' },
@@ -47,122 +45,6 @@ export const useAISettings = () => {
     };
 
     return { load, save };
-};
-
-const AISettingsPopup = ({
-                             onClose,
-                         }: {
-    onClose: () => void;
-}) => {
-    const { load, save } = useAISettings();
-    const [settings, setSettings] = useState<AISettings>(load);
-    const popupRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClick = (e: MouseEvent) => {
-            if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-                onClose();
-            }
-        };
-        document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
-    }, [onClose]);
-
-    const handleSave = () => {
-        save(settings);
-        onClose();
-    };
-
-    return (
-        <>
-            {/* Оверлей для затемнения фона (опционально) */}
-            <div
-                className="fixed inset-0 z-[998] bg-black/5"
-                onClick={onClose}
-            />
-
-            {/* Сам попап */}
-            <div
-                ref={popupRef}
-                className="
-                    fixed z-[999]
-                    top-14 left-[calc(16rem+2rem)]
-                    w-80 bg-white dark:bg-slate-900
-                    border border-slate-200 dark:border-slate-700
-                    rounded-2xl shadow-2xl p-4
-                    animate-in fade-in slide-in-from-top-2 duration-150
-                "
-                style={{
-                    /* 16rem = ширина сайдбара (w-64), + отступ */
-                    /* Если нужно точнее — подстройте значение */
-                }}
-            >
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-black text-sm dark:text-white">Настройки ИИ</h3>
-                    <button
-                        onClick={onClose}
-                        className="text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors"
-                    >
-                        <X size={16} />
-                    </button>
-                </div>
-
-                {/* Модель */}
-                <div className="mb-4">
-                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 block">
-                        Модель ИИ
-                    </label>
-                    <select
-                        value={settings.model}
-                        onChange={e => setSettings(prev => ({ ...prev, model: e.target.value }))}
-                        className="
-                            w-full bg-slate-50 dark:bg-slate-800
-                            border border-slate-200 dark:border-slate-700
-                            rounded-xl px-3 py-2 text-sm dark:text-white
-                            outline-none focus:border-blue-500 transition-colors
-                        "
-                    >
-                        {AI_MODELS.map(m => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                {/* Системный промпт */}
-                <div className="mb-4">
-                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 block">
-                        Системный промпт
-                    </label>
-                    <textarea
-                        value={settings.systemPrompt}
-                        onChange={e => setSettings(prev => ({ ...prev, systemPrompt: e.target.value }))}
-                        placeholder="Например: Пиши условия в стиле приключений..."
-                        rows={5}
-                        className="
-                            w-full bg-slate-50 dark:bg-slate-800
-                            border border-slate-200 dark:border-slate-700
-                            rounded-xl px-3 py-2 text-xs dark:text-white
-                            outline-none focus:border-blue-500 transition-colors
-                            resize-none font-mono
-                        "
-                    />
-                </div>
-
-                <button
-                    onClick={handleSave}
-                    className="
-                        w-full flex items-center justify-center gap-2
-                        bg-blue-600 hover:bg-blue-700 text-white
-                        px-4 py-2 rounded-xl text-sm font-bold
-                        transition-all shadow-lg shadow-blue-500/20
-                    "
-                >
-                    <Check size={14} />
-                    Сохранить
-                </button>
-            </div>
-        </>
-    );
 };
 
 // ─────────────────────────── MainLayout ─────────────────────────────────────
