@@ -20,7 +20,7 @@ COPY plagiarism ./plagiarism
 
 RUN LLVM_VERSION=$(ls /usr/lib/ | grep -oP 'llvm-\K[0-9]+' | sort -rn | head -1) && \
     echo "Found LLVM version: $LLVM_VERSION" && \
-    mkdir -p /tmp/plag-build /tmp/plag-dist && \
+    mkdir -p /tmp/plag-build /tmp/plag-dist /tmp/clang-libs && \
     cmake -S /build/plagiarism -B /tmp/plag-build \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_C_COMPILER=clang \
@@ -30,7 +30,8 @@ RUN LLVM_VERSION=$(ls /usr/lib/ | grep -oP 'llvm-\K[0-9]+' | sort -rn | head -1)
       -Dpybind11_DIR="$(python -m pybind11 --cmakedir)" && \
     cmake --build /tmp/plag-build --target plagiarism_cpp -j"$(nproc)" && \
     find /tmp/plag-build -name "plagiarism_cpp*.so" -exec cp {} /tmp/plag-dist/ \; && \
-    ls /tmp/plag-dist/
+    find /usr/lib -name "libclang-${LLVM_VERSION}.so*" -not -type d -exec cp {} /tmp/clang-libs/ \; && \
+    ls /tmp/plag-dist/ && ls /tmp/clang-libs/
 
 # ── Stage 2: Runtime image ────────────────────────────────────────────────────
 FROM python:3.11-slim
@@ -45,8 +46,10 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy compiled plagiarism extension (full filename with ABI tag preserved)
+# Copy compiled plagiarism extension and the libclang it was linked against
 COPY --from=builder /tmp/plag-dist/ /usr/local/lib/python3.11/site-packages/
+COPY --from=builder /tmp/clang-libs/ /usr/local/lib/
+RUN ldconfig
 
 COPY . .
 
