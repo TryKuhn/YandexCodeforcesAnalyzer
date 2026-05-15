@@ -32,7 +32,7 @@ RUN LLVM_VERSION=$(ls /usr/lib/ | grep -oP 'llvm-\K[0-9]+' | sort -rn | head -1)
     find /tmp/plag-build -name "plagiarism_cpp*.so" -exec cp {} /tmp/plag-dist/ \; && \
     ldd $(find /tmp/plag-dist -name "plagiarism_cpp*.so" | head -1) \
       | grep "=> /" | awk '{print $3}' \
-      | grep -iE '(llvm|clang)' \
+      | grep -Ev "/(libc|libm|libdl|libpthread|librt|ld-linux)\.so" \
       | xargs -I{} cp -L {} /tmp/clang-libs/ && \
     echo "Extension:" && ls /tmp/plag-dist/ && \
     echo "Bundled libs:" && ls /tmp/clang-libs/
