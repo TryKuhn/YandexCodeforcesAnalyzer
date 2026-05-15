@@ -16,11 +16,31 @@ env:
   IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
 
 jobs:
-  build-and-push:
+  changes:
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+  build-and-push:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -40,6 +60,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push backend image
+        if: needs.changes.outputs.backend == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -52,6 +73,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=backend-prod
 
       - name: Build and push frontend image
+        if: needs.changes.outputs.frontend == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
@@ -66,77 +88,134 @@ jobs:
           cache-to: type=gha,mode=max,scope=frontend-prod
 
   deploy:
-    needs: build-and-push
+    needs: [changes, build-and-push]
     runs-on: ubuntu-latest
 
+    env:
+      IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+      DEPLOY_BACKEND: ${{ needs.changes.outputs.backend }}
+      DEPLOY_FRONTEND: ${{ needs.changes.outputs.frontend }}
+
     steps:
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true
-          envs: GHCR_USERNAME,GHCR_TOKEN,IMAGE_TAG
-          script: |
-            set -e
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
-            cd ~/YandexCodeforcesAnalyzer
+      - name: Deploy with health check and rollback
+        run: |
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            GHCR_USERNAME='${{ secrets.GHCR_USERNAME }}' \
+            GHCR_TOKEN='${{ secrets.GHCR_TOKEN }}' \
+            IMAGE_TAG='${{ env.IMAGE_TAG }}' \
+            DEPLOY_BACKEND='${{ env.DEPLOY_BACKEND }}' \
+            DEPLOY_FRONTEND='${{ env.DEPLOY_FRONTEND }}' \
+            bash -s << 'ENDSSH'
+          set -e
 
-            echo "Pulling latest compose/config changes..."
-            git fetch origin main
-            git reset --hard origin/main
+          cd ~/YandexCodeforcesAnalyzer
 
-            echo "Logging into GHCR..."
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+          if [ ! -f .env ]; then
+            echo "ERROR: .env file not found on server!"
+            exit 1
+          fi
 
-            export IMAGE_TAG="$IMAGE_TAG"
+          if command -v docker-compose >/dev/null 2>&1; then
+            DC="docker-compose"
+          else
+            DC="docker compose"
+          fi
 
-            echo "Pulling new images..."
-            docker compose -f docker-compose.prod.yml pull --quiet backend frontend
+          echo "Pulling latest compose/config changes..."
+          git fetch origin main
+          git reset --hard origin/main
 
-            echo "Restarting services..."
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          echo "Logging into GHCR..."
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
 
-            echo "Cleaning dangling images..."
-            docker image prune -f
+          export IMAGE_TAG="$IMAGE_TAG"
 
-            echo "Deployment completed!"
-            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+          # Save previous backend image tag for rollback
+          PREV_TAG=""
+          BACKEND_CID_OLD=$($DC -f docker-compose.prod.yml ps -q backend 2>/dev/null || true)
+          if [ -n "$BACKEND_CID_OLD" ]; then
+            PREV_TAG=$(docker inspect --format='{{index .Config.Image}}' "$BACKEND_CID_OLD" 2>/dev/null | \
+              sed 's/.*://' || true)
+            echo "Previous backend tag: ${PREV_TAG:-unknown}"
+          else
+            echo "No previous backend container found (fresh deploy)"
+          fi
 
-      - name: Health check
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true
-          script: |
-            set -e
+          echo "Pulling new images..."
+          if [ "$DEPLOY_BACKEND" = "true" ]; then
+            $DC -f docker-compose.prod.yml pull --quiet backend
+          fi
+          if [ "$DEPLOY_FRONTEND" = "true" ]; then
+            $DC -f docker-compose.prod.yml pull --quiet frontend
+          fi
 
-            cd ~/YandexCodeforcesAnalyzer
+          echo "Restarting services..."
+          $DC -f docker-compose.prod.yml up -d --remove-orphans
 
-            if command -v docker-compose >/dev/null 2>&1; then
-              DC="docker-compose"
-            else
-              DC="docker compose"
+          echo "Cleaning dangling images..."
+          docker image prune -f
+
+          echo "Current container status:"
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+
+          echo "Waiting 125s for containers to initialise (start_period=120s)..."
+          sleep 125
+
+          BACKEND_CID=$($DC -f docker-compose.prod.yml ps -q backend)
+          if [ -z "$BACKEND_CID" ]; then
+            echo "Backend container not found after deploy!"
+            $DC -f docker-compose.prod.yml ps
+            exit 1
+          fi
+
+          echo "Polling backend health (max 5 min)..."
+          HEALTHY=false
+          for i in $(seq 1 60); do
+            STATUS=$(docker inspect \
+              --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+              "$BACKEND_CID")
+            echo "Attempt $i/60: backend status = $STATUS"
+
+            if [ "$STATUS" = "healthy" ]; then
+              HEALTHY=true
+              break
             fi
 
-            echo "Checking health..."
-            for i in $(seq 1 12); do
-              if $DC -f docker-compose.prod.yml exec -T backend \
-                  python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" \
-                  > /dev/null 2>&1; then
-                echo "Backend is healthy!"
-                exit 0
-              fi
-              echo "Attempt $i/12 failed, retrying in 5s..."
-              sleep 5
-            done
+            if [ "$STATUS" = "exited" ] || [ "$STATUS" = "dead" ]; then
+              echo "Backend container crashed!"
+              $DC -f docker-compose.prod.yml logs --tail=100 backend postgres
+              break
+            fi
 
-            echo "Backend health check failed after 60s"
-            exit 1
+            sleep 5
+          done
+
+          if [ "$HEALTHY" = "true" ]; then
+            echo "Backend is healthy — deployment successful!"
+            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+            exit 0
+          fi
+
+          echo "Health check failed after timeout!"
+          $DC -f docker-compose.prod.yml ps
+          $DC -f docker-compose.prod.yml logs --tail=100 backend postgres caddy
+
+          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$IMAGE_TAG" ]; then
+            echo "Rolling back to previous tag: $PREV_TAG"
+            IMAGE_TAG="$PREV_TAG" $DC -f docker-compose.prod.yml up -d backend frontend
+            echo "Rollback deployed. Current status:"
+            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+          else
+            echo "No previous tag available for rollback."
+          fi
+
+          exit 1
+          ENDSSH
