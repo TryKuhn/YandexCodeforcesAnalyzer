@@ -81,12 +81,18 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
-          command_timeout: 15m
+          command_timeout: 25m
+          debug: true
           envs: GHCR_USERNAME,GHCR_TOKEN,IMAGE_TAG
           script: |
             set -e
 
             cd ~/YandexCodeforcesAnalyzer
+
+            if [ ! -f .env ]; then
+              echo "ERROR: .env file not found on server!"
+              exit 1
+            fi
 
             if command -v docker-compose >/dev/null 2>&1; then
               DC="docker-compose"
