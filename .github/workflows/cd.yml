@@ -82,7 +82,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
           command_timeout: 25m
-          debug: true
           envs: GHCR_USERNAME,GHCR_TOKEN,IMAGE_TAG
           script: |
             set -e
