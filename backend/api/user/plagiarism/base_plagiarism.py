@@ -1,12 +1,13 @@
 import asyncio
 import logging
+import re
 from base64 import b64decode
 from concurrent.futures import ProcessPoolExecutor
 from math import ceil
 
 import plagiarism_cpp
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -22,6 +23,49 @@ from models.plagiarism.plagiarism_report import PlagiarismReport
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Ordered list of (pattern, canonical_name). Checked top-to-bottom; first match wins.
+# PyPy must precede Python (PyPy strings contain "py").
+# C++ must precede C (both start with "C").
+_LANG_PATTERNS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r'pypy',               re.IGNORECASE), 'PyPy'),
+    (re.compile(r'c\+\+|g\+\+',        re.IGNORECASE), 'C++'),
+    (re.compile(r'python|py[23]\b',     re.IGNORECASE), 'Python'),
+    (re.compile(r'java(?!script)',       re.IGNORECASE), 'Java'),
+    (re.compile(r'kotlin',              re.IGNORECASE), 'Kotlin'),
+    (re.compile(r'c#|csharp',           re.IGNORECASE), 'C#'),
+    (re.compile(r'gnu\s*c\b|gnu\s*c\d', re.IGNORECASE), 'C'),
+    (re.compile(r'rust',                re.IGNORECASE), 'Rust'),
+    (re.compile(r'\bgo\b|golang',       re.IGNORECASE), 'Go'),
+    (re.compile(r'haskell',             re.IGNORECASE), 'Haskell'),
+    (re.compile(r'javascript|node\.?js',re.IGNORECASE), 'JavaScript'),
+    (re.compile(r'typescript',          re.IGNORECASE), 'TypeScript'),
+    (re.compile(r'ruby',                re.IGNORECASE), 'Ruby'),
+    (re.compile(r'scala',               re.IGNORECASE), 'Scala'),
+    (re.compile(r'swift',               re.IGNORECASE), 'Swift'),
+    (re.compile(r'\bphp\b',             re.IGNORECASE), 'PHP'),
+    (re.compile(r'\bperl\b',            re.IGNORECASE), 'Perl'),
+    (re.compile(r'pascal|delphi',       re.IGNORECASE), 'Pascal'),
+    (re.compile(r'ocaml',               re.IGNORECASE), 'OCaml'),
+    (re.compile(r'clojure',             re.IGNORECASE), 'Clojure'),
+    (re.compile(r'\bd\b',               re.IGNORECASE), 'D'),
+]
+
+
+def _normalize_language_display(lang: str) -> str:
+    """Collapse versioned/compiler-specific language strings to a canonical name.
+
+    Examples:
+        "GNU G++17 7.3.0"   -> "C++"
+        "Python 3.11"       -> "Python"
+        "PyPy 3-64"         -> "PyPy"
+        "Java 17"           -> "Java"
+        "Kotlin 1.9"        -> "Kotlin"
+    """
+    for pattern, canonical in _LANG_PATTERNS:
+        if pattern.search(lang):
+            return canonical
+    return lang
 # ProcessPoolExecutor: each worker has its own GIL, so the main event loop
 # is never blocked by the C++ plagiarism computation.
 _plagiarism_executor = ProcessPoolExecutor(max_workers=4)
@@ -29,6 +73,13 @@ _plagiarism_executor = ProcessPoolExecutor(max_workers=4)
 
 def _run_plagiarism_check(sub_rows: list, threshold: float) -> list[tuple]:
     """Runs in a subprocess. Returns plain tuples so the result is picklable."""
+    import logging
+    import os
+    _log = logging.getLogger(__name__)
+    _log.info(
+        f"[plagiarism worker] pid={os.getpid()} cwd={os.getcwd()} "
+        f"submissions={len(sub_rows)} threshold={threshold}"
+    )
     py_submissions = []
     for sub in sub_rows:
         py_sub = plagiarism_cpp.Submission()
@@ -39,6 +90,7 @@ def _run_plagiarism_check(sub_rows: list, threshold: float) -> list[tuple]:
         py_sub.problem = sub["task_name"] or ""
         py_submissions.append(py_sub)
     pairs = plagiarism_cpp.compute_similarity_pairs(py_submissions, threshold)
+    _log.info(f"[plagiarism worker] pid={os.getpid()} returned {len(pairs)} pairs")
     return [
         (
             str(pair.first_submission_id),
@@ -50,8 +102,8 @@ def _run_plagiarism_check(sub_rows: list, threshold: float) -> list[tuple]:
 
 
 class PlagiarismCheckBody(BaseModel):
-    threshold: float  # display threshold (lower) — passed to C++ as the scan cutoff
-    banThreshold: float  # auto-ban threshold (upper, >= threshold)
+    threshold: float = Field(ge=0.0, le=1.0)     # similarity cutoff passed to C++ [0, 1]
+    banThreshold: float = Field(ge=0.0, le=1.0)  # auto-ban cutoff (>= threshold) [0, 1]
     onlyOk: bool = False
     languages: list[str] | None = None
     tasks: list[str] | None = None
@@ -116,8 +168,11 @@ async def get_contest_submissions_meta(
         select(Submission.task_name).distinct().filter_by(contest_id=contest_id)
     )
 
+    raw_langs = [l for l in languages_result.scalars().all() if l]
+    normalized_langs = sorted(set(_normalize_language_display(l) for l in raw_langs))
+
     return {
-        "languages": sorted(lang for lang in languages_result.scalars().all() if lang),
+        "languages": normalized_langs,
         "tasks": sorted(task for task in tasks_result.scalars().all() if task),
     }
 
@@ -261,8 +316,8 @@ async def get_pair(
     _pair_q = await db.execute(
         select(PairOfBannedSubmissions)
         .options(
-            joinedload(PairOfBannedSubmissions.first_submission),
-            joinedload(PairOfBannedSubmissions.second_submission),
+            joinedload(PairOfBannedSubmissions.first_submission).joinedload(Submission.task_result),
+            joinedload(PairOfBannedSubmissions.second_submission).joinedload(Submission.task_result),
         )
         .filter_by(id=pair_id)
     )
@@ -294,20 +349,90 @@ async def get_pair(
     )
     name_map = {cp.login: cp.name for cp in cp_result.scalars().all()}
 
+    def _decode_source(raw: str | None) -> str:
+        if not raw:
+            return ""
+        try:
+            return b64decode(raw).decode("utf-8", errors="replace")
+        except Exception:
+            return raw
+
+    def _original_score(sub: Submission) -> float | None:
+        """Return the score the participant earned before any ban."""
+        tr = sub.task_result
+        if tr is None:
+            return sub.score
+        # If the task_result is banned its score was zeroed; recover from submission.
+        return sub.score if tr.banned else tr.score
+
     return {
         "id": pair.id,
         "percent": round(pair.percentage, 2),
+        "task_name": pair.first_submission.task_name,
         "user1": login1,
         "user1_name": name_map.get(login1),
         "user2": login2,
         "user2_name": name_map.get(login2),
         "sub1_id": str(pair.first_submission_id),
         "sub2_id": str(pair.second_submission_id),
-        "code1": pair.first_submission.source or "",
-        "code2": pair.second_submission.source or "",
+        "code1": _decode_source(pair.first_submission.source),
+        "code2": _decode_source(pair.second_submission.source),
         "sub1_banned": pair.first_submission.banned,
         "sub2_banned": pair.second_submission.banned,
+        "score1": _original_score(pair.first_submission),
+        "score2": _original_score(pair.second_submission),
     }
+
+
+@router.post("/reports/{report_id}/unban-task")
+async def unban_report_task(
+    report_id: int,
+    task_name: str | None = Query(None),
+    user_id: int = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unban every submission that appears in the report's pairs.
+
+    Pass ``task_name`` to limit the action to one task; omit it to unban
+    all tasks in the report at once.
+    """
+    _report_q = await db.execute(select(PlagiarismReport).filter_by(id=report_id))
+    report = _report_q.scalars().first()
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    _contest_q = await db.execute(
+        select(Contest).filter_by(id=report.contest_id, user_id=user_id)
+    )
+    if not _contest_q.scalars().first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+
+    query = (
+        select(PairOfBannedSubmissions)
+        .options(
+            joinedload(PairOfBannedSubmissions.first_submission),
+            joinedload(PairOfBannedSubmissions.second_submission),
+        )
+        .filter_by(report_id=report_id)
+    )
+    if task_name:
+        query = query.join(
+            Submission, PairOfBannedSubmissions.first_submission_id == Submission.id
+        ).filter(Submission.task_name == task_name)
+
+    _pairs_q = await db.execute(query)
+    pairs = _pairs_q.scalars().all()
+
+    sub_ids: set[str] = set()
+    for pair in pairs:
+        sub_ids.add(str(pair.first_submission_id))
+        sub_ids.add(str(pair.second_submission_id))
+
+    for sub_id in sub_ids:
+        await _unban_task_result_for_submission(db, sub_id)
+
+    await db.commit()
+    return {"unbanned_submissions": len(sub_ids)}
 
 
 @router.post("/pairs/{pair_id}/ban/{position}")
@@ -533,7 +658,19 @@ async def process_plagiarism_report(
             if only_ok:
                 query = query.filter_by(verdict="OK")
             if languages:
-                query = query.filter(Submission.language.in_(languages))
+                # Normalised names (e.g. "C++", "Python") must be expanded back
+                # to the raw strings that exist in this contest's submissions.
+                raw_q = await db.execute(
+                    select(Submission.language).distinct().filter_by(contest_id=contest_id)
+                )
+                all_raw = [l for l in raw_q.scalars().all() if l]
+                wanted = set(languages)
+                matching_raw = [l for l in all_raw if _normalize_language_display(l) in wanted]
+                if matching_raw:
+                    query = query.filter(Submission.language.in_(matching_raw))
+                else:
+                    # Nothing matches — skip to avoid empty-result plagiarism run.
+                    query = query.filter(Submission.language.in_([]))
             if tasks:
                 query = query.filter(Submission.task_name.in_(tasks))
 

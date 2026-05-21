@@ -10,21 +10,8 @@ export const PlagiarismComparison = () => {
     const [banning, setBanning] = useState<1 | 2 | null>(null);
     const [unbanning, setUnbanning] = useState<1 | 2 | null>(null);
 
-    const decodeCode = (str: string) => {
-        try {
-            return new TextDecoder('utf-8').decode(Uint8Array.from(atob(str), c => c.charCodeAt(0)));
-        } catch (e) {
-            return "Ошибка декодирования";
-        }
-    };
-
     useEffect(() => {
-        api.get(`/analytics/pairs/${pairId}`).then(res => {
-            const d = res.data;
-            d.code1 = decodeCode(d.code1);
-            d.code2 = decodeCode(d.code2);
-            setData(d);
-        });
+        api.get(`/analytics/pairs/${pairId}`).then(res => setData(res.data));
     }, [pairId]);
 
     const banSubmission = async (position: 1 | 2) => {
@@ -59,21 +46,28 @@ export const PlagiarismComparison = () => {
 
     if (!data) return null;
 
-    const CodeHeader = ({user, userName, subId, banned, position}: any) => {
+    const CodeHeader = ({user, userName, subId, banned, position, score}: any) => {
         const displayName = userName || user || 'Неизвестный';
         return (
             <div className={`p-4 border-b dark:border-slate-800 flex items-center justify-between ${banned ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-white dark:bg-slate-900'}`}>
                 <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${banned ? 'bg-blue-200 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600'}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 ${banned ? 'bg-blue-200 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600'}`}>
                         {displayName[0]?.toUpperCase() || '?'}
                     </div>
                     <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-bold text-sm dark:text-white">{displayName}</p>
                             {banned && <span className="text-[10px] font-black text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">ЗАБАНЕН</span>}
                         </div>
                         {userName && <p className="text-xs text-slate-400">{user}</p>}
-                        <p className="text-[10px] text-slate-400">ID Посылки: {subId?.split('_').pop() || '—'}</p>
+                        <div className="flex items-center gap-3 mt-0.5">
+                            <p className="text-[10px] text-slate-400">ID Посылки: {subId?.split('_').pop() || '—'}</p>
+                            {score != null && (
+                                <p className="text-[10px] font-bold text-amber-500">
+                                    {score} балл{score === 1 ? '' : score < 5 ? 'а' : 'ов'}
+                                </p>
+                            )}
+                        </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -119,6 +113,11 @@ export const PlagiarismComparison = () => {
                     <ArrowLeft size={20}/> К списку пар
                 </button>
                 <div className="flex items-center gap-3">
+                    {data.task_name && (
+                        <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-300 px-3 py-1.5 rounded-xl">
+                            Задача: {data.task_name}
+                        </span>
+                    )}
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-widest hidden sm:block">Similarity:</span>
                     <div className="px-4 py-1.5 bg-red-600 text-white rounded-2xl font-black text-lg shadow-lg shadow-red-500/20">
                         {data.percent}%
@@ -129,7 +128,7 @@ export const PlagiarismComparison = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" style={{minHeight: '60vh'}}>
                 <div
                     className="flex flex-col rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden bg-slate-950">
-                    <CodeHeader user={data.user1} userName={data.user1_name} subId={data.sub1_id} banned={data.sub1_banned} position={1}/>
+                    <CodeHeader user={data.user1} userName={data.user1_name} subId={data.sub1_id} banned={data.sub1_banned} position={1} score={data.score1}/>
                     <div className="flex-1 p-4 overflow-auto font-mono text-[11px] leading-relaxed text-slate-300" style={{minHeight: '300px'}}>
                         <pre><code>{data.code1}</code></pre>
                     </div>
@@ -137,7 +136,7 @@ export const PlagiarismComparison = () => {
 
                 <div
                     className="flex flex-col rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden bg-slate-950">
-                    <CodeHeader user={data.user2} userName={data.user2_name} subId={data.sub2_id} banned={data.sub2_banned} position={2}/>
+                    <CodeHeader user={data.user2} userName={data.user2_name} subId={data.sub2_id} banned={data.sub2_banned} position={2} score={data.score2}/>
                     <div className="flex-1 p-4 overflow-auto font-mono text-[11px] leading-relaxed text-slate-300" style={{minHeight: '300px'}}>
                         <pre><code>{data.code2}</code></pre>
                     </div>

@@ -13,6 +13,9 @@ find_package(pybind11 CONFIG QUIET)
 set(PLAGIARISM_CORE_SOURCES
         outdated_metrics/levenshtein_similarity.cpp
 
+        preprocessing/alias_expander.cpp
+        preprocessing/namespace_stripper.cpp
+        preprocessing/dead_code_stripper.cpp
         preprocessing/comments.cpp
         preprocessing/line_endings.cpp
         preprocessing/lines.cpp

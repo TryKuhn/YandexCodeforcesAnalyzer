@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
+/// @brief Structural statistics and preorder kind sequence extracted from an AST.
 struct AstFeatures {
     bool parse_ok = false;
 

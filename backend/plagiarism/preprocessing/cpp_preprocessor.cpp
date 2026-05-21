@@ -64,7 +64,10 @@ bool ReadFile(const std::string& path, std::string& text) {
 
 std::string MakeFile(const std::string& prefix, const std::string& ext) {
     long long t = std::chrono::steady_clock::now().time_since_epoch().count();
-    return "./" + prefix + "_" + std::to_string(getpid()) + "_" + std::to_string(t) + ext;
+    // Include thread id so parallel workers never collide on the same filename.
+    auto tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
+    return "/tmp/" + prefix + "_" + std::to_string(getpid()) + "_" +
+           std::to_string(tid) + "_" + std::to_string(t) + ext;
 }
 
 bool RunPreprocessor(const std::string& inputPath, const std::string& outputPath) {

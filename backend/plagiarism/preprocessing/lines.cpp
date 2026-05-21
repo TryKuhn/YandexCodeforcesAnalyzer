@@ -45,11 +45,13 @@ void LinesNormalizer::RemoveEmptyLines() {
     }
     lines_ = result;
 }
-void LinesNormalizer::RemoveIncludesAndPragmas() {
-    std::vector < std::string > result;
+void LinesNormalizer::RemoveDirectives() {
+    std::vector<std::string> result;
     for (std::string& line : lines_) {
         if (!(line.size() >= 8 && line.substr(0, 8) == "#include") &&
-            !(line.size() >= 7 && line.substr(0, 7) == "#pragma")) {
+            !(line.size() >= 7 && line.substr(0, 7) == "#pragma") &&
+            !(line.size() >= 6 && line.substr(0, 6) == "#undef") &&
+            !(line.size() >= 5 && line.substr(0, 5) == "#line")) {
             result.push_back(line);
         }
     }
@@ -59,7 +61,7 @@ std::string LinesNormalizer::Transform() {
     SplitLines();
     NormalizeEachLine();
     RemoveEmptyLines();
-    RemoveIncludesAndPragmas();
+    RemoveDirectives();
     JoinLines();
     return code_;
 };

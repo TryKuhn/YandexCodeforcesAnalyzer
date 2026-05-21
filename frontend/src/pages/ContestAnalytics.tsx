@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     ShieldAlert, Play, BarChart, AlertCircle,
@@ -12,11 +12,7 @@ export const ContestAnalytics = () => {
     const [reports, setReports] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    useEffect(() => {
-        fetchReports();
-    }, [id]);
-
-    const fetchReports = async () => {
+    const fetchReports = useCallback(async () => {
         try {
             const res = await api.get(`/analytics/contests/${id}/reports`);
             setReports(res.data);
@@ -25,7 +21,22 @@ export const ContestAnalytics = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [id]);
+
+    useEffect(() => {
+        fetchReports();
+    }, [fetchReports]);
+
+    // Poll every 3 s while at least one report is still processing.
+    useEffect(() => {
+        const hasProcessing = reports.some(
+            r => r.status !== 'completed' && r.status !== 'failed'
+        );
+        if (!hasProcessing) return;
+
+        const interval = setInterval(fetchReports, 3000);
+        return () => clearInterval(interval);
+    }, [reports, fetchReports]);
 
     const getStatusStyle = (status: string) => {
         switch (status) {

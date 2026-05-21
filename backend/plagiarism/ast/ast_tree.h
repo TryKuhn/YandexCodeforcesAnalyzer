@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+/// @brief Coarse-grained type classification of an AST node.
 enum class AstNodeType {
     kTranslationUnit,
     kFunctionDecl,
@@ -25,6 +26,7 @@ enum class AstNodeType {
     kUnknown,
 };
 
+/// @brief Semantic role a node plays in its parent's construct.
 enum class AstNodeRole {
     kNone,
     kCondition,
@@ -38,11 +40,13 @@ enum class AstNodeRole {
     kUnknown,
 };
 
+/// @brief Inclusive source line range for a node.
 struct LineRange {
     int start_line = 0;
     int end_line = 0;
 };
 
+/// @brief Single node in the simplified AST used for similarity scoring.
 struct AstNode {
     AstNodeType type = AstNodeType::kUnknown;
     AstNodeRole role = AstNodeRole::kNone;
@@ -60,6 +64,7 @@ struct AstNode {
     int subtree_size = 1;
 };
 
+/// @brief Root container for a parsed AST.
 struct AstTree {
     bool parse_ok = false;
     std::unique_ptr<AstNode> root;

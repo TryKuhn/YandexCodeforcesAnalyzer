@@ -10,6 +10,7 @@
 #include "winnowing_features.h"
 #include "../ast/ast_features.h"
 
+/// @brief All derived features computed from a single submission's source code.
 struct SubmissionData {
     std::string submission_id;
 
