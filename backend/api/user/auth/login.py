@@ -9,8 +9,8 @@ from api.crypt import hash_password, verify_password
 from api.crypt.crypt_password import hash_token
 from api.pydantic_schemas import Token, UserLogin, UserRegister
 from api.user.auth.base_auth import router as auth_router
-from api.user.auth.tokens import get_tokens
 from api.user.auth.location import get_location
+from api.user.auth.tokens import get_tokens
 from app.database import get_db
 from models import RefreshToken, Role, User
 
@@ -73,14 +73,18 @@ async def login(
     user = _r.scalars().first()
 
     if not user or not user.password:
-        logger.warning(f"Login failed: unknown login '{payload.login}' from {client_ip}")
+        logger.warning(
+            f"Login failed: unknown login '{payload.login}' from {client_ip}"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid login or password",
         )
 
     if not verify_password(payload.password, user.password):
-        logger.warning(f"Login failed: wrong password for '{payload.login}' from {client_ip}")
+        logger.warning(
+            f"Login failed: wrong password for '{payload.login}' from {client_ip}"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid login or password",
@@ -110,7 +114,9 @@ async def login(
     db.add(refresh_token_sub)
     await db.commit()
 
-    logger.info(f"Login successful: user_id={user_id} ('{payload.login}') from {client_ip}")
+    logger.info(
+        f"Login successful: user_id={user_id} ('{payload.login}') from {client_ip}"
+    )
 
     return Token(
         access_token=access_token, refresh_token=refresh_token, token_type="Bearer"

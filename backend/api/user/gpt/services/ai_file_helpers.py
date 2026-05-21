@@ -4,17 +4,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.ai.ai_generated_file import AIGeneratedFile
 
 FILE_NAME_MAP: dict[str, str] = {
-    "validator":    "validator.cpp",
-    "generator":    "generator.cpp",
-    "checker":      "checker.cpp",
+    "validator": "validator.cpp",
+    "generator": "generator.cpp",
+    "checker": "checker.cpp",
+    "interactor": "interactor.cpp",
     "solution_cpp": "solution.cpp",
-    "solution_py":  "solution_python.py",
-    "wa_sol":       "wa.cpp",
-    "tl_sol":       "tl.cpp",
-    "re_sol":       "re.cpp",
-    "ml_sol":       "ml.cpp",
-    "script":       "script.txt",
+    "solution_py": "solution_python.py",
+    "wa_sol": "wa.cpp",
+    "tl_sol": "tl.cpp",
+    "re_sol": "re.cpp",
+    "ml_sol": "ml.cpp",
+    "script": "script.txt",
 }
+
+
+def resolve_filename(file_type: str, solution_meta: dict | None = None) -> str:
+    """Returns the filename for a given file_type.
+    For custom solutions (file_type starts with 'sol_custom_'), uses solution_meta.
+    """
+    if file_type in FILE_NAME_MAP:
+        return FILE_NAME_MAP[file_type]
+    if solution_meta and file_type in solution_meta:
+        name = solution_meta[file_type].get("name", file_type)
+        if not name.endswith(".cpp"):
+            name += ".cpp"
+        return name
+    return file_type
 
 
 async def upsert_ai_file(
@@ -24,8 +39,9 @@ async def upsert_ai_file(
     content: str,
     *,
     uploaded: bool = False,
+    solution_meta: dict | None = None,
 ) -> None:
-    filename = FILE_NAME_MAP.get(file_type, file_type)
+    filename = resolve_filename(file_type, solution_meta)
     result = await db.execute(
         select(AIGeneratedFile).where(
             AIGeneratedFile.session_id == session_id,
@@ -38,13 +54,15 @@ async def upsert_ai_file(
         existing.filename = filename
         existing.uploaded = uploaded
     else:
-        db.add(AIGeneratedFile(
-            session_id=session_id,
-            filename=filename,
-            content=content,
-            file_type=file_type,
-            uploaded=uploaded,
-        ))
+        db.add(
+            AIGeneratedFile(
+                session_id=session_id,
+                filename=filename,
+                content=content,
+                file_type=file_type,
+                uploaded=uploaded,
+            )
+        )
 
 
 async def upsert_all_ai_files(

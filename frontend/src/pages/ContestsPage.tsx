@@ -99,10 +99,10 @@ export const ContestsPage = () => {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-200">Мои контесты</h1>
-                <button onClick={() => navigate('/contests/sync')} className="bg-blue-600 text-slate-200 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-all">
-                    <Plus size={20} /> Загрузить новый
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-200">Мои контесты</h1>
+                <button onClick={() => navigate('/contests/sync')} className="bg-blue-600 text-slate-200 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-all text-sm sm:text-base shrink-0">
+                    <Plus size={18} /> Загрузить новый
                 </button>
             </div>
 
@@ -111,7 +111,7 @@ export const ContestsPage = () => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {contests.map((contest) => (
-                        <div key={contest.id} className="bg-slate-200 dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 flex flex-col group relative">
+                        <div key={contest.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col group relative">
                             <button
                                 onClick={() => handleDelete(contest.id, contest.name)}
                                 className="absolute top-4 right-4 p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
@@ -134,7 +134,7 @@ export const ContestsPage = () => {
 
                             <h3 className="font-bold text-lg dark:text-slate-200 line-clamp-2 mb-4 pr-8">{contest.name}</h3>
 
-                            <div className="mt-auto pt-4 border-t border-slate-50 dark:border-slate-800">
+                            <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800">
                                 <div className="flex items-center justify-between mb-4">
                                     <label className={`flex items-center gap-2 cursor-pointer group/label ${syncingId === contest.id ? 'opacity-50 pointer-events-none' : ''}`}>
                                         <input
@@ -157,7 +157,7 @@ export const ContestsPage = () => {
                                     </button>
                                 </div>
 
-                                <button onClick={() => navigate(`/contests/${contest.id}`)} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-600 dark:bg-slate-200 text-slate-200 dark:text-slate-900 font-bold hover:opacity-90 transition-all">
+                                <button onClick={() => navigate(`/contests/${contest.id}`)} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-bold hover:from-violet-700 hover:to-fuchsia-700 shadow-lg shadow-violet-500/25 transition-all">
                                     <span>Войти в соревнование</span>
                                     <ExternalLink size={16} />
                                 </button>

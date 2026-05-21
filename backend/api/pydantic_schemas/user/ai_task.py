@@ -3,6 +3,58 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 
+class ProblemSettings(BaseModel):
+    input_file: Optional[str] = "stdin"
+    output_file: Optional[str] = "stdout"
+    interactive: Optional[bool] = False
+    time_limit: Optional[int] = 2000
+    memory_limit: Optional[int] = 256
+    tags: Optional[List[str]] = []
+    enable_groups: Optional[bool] = False
+    enable_points: Optional[bool] = False
+
+
+class AddCustomSolutionRequest(BaseModel):
+    session_id: str
+    tag: str
+    name: str
+
+
+class UpdateProblemSettingsRequest(BaseModel):
+    session_id: Optional[str] = None
+    settings: ProblemSettings
+
+
+class GenerateSamplesRequest(BaseModel):
+    session_id: str
+    count: Optional[int] = 3
+
+
+class SuggestTagsRequest(BaseModel):
+    session_id: str
+
+
+class UpdateExamplesRequest(BaseModel):
+    session_id: str
+    examples: List[Dict[str, str]]  # [{index, input, output}]
+
+
+class GenerateScoringRequest(BaseModel):
+    session_id: str
+
+
+class UpdateStatementFieldRequest(BaseModel):
+    session_id: str
+    field: str
+    value: str
+
+
+class ImportFromPolygonFullRequest(BaseModel):
+    polygon_problem_id: int
+    model: str
+    load_files: Optional[bool] = True
+
+
 class AIStatementRequest(BaseModel):
     idea: Optional[str] = ""
     model: str
@@ -19,17 +71,18 @@ class AIStatementResponse(BaseModel):
     statement: Dict[str, Any]
     session_id: str
     stage: str
+    technical_data: Optional[Dict[str, Any]] = None
 
 
 class RefineRequest(BaseModel):
     session_id: str
     feedback: str
+    problem_settings: Optional[Dict] = None
 
 
 class ApproveStatementRequest(BaseModel):
-    """Пользователь одобряет условие → запускаем генерацию файлов"""
-
     session_id: str
+    problem_settings: Optional[Dict] = None
 
 
 class GenerateFilesResponse(BaseModel):
@@ -39,22 +92,16 @@ class GenerateFilesResponse(BaseModel):
 
 
 class RefineFileRequest(BaseModel):
-    """Правка конкретного файла"""
-
     session_id: str
-    file_key: str  # 'validator', 'generator', etc.
-    feedback: str  # что именно поправить
+    file_key: str
+    feedback: str
 
 
 class ApproveFilesRequest(BaseModel):
-    """Пользователь одобряет файлы → запускаем загрузку"""
-
     session_id: str
 
 
 class ManualFixRequest(BaseModel):
-    """Пользователь вручную правит файл с ошибкой"""
-
     session_id: str
     file_key: str
     new_content: str
@@ -68,6 +115,12 @@ class PostBuildRefineRequest(BaseModel):
 class ImportFromPolygonRequest(BaseModel):
     polygon_problem_id: int
     model: str
+
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+    context: str
 
 
 class UploadProgressResponse(BaseModel):

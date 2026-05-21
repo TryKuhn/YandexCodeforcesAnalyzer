@@ -3,13 +3,15 @@ Root conftest.py — sets up dummy environment variables and mocks external
 C++ extensions so that the app can be imported without a real .env file.
 The actual database connection is overridden in test_base.py to use SQLite.
 """
+
+import os
 import sys
 import types
-import os
 from typing import Any
 
-import api.crypt.crypt_password as _crypt_mod
 from passlib.context import CryptContext
+
+import api.crypt.crypt_password as _crypt_mod
 
 # Ensure the backend directory itself is importable regardless of where
 # pytest is invoked from (project root, backend/, IDE, etc.)
@@ -20,11 +22,14 @@ if _backend_dir not in sys.path:
 # Mock the plagiarism_cpp C++ extension which is not available in test environments
 _mock_plagiarism: Any = types.ModuleType("plagiarism_cpp")
 
+
 class _ProgrammingLanguage:
     Cpp = "cpp"
     Python = "python"
 
+
 _mock_plagiarism.ProgrammingLanguage = _ProgrammingLanguage
+
 
 class _Submission:
     def __init__(self):
@@ -33,6 +38,7 @@ class _Submission:
         self.rawCode = ""
         self.participant = ""
         self.problem = ""
+
 
 _mock_plagiarism.Submission = _Submission
 _mock_plagiarism.compute_similarity_pairs = lambda submissions, threshold: []

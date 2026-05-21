@@ -14,6 +14,13 @@ from api.user.polygon.files.gen.set_solution import set_solution
 from api.user.polygon.files.gen.set_validator import set_validator
 from api.user.polygon.files.save_statement import save_statement
 from api.user.polygon.files.save_test import save_test
+from api.user.polygon.get_problem_files import (get_problem_files,
+                                                get_problem_script,
+                                                get_problem_solutions,
+                                                get_problem_tags,
+                                                get_problem_tests,
+                                                get_test_input, view_file,
+                                                view_solution)
 from api.user.polygon.get_response import get_response
 from api.user.polygon.problem_info import problem_info
 from api.user.polygon.problem_script import problem_script
@@ -48,4 +55,12 @@ __all__ = [
     "add_source",
     "create_signature",
     "get_response",
+    "get_problem_files",
+    "get_problem_solutions",
+    "get_problem_script",
+    "get_problem_tags",
+    "get_problem_tests",
+    "get_test_input",
+    "view_file",
+    "view_solution",
 ]

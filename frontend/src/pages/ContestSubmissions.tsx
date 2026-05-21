@@ -50,7 +50,8 @@ export const ContestSubmissions = () => {
         setPage(1);
     };
 
-    const getVerdictStyle = (verdict: string) => {
+    const getVerdictStyle = (verdict: string, banned?: boolean) => {
+        if (banned) return 'text-purple-500';
         switch (verdict) {
             case 'OK': return 'text-green-500';
             case 'PARTIAL': return 'text-yellow-500 dark:text-yellow-400';
@@ -62,12 +63,12 @@ export const ContestSubmissions = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <button onClick={() => navigate(`/contests/${id}`)}
-                        className="flex items-center gap-2 text-slate-500 hover:text-blue-600 font-medium">
-                    <ArrowLeft size={20} /> Назад к обзору
+                        className="flex items-center gap-2 text-slate-500 hover:text-blue-600 font-medium text-sm">
+                    <ArrowLeft size={18} /> Назад к обзору
                 </button>
-                <h1 className="text-xl font-bold dark:text-white">Посылки контеста #{id}</h1>
+                <h1 className="text-lg sm:text-xl font-bold dark:text-white">Посылки #{id}</h1>
             </div>
 
             <div className="relative">
@@ -84,23 +85,23 @@ export const ContestSubmissions = () => {
                 )}
             </div>
 
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
-                <table className="w-full text-sm text-left">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm overflow-x-auto">
+                <table className="w-full text-sm text-left" style={{minWidth: '560px'}}>
                     <thead className="bg-slate-50 dark:bg-slate-800/50 border-b dark:border-slate-800">
                     <tr>
-                        <th className="px-6 py-4 font-bold dark:text-white">ID</th>
-                        <th className="px-6 py-4 font-bold dark:text-white">Время отправки</th>
-                        <th className="px-6 py-4 font-bold dark:text-white">Участник</th>
-                        <th className="px-6 py-4 font-bold dark:text-white">Задача</th>
-                        <th className="px-6 py-4 font-bold dark:text-white">Язык</th>
-                        <th className="px-6 py-4 font-bold dark:text-white">Баллы</th>
-                        <th className="px-6 py-4 font-bold dark:text-white">Вердикт</th>
+                        <th className="px-4 py-3 font-bold dark:text-white">ID</th>
+                        <th className="px-4 py-3 font-bold dark:text-white hidden sm:table-cell">Время</th>
+                        <th className="px-4 py-3 font-bold dark:text-white">Участник</th>
+                        <th className="px-4 py-3 font-bold dark:text-white">Задача</th>
+                        <th className="px-4 py-3 font-bold dark:text-white hidden md:table-cell">Язык</th>
+                        <th className="px-4 py-3 font-bold dark:text-white">Баллы</th>
+                        <th className="px-4 py-3 font-bold dark:text-white">Вердикт</th>
                     </tr>
                     </thead>
                     <tbody className={isLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
                     {subs.map(s => (
                         <tr key={s.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-3">
                                 <Link
                                     to={`/contests/${id}/submissions/${s.id}`}
                                     className="font-mono text-[10px] text-blue-500 hover:underline bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded"
@@ -108,15 +109,15 @@ export const ContestSubmissions = () => {
                                     #{s.id.split('_').pop()}
                                 </Link>
                             </td>
-                            <td className="px-6 py-4 text-slate-400 text-[11px]">
+                            <td className="px-4 py-3 text-slate-400 text-[11px] hidden sm:table-cell">
                                 {new Date(s.send_time).toLocaleString()}
                             </td>
-                            <td className="px-6 py-4 font-bold dark:text-white">{s.participant_login}</td>
-                            <td className="px-6 py-4 text-slate-500">{s.task_name}</td>
-                            <td className="px-6 py-4 text-xs text-slate-400">{s.language}</td>
-                            <td className="px-6 py-4 font-mono text-blue-600 font-bold">{s.score}</td>
-                            <td className={`px-6 py-4 font-bold ${getVerdictStyle(s.verdict)}`}>
-                                {s.verdict}
+                            <td className="px-4 py-3 font-bold dark:text-white text-sm">{s.participant_login}</td>
+                            <td className="px-4 py-3 text-slate-500 text-sm">{s.task_name}</td>
+                            <td className="px-4 py-3 text-xs text-slate-400 hidden md:table-cell">{s.language}</td>
+                            <td className="px-4 py-3 font-mono text-blue-600 font-bold">{s.banned ? 0 : s.score}</td>
+                            <td className={`px-4 py-3 font-bold text-xs ${getVerdictStyle(s.verdict, s.banned)}`}>
+                                {s.banned ? 'BANNED' : s.verdict}
                             </td>
                         </tr>
                     ))}

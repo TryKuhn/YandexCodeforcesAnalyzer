@@ -3,21 +3,13 @@
 #include "submission_stages.h"
 #include "../similarity/winnowing.h"
 
-SubmissionData BuildSubmissionData(const Submission& submission) {
-    SubmissionData dat;
-
+static void fill_token_features(SubmissionData& dat, const Submission& submission) {
     dat.submission_id = submission.id;
     dat.raw_code = submission.rawCode;
     dat.ast_code = BuildSubmissionAstCode(submission);
     dat.token_code = BuildSubmissionTokenCode(submission);
-    // if (submission.language == ProgrammingLanguage::Cpp) {
-    //     dat.ir_code = BuildSubmissionIrCode(submission.rawCode);
-    //     dat.ir_parse_ok = !dat.ir_code.empty();
-    // } else {
-        dat.ir_code.clear();
-        dat.ir_parse_ok = false;
-    // }
-    dat.ir_parse_ok = !dat.ir_code.empty();
+    dat.ir_code.clear();
+    dat.ir_parse_ok = false;
 
     dat.tokens = BuildSubmissionTokens(dat.token_code);
     dat.normalized_tokens = BuildNormalizedSubmissionTokens(dat.tokens);
@@ -29,12 +21,25 @@ SubmissionData BuildSubmissionData(const Submission& submission) {
     dat.winnowing_features.minhash_signature = build_minhash_signature(fingerprints);
 
     dat.token_features = BuildSubmissionTokenFeatures(dat.tokens, dat.normalized_tokens);
+}
 
+SubmissionData BuildSubmissionDataCheap(const Submission& submission) {
+    SubmissionData dat;
+    fill_token_features(dat, submission);
+    return dat;
+}
+
+void EnrichWithAst(SubmissionData& dat) {
     auto ast_pair = BuildSubmissionAstAndFeatures(dat.ast_code);
     dat.ast_features = std::move(ast_pair.first);
     const AstTree ast_tree = std::move(ast_pair.second);
     dat.ast_subtree_hash_freq = BuildSubmissionAstSubtreeHashFreq(ast_tree);
     dat.ast_normalized_sequence = BuildSubmissionAstNormalizedSequence(ast_tree);
+}
 
+SubmissionData BuildSubmissionData(const Submission& submission) {
+    SubmissionData dat;
+    fill_token_features(dat, submission);
+    EnrichWithAst(dat);
     return dat;
 }

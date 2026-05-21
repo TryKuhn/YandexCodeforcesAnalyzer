@@ -20,7 +20,11 @@ def test_register_success():
 
 def test_register_existing_user():
     _register("test_user_duplicate")
-    response = _register("test_user_duplicate", password="Bb2@bbbb", email="test_user_duplicate_second@example.com")
+    response = _register(
+        "test_user_duplicate",
+        password="Bb2@bbbb",
+        email="test_user_duplicate_second@example.com",
+    )
     assert response.status_code == 400
     assert response.json() == {"detail": "User with this login already exists"}
 
@@ -44,13 +48,17 @@ def test_register_password_without_digit():
 def test_register_password_without_lowercase_latin_letter():
     r = _register("without_lowercase_user", password="AA1!AAAA")
     assert r.status_code == 400
-    assert r.json() == {"detail": "Password must contain at least one lowercase Latin letter"}
+    assert r.json() == {
+        "detail": "Password must contain at least one lowercase Latin letter"
+    }
 
 
 def test_register_password_without_uppercase_latin_letter():
     r = _register("without_uppercase_user", password="aa1!aaaa")
     assert r.status_code == 400
-    assert r.json() == {"detail": "Password must contain at least one uppercase Latin letter"}
+    assert r.json() == {
+        "detail": "Password must contain at least one uppercase Latin letter"
+    }
 
 
 def test_register_password_without_special_symbol():
@@ -102,11 +110,19 @@ def test_register_password_with_space():
 
 
 def test_register_long_valid_password():
-    assert _register("long_valid_password_user", password="VeryStrongPassword123!A").status_code == 200
+    assert (
+        _register(
+            "long_valid_password_user", password="VeryStrongPassword123!A"
+        ).status_code
+        == 200
+    )
 
 
 def test_register_password_minimal_valid_complexity():
-    assert _register("minimal_valid_complexity_user", password="A1!bobau").status_code == 200
+    assert (
+        _register("minimal_valid_complexity_user", password="A1!bobau").status_code
+        == 200
+    )
 
 
 def test_register_with_invalid_email():

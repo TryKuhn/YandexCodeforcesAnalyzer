@@ -10,7 +10,8 @@ import asyncio
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (AsyncSession, async_sessionmaker,
+                                    create_async_engine)
 from sqlalchemy.pool import StaticPool
 
 # ── Test engine (SQLite in-memory, single shared connection) ─────────────────
@@ -55,11 +56,11 @@ from app.server import app  # noqa: E402
 
 app.dependency_overrides[get_db] = _override_get_db
 
+import app.database as _db_module  # noqa: E402
 # ── Patch module-level Session factories used directly by middlewares ─────────
 # The update_last_seen_middleware in server.py uses `Session()` directly (not
 # via get_db), so we must patch it to avoid connection attempts to PostgreSQL.
 import app.server as _server_module  # noqa: E402
-import app.database as _db_module  # noqa: E402
 
 _server_module.Session = _TestSession
 _db_module.Session = _TestSession

@@ -48,7 +48,7 @@ export const Pagination = ({ page, totalPages, total, perPage, onPageChange, onP
                     onChange={(e) => onPerPageChange(Number(e.target.value))}
                     className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-white cursor-pointer"
                 >
-                    {[10, 25, 50, 100, 200].map(n => (
+                    {[10, 25, 50, 100].map(n => (
                         <option key={n} value={n}>{n} / стр.</option>
                     ))}
                 </select>

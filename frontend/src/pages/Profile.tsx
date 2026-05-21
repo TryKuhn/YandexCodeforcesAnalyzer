@@ -14,8 +14,6 @@ export const Profile = () => {
     const [passData, setPassPassData] = useState({old: '', new: '', confirm: ''});
     const [status, setStatus] = useState({type: '', msg: ''});
 
-    {/* CF Legacy */
-    }
     const [cfData, setCfData] = useState({key: '', secret: ''});
     const [showCfModal, setShowCfModal] = useState(false);
     const [isLinkingCf, setIsLinkingCf] = useState(false);
@@ -140,7 +138,10 @@ export const Profile = () => {
 
     const performLogoutAll = async () => {
         try {
-            await api.post('/auth/logout_all');
+            const refreshToken = useAuthStore.getState().refreshToken;
+            await api.post('/auth/logout_all', {
+                refresh_token: refreshToken,
+            });
         } catch (e) {
             console.error("Logout all failed", e);
         }
@@ -254,7 +255,7 @@ export const Profile = () => {
                     <User size={32}/>
                 </div>
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{user?.login}</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white break-all">{user?.login}</h1>
                     <p className="text-slate-500 dark:text-slate-400">Управление безопасностью и сессиями</p>
                 </div>
             </div>
@@ -432,7 +433,7 @@ export const Profile = () => {
                         className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
                         <div className="flex justify-between items-center mb-4">
                             <span className="font-bold dark:text-white italic">Yandex <span
-                                className="text-red-500">Contest</span></span>
+                                className="text-white-500">Contest</span></span>
                             {user?.is_yandex_linked ? (
                                 <span
                                     className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full uppercase">Связан</span>
@@ -448,7 +449,7 @@ export const Profile = () => {
                             </button>
                         ) : (
                             <button onClick={handleYandexStart}
-                                    className="w-full bg-red-600 text-white py-2 rounded-xl text-sm font-bold">
+                                    className="bg-gradient-to-r from-violet-600 to-fuchsia-600 w-full text-white py-2 rounded-xl text-sm font-bold">
                                 Войти через Яндекс
                             </button>
                         )}
@@ -457,7 +458,7 @@ export const Profile = () => {
                     <div
                         className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
                         <div className="flex justify-between items-center mb-4">
-                            <span className="font-bold dark:text-white text-orange-600">Polygon</span>
+                            <span className="font-bold dark:text-white text-black-600">Polygon</span>
                             {user?.is_polygon_linked ? (
                                 <span
                                     className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full uppercase">Связан</span>

@@ -1,23 +1,23 @@
+import { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { TaskForgeIcon } from '../TaskForgeLogo';
 import {
     LayoutDashboard, Trophy, Users, User,
-    LogOut, ChevronRight, Sparkles,
+    LogOut, ChevronRight, Sparkles, Menu,
 } from 'lucide-react';
-// Settings, X, Check — используются только в AISettingsPopup (системный промпт)
 import { useAuthStore } from '../../store/useAuthStore';
 import { ThemeToggle } from '../ThemeToggle';
 import { api } from "../../api/instance.ts";
 
 export const AI_MODELS = [
     { id: 'anthropic/claude-opus-4.7',       name: 'Claude 4.7 Opus' },
+    { id: 'anthropic/claude-sonnet-4.6',     name: 'Claude Sonnet 4.6' },
     { id: 'anthropic/claude-opus-4.6-fast',  name: 'Claude 4.6 Fast' },
     { id: 'google/gemini-3.1-pro-preview',   name: 'Gemini 3.1 Pro' },
     { id: 'google/gemini-3-flash-preview',   name: 'Gemini 3 Flash' },
     { id: 'openai/gpt-5.5-pro',              name: 'GPT-5.5 Pro' },
 ];
 
-// ─── Попап настроек ИИ ──────────────────────────────────────────────────────
-// Настройки хранятся в localStorage и читаются в AITasks
 const AI_SETTINGS_KEY = 'ai_tasks_settings';
 
 export interface AISettings {
@@ -47,13 +47,14 @@ export const useAISettings = () => {
     return { load, save };
 };
 
-// ─────────────────────────── MainLayout ─────────────────────────────────────
 
 export const MainLayout = () => {
     const location  = useLocation();
     const navigate  = useNavigate();
     const { user, logout } = useAuthStore();
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
+    const isAISession = /^\/ai-tasks\/.+/.test(location.pathname);
 
     const handleLogout = async () => {
         const { accessToken, refreshToken, tokenType } = useAuthStore.getState();
@@ -80,14 +81,23 @@ export const MainLayout = () => {
 
     return (
         <div className="flex h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-            {/* Сайдбар */}
-            <aside className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col">
+            {sidebarOpen && (
+                <div
+                    className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
+            <aside className={`
+                fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col
+                transform transition-transform duration-200 ease-in-out
+                lg:relative lg:translate-x-0
+                ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+            `}>
                 <div className="p-6 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800">
-                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg">
-                        MC
-                    </div>
+                    <TaskForgeIcon size={32} />
                     <span className="font-bold text-xl dark:text-white tracking-tight">
-                        JudgeSystem
+                        TaskForge
                     </span>
                 </div>
 
@@ -98,11 +108,12 @@ export const MainLayout = () => {
                             <Link
                                 key={item.path}
                                 to={item.path}
+                                onClick={() => setSidebarOpen(false)}
                                 className={`
                                     flex items-center justify-between px-4 py-3 rounded-xl
                                     transition-all group
                                     ${isActive
-                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                    ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/30'
                                     : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                                 }
                                 `}
@@ -128,37 +139,48 @@ export const MainLayout = () => {
                 </div>
             </aside>
 
-            {/* Контентная часть */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Хедер */}
-                <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8">
-                    <div className="flex items-center gap-3">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium">
+            <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+                <header className="h-16 shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 lg:px-8">
+                    <div className="flex items-center gap-2 lg:gap-3">
+                        <button
+                            className="lg:hidden p-2 -ml-1 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                            onClick={() => setSidebarOpen(prev => !prev)}
+                            aria-label="Открыть меню"
+                        >
+                            <Menu size={20} />
+                        </button>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium text-sm lg:text-base">
                             {currentLabel}
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-3 lg:gap-6">
                         <ThemeToggle />
-                        <div className="flex items-center gap-3 pl-6 border-l border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2 lg:gap-3 lg:pl-6 lg:border-l border-slate-200 dark:border-slate-700">
                             <div className="text-right hidden sm:block">
                                 <p className="text-sm font-bold dark:text-white">
                                     {user?.login || 'Пользователь'}
                                 </p>
                                 <p className="text-xs text-slate-500">Online</p>
                             </div>
-                            <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center border border-slate-200 dark:border-slate-700">
-                                <User size={20} className="text-slate-400" />
+                            <div className="w-8 h-8 lg:w-10 lg:h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center border border-slate-200 dark:border-slate-700">
+                                <User size={18} className="text-slate-400" />
                             </div>
                         </div>
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto p-8 bg-slate-50 dark:bg-slate-950">
-                    <div className="max-w-6xl mx-auto">
+                {isAISession ? (
+                    <main className="flex-1 overflow-hidden bg-slate-50 dark:bg-slate-950">
                         <Outlet />
-                    </div>
-                </main>
+                    </main>
+                ) : (
+                    <main className="flex-1 overflow-y-auto p-4 lg:p-8 bg-slate-50 dark:bg-slate-950">
+                        <div className="max-w-6xl mx-auto">
+                            <Outlet />
+                        </div>
+                    </main>
+                )}
             </div>
         </div>
     );
