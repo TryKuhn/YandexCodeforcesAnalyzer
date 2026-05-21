@@ -2,33 +2,48 @@
 
 #include "normalize_tokens.h"
 
+// Identifiers preserved verbatim after normalization.
+// Two groups: (1) container/algorithm names that reflect structural choices;
+// (2) member names that distinguish operations (e.g. push_back vs insert).
+// User-defined names and anything not in this list collapse to "ID".
+// "std" is intentionally absent — StripNamespaceQualifiers removes it upstream.
 const std::unordered_set<std::string> allowed_ids = {
-    "std",
-    "vector",
-    "string",
-    "map",
-    "set",
-    "unordered_map",
-    "unordered_set",
-    "queue",
-    "stack",
-    "deque",
-    "pair",
-    "tuple",
-    "sort",
-    "lower_bound",
-    "upper_bound",
-    "push_back",
-    "emplace_back",
-    "begin",
-    "end",
-    "cin",
-    "cout",
-    "endl",
-    "min",
-    "max",
-    "swap",
-    "abs"
+    // Containers
+    "vector", "string", "map", "set", "unordered_map", "unordered_set",
+    "multimap", "multiset", "queue", "priority_queue", "stack", "deque",
+    "list", "array", "bitset", "pair", "tuple",
+
+    // Algorithms
+    "sort", "stable_sort", "nth_element",
+    "lower_bound", "upper_bound", "binary_search",
+    "min", "max", "min_element", "max_element",
+    "fill", "copy", "reverse", "rotate", "unique",
+    "accumulate", "count", "count_if",
+    "find", "find_if",
+    "next_permutation", "prev_permutation",
+    "gcd", "lcm", "abs", "swap",
+
+    // Container members
+    "push_back", "pop_back", "emplace_back",
+    "push", "pop", "top", "front", "back",
+    "insert", "emplace", "erase", "clear",
+    "begin", "end", "rbegin", "rend",
+    "size", "empty", "resize", "reserve", "capacity",
+    "at", "contains", "count",
+
+    // Pair/tuple members
+    "first", "second", "make_pair", "make_tuple", "get",
+
+    // I/O
+    "cin", "cout", "cerr", "endl", "printf", "scanf",
+    "getline", "puts", "gets",
+
+    // String / conversion
+    "to_string", "stoi", "stol", "stoll", "stof", "stod",
+    "strlen", "strcmp", "strcpy",
+
+    // Memory
+    "make_shared", "make_unique",
 };
 
 bool IsString(const std::string& str) {

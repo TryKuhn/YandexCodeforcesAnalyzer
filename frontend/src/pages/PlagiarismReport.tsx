@@ -7,6 +7,7 @@ import {
     ChevronRight,
     CheckCircle2,
     Search,
+    ShieldCheck,
 } from 'lucide-react';
 import { api } from '../api/instance';
 import { Pagination } from '../components/Pagination';
@@ -63,6 +64,7 @@ export const PlagiarismReport = () => {
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [isUnbanning, setIsUnbanning] = useState(false);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -125,6 +127,23 @@ export const PlagiarismReport = () => {
         setPage(1);
     };
 
+    const handleUnbanTask = async () => {
+        const label = selectedTask ? `задачу «${selectedTask}»` : 'всё';
+        if (!confirm(`Разбанить ${label}? Это вернёт очки всем участникам.`)) return;
+
+        setIsUnbanning(true);
+        try {
+            await api.post(`/analytics/reports/${reportId}/unban-task`, null, {
+                params: selectedTask ? { task_name: selectedTask } : {},
+            });
+            fetchReport();
+        } catch {
+            alert('Ошибка при разбане');
+        } finally {
+            setIsUnbanning(false);
+        }
+    };
+
     if (status === 'processing') {
         return (
             <div className="h-100 flex flex-col items-center justify-center space-y-4 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
@@ -180,6 +199,8 @@ export const PlagiarismReport = () => {
                     />
                 </div>
 
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
                 {availableTasks.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                         <button
@@ -205,6 +226,18 @@ export const PlagiarismReport = () => {
                                 {task}
                             </button>
                         ))}
+
+                        <button
+                            onClick={handleUnbanTask}
+                            disabled={isUnbanning}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-bold transition-all bg-white dark:bg-slate-900 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50"
+                        >
+                            {isUnbanning
+                                ? <Loader2 size={13} className="animate-spin" />
+                                : <ShieldCheck size={13} />
+                            }
+                            {selectedTask ? `Разбанить «${selectedTask}»` : 'Разбанить всё'}
+                        </button>
                     </div>
                 )}
             </div>

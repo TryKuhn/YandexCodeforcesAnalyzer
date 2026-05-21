@@ -2,6 +2,7 @@
 
 #include <string>
 
+/// @brief A pair of submissions flagged as potentially plagiarized.
 struct SimilarSubmissionPair {
     std::string first_submission_id;
     std::string second_submission_id;

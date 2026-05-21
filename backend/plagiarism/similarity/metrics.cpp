@@ -52,18 +52,6 @@ static std::vector<std::string> extract_ir_opcodes(const std::string& ir_code) {
     return ops;
 }
 
-static std::vector<std::string> build_grams3(const std::vector<std::string>& items) {
-    if (items.size() < 3) {
-        return items;
-    }
-
-    std::vector<std::string> grams;
-    grams.reserve(items.size() - 2);
-    for (std::size_t i = 0; i + 2 < items.size(); ++i) {
-        grams.push_back(items[i] + "|" + items[i + 1] + "|" + items[i + 2]);
-    }
-    return grams;
-}
 
 double jaccard_score(
     const std::vector<std::string>& lft,
@@ -73,7 +61,7 @@ double jaccard_score(
     std::unordered_set<std::string> rht_set(rht.begin(), rht.end());
 
     if (lft_set.empty() && rht_set.empty()) {
-        return 1.0;
+        return 0.0;
     }
 
     int intersec = 0;
@@ -113,7 +101,7 @@ double cosine_similarity_score(
         rht_norm += static_cast<double>(to.second) * static_cast<double>(to.second);
     }
     if (lft_norm == 0.0 && rht_norm == 0.0) {
-        return 1.0;
+        return 0.0;
     }
     if (lft_norm == 0.0 || rht_norm == 0.0 ) {
         return 0.0;
@@ -144,7 +132,7 @@ double weighted_jaccard_strings(
             each += v;
         }
     }
-    if (each == 0.0) return 1.0;
+    if (each == 0.0) return 0.0;
     return intersec / each;
 }
 
@@ -178,7 +166,7 @@ double compute_ast_counts_similarity(
     max_sum += std::max(left.calls_cnt, right.calls_cnt);
 
     if (max_sum == 0) {
-        return 1.0;
+        return 0.0;
     }
 
     return 1.0 - static_cast<double>(diff_sum) / static_cast<double>(max_sum);
@@ -188,7 +176,7 @@ double weighted_jaccard_hash_freq(
     const std::unordered_map<std::uint64_t, int>& rht
 ) {
     if (lft.empty() && rht.empty()) {
-        return 1.0;
+        return 0.0;
     }
 
     double intersec = 0.0;
@@ -263,8 +251,8 @@ double compute_ir_similarity(
     std::vector<std::string> lft_ops = extract_ir_opcodes(lft.ir_code);
     std::vector<std::string> rht_ops = extract_ir_opcodes(rht.ir_code);
 
-    std::vector<std::string> lft_grams = build_grams3(lft_ops);
-    std::vector<std::string> rht_grams = build_grams3(rht_ops);
+    std::vector<std::string> lft_grams = build_ast_grams3(lft_ops);
+    std::vector<std::string> rht_grams = build_ast_grams3(rht_ops);
     return jaccard_score(lft_grams, rht_grams);
 }
 

@@ -6,12 +6,15 @@
 
 std::uint64_t build_lsh_bucket_key(
     const std::vector<std::uint64_t>& signature,
-    std::size_t start,
+    std::size_t band,
     int rows_per_band
 ) {
-    std::uint64_t ret = 0;
+    // Seed with band index so identical signature values in different bands
+    // produce distinct keys and never land in the same bucket.
+    std::uint64_t ret = band;
+    const std::size_t start = band * static_cast<std::size_t>(rows_per_band);
 
-    for (size_t i = 0; i < rows_per_band; i++) {
+    for (int i = 0; i < rows_per_band; i++) {
         ret = splitmix64(ret ^ signature[start + i]);
     }
     return ret;
@@ -36,7 +39,7 @@ std::vector<std::pair < std::string, std::string > > generate_lsh_candidate_pair
         for (size_t band = 0; band < BANDS; band++) {
             std::uint64_t bucket_key = build_lsh_bucket_key(
                 to.winnowing_features.minhash_signature,
-                band * ROWS_PER_BAND
+                band
             );
             buckets[bucket_key].push_back(to.submission_id);
         }

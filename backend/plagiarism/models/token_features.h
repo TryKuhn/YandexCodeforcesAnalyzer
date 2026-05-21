@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
+/// @brief Aggregated token statistics and n-gram features for a submission.
 struct TokenFeatures {
     int tokens_cnt = 0;
     int literals_cnt = 0;

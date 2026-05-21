@@ -1,5 +1,6 @@
 #pragma once
 
+/// @brief Aggregate similarity scores for a submission pair.
 struct Metrics {
     double token_jaccard = 0.0;
     double normalized_levenshtein = 0.0;
