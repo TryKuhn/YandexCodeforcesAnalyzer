@@ -121,11 +121,38 @@ double cosine_similarity_score(
     return scalar / (std::sqrt(lft_norm) * std::sqrt(rht_norm));
 }
 
+double weighted_jaccard_strings(
+    const std::vector<std::string>& lft,
+    const std::vector<std::string>& rht
+) {
+    std::unordered_map<std::string, int> lft_freq, rht_freq;
+    for (const auto& s : lft) lft_freq[s]++;
+    for (const auto& s : rht) rht_freq[s]++;
+
+    double intersec = 0.0, each = 0.0;
+    for (const auto& [k, v] : lft_freq) {
+        auto it = rht_freq.find(k);
+        if (it != rht_freq.end()) {
+            intersec += std::min(v, it->second);
+            each += std::max(v, it->second);
+        } else {
+            each += v;
+        }
+    }
+    for (const auto& [k, v] : rht_freq) {
+        if (lft_freq.find(k) == lft_freq.end()) {
+            each += v;
+        }
+    }
+    if (each == 0.0) return 1.0;
+    return intersec / each;
+}
+
 double compute_token_similarity(
     const SubmissionData& lft,
     const SubmissionData& rht
 ) {
-    double grams3 = jaccard_score(lft.token_features.grams3, rht.token_features.grams3);
+    double grams3 = weighted_jaccard_strings(lft.token_features.grams3, rht.token_features.grams3);
     double freq_cos = cosine_similarity_score(lft.token_features.freq, rht.token_features.freq);
     return 0.75 * grams3 + 0.25 * freq_cos;
 }

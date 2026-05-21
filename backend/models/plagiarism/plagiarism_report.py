@@ -25,6 +25,7 @@ class PlagiarismReport(Base):
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     threshold: Mapped[float] = mapped_column()
+    ban_threshold: Mapped[float | None] = mapped_column(default=None)
     only_ok: Mapped[bool] = mapped_column()
 
     contest: Mapped["Contest"] = relationship(back_populates="plagiarism_reports")

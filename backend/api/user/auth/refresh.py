@@ -1,5 +1,4 @@
 import logging
-import uuid
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
@@ -30,23 +29,20 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
         )
 
-    new_sid = uuid.uuid4()
     user_id = db_token.user_id
+    session_id = str(db_token.id)
 
     access_token, refresh_token, created_at, expires_in = get_tokens(
-        user_id, str(new_sid)
+        user_id, session_id
     )
 
-    new_refresh_hash = hash_token(refresh_token)
-
-    db_token.id = new_sid
-    db_token.refresh_hash = new_refresh_hash
+    db_token.refresh_hash = hash_token(refresh_token)
     db_token.created_at = created_at
     db_token.expires_in = expires_in
 
     await db.commit()
 
-    logger.debug(f"Token refreshed: user_id={user_id}")
+    logger.debug(f"Token refreshed: user_id={user_id} session_id={session_id}")
 
     return Token(
         access_token=access_token, refresh_token=refresh_token, token_type="Bearer"

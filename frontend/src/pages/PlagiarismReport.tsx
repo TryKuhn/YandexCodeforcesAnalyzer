@@ -5,7 +5,8 @@ import {
     AlertTriangle,
     User,
     ChevronRight,
-    CheckCircle2
+    CheckCircle2,
+    Search,
 } from 'lucide-react';
 import { api } from '../api/instance';
 import { Pagination } from '../components/Pagination';
@@ -50,16 +51,26 @@ export const PlagiarismReport = () => {
     const [isLoading, setIsLoading] = useState(true);
 
     const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
+    const [perPage, setPerPage] = useState(10);
     const [pagination, setPagination] = useState<PaginationData>({
         page: 1,
-        per_page: 20,
+        per_page: 10,
         total: 0,
         total_pages: 1,
     });
 
     const [availableTasks, setAvailableTasks] = useState<string[]>([]);
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+            setPage(1);
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     const fetchReport = useCallback(async (silent = false) => {
         if (!reportId) return;
@@ -70,7 +81,8 @@ export const PlagiarismReport = () => {
                 params: {
                     page,
                     per_page: perPage,
-                    task_name: selectedTask,
+                    ...(selectedTask ? { task_name: selectedTask } : {}),
+                    ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
                 },
             });
 
@@ -79,29 +91,25 @@ export const PlagiarismReport = () => {
             setAvailableTasks(res.data.tasks || []);
             setPagination(res.data.pagination || {
                 page: 1,
-                per_page: 20,
+                per_page: 10,
                 total: 0,
                 total_pages: 1,
             });
         } catch {
             setStatus('failed');
         } finally {
-            // Always clear loading — including silent calls that transition from
-            // 'processing' to 'completed', so the spinner doesn't stay forever.
             setIsLoading(false);
         }
-    }, [reportId, page, perPage, selectedTask]);
+    }, [reportId, page, perPage, selectedTask, debouncedSearch]);
 
-    // Initial load + re-fetch when page / perPage / selectedTask changes
     useEffect(() => {
         fetchReport();
     }, [fetchReport]);
 
     useEffect(() => {
         setPage(1);
-    }, [selectedTask]);
+    }, [selectedTask, debouncedSearch]);
 
-    // Polling while the report is still being processed
     useEffect(() => {
         if (status !== 'processing') return;
 
@@ -160,33 +168,46 @@ export const PlagiarismReport = () => {
                 </div>
             </div>
 
-            {availableTasks.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                    <button
-                        onClick={() => setSelectedTask(null)}
-                        className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all ${
-                            selectedTask === null
-                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                                : 'bg-white dark:bg-slate-900 text-slate-500 border border-slate-100 dark:border-slate-800 hover:border-blue-500/50'
-                        }`}
-                    >
-                        Все задачи
-                    </button>
-                    {availableTasks.map(task => (
+            <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input
+                        type="text"
+                        placeholder="Поиск по логину участника..."
+                        className="w-full bg-white dark:bg-slate-900 dark:text-white rounded-2xl py-2.5 pl-10 pr-4 outline-none border border-slate-100 dark:border-slate-800 focus:ring-2 focus:ring-blue-500 text-sm"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+                </div>
+
+                {availableTasks.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
                         <button
-                            key={task}
-                            onClick={() => setSelectedTask(task)}
+                            onClick={() => setSelectedTask(null)}
                             className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all ${
-                                selectedTask === task
+                                selectedTask === null
                                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
                                     : 'bg-white dark:bg-slate-900 text-slate-500 border border-slate-100 dark:border-slate-800 hover:border-blue-500/50'
                             }`}
                         >
-                            {task}
+                            Все задачи
                         </button>
-                    ))}
-                </div>
-            )}
+                        {availableTasks.map(task => (
+                            <button
+                                key={task}
+                                onClick={() => setSelectedTask(task)}
+                                className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all ${
+                                    selectedTask === task
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                        : 'bg-white dark:bg-slate-900 text-slate-500 border border-slate-100 dark:border-slate-800 hover:border-blue-500/50'
+                                }`}
+                            >
+                                {task}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
 
 
             <div className={`grid grid-cols-1 gap-3 transition-opacity ${isLoading ? 'opacity-50' : ''}`}>
@@ -194,42 +215,38 @@ export const PlagiarismReport = () => {
                     <button
                         key={pair.id}
                         onClick={() => navigate(`/contests/${id}/analytics/compare/${pair.id}`)}
-                        className="w-full bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:border-blue-500/50 hover:shadow-lg transition-all group"
+                        className="w-full bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 hover:border-blue-500/50 hover:shadow-lg transition-all group"
                     >
-                        <div className="flex items-center gap-8">
-                            <div className="text-center w-16">
-                                <div className={`text-2xl font-black ${pair.percent > 90 ? 'text-red-600' : 'text-orange-500'}`}>
+                        <div className="flex items-center gap-3 sm:gap-6 flex-1 min-w-0">
+                            <div className="text-center shrink-0">
+                                <div className={`text-xl sm:text-2xl font-black ${pair.percent > 90 ? 'text-red-600' : 'text-orange-500'}`}>
                                     {pair.percent}%
                                 </div>
-                                <div className="text-[10px] font-bold text-slate-400 uppercase">Match</div>
+                                <div className="text-[9px] font-bold text-slate-400 uppercase">Match</div>
                             </div>
 
-                            <div className="flex items-center gap-6">
-                                <div className="text-left">
-                                    <p className="text-xs text-slate-400 font-bold mb-1">УЧАСТНИК 1</p>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 min-w-0 flex-1">
+                                <div className="text-left min-w-0">
+                                    <p className="text-[10px] text-slate-400 font-bold mb-0.5">УЧАСТНИК 1</p>
                                     <ParticipantLabel login={pair.user1} name={pair.user1_name} />
                                 </div>
 
-                                <div className="h-10 w-px bg-slate-100 dark:bg-slate-800"></div>
+                                <div className="hidden sm:block h-10 w-px bg-slate-100 dark:bg-slate-800 shrink-0"></div>
 
-                                <div className="text-left">
-                                    <p className="text-xs text-slate-400 font-bold mb-1">УЧАСТНИК 2</p>
+                                <div className="text-left min-w-0">
+                                    <p className="text-[10px] text-slate-400 font-bold mb-0.5">УЧАСТНИК 2</p>
                                     <ParticipantLabel login={pair.user2} name={pair.user2_name} />
                                 </div>
                             </div>
 
-                            <div className="hidden lg:block px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-2xl">
-                                <p className="text-[10px] text-slate-400 font-bold mb-1 uppercase text-left">
-                                    Задача
-                                </p>
-                                <p className="text-xs font-bold dark:text-slate-200">
-                                    {pair.task_name}
-                                </p>
+                            <div className="hidden lg:block px-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-2xl shrink-0">
+                                <p className="text-[10px] text-slate-400 font-bold mb-1 uppercase">Задача</p>
+                                <p className="text-xs font-bold dark:text-slate-200">{pair.task_name}</p>
                             </div>
                         </div>
 
-                        <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded-full text-slate-300 group-hover:text-blue-600 transition-colors">
-                            <ChevronRight size={20} />
+                        <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded-full text-slate-300 group-hover:text-blue-600 transition-colors shrink-0">
+                            <ChevronRight size={18} />
                         </div>
                     </button>
                 ))}

@@ -76,9 +76,14 @@ class TaskAIService:
                         raise
                 else:
                     return {"text": content}
-            except Exception as e:
-                logger.error(f"AI Service Exception: {str(e)}")
+            except HTTPException:
                 raise
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
+                logger.error(f"AI Service network error: {e}")
+                raise HTTPException(status_code=503, detail="AI service unavailable: network error")
+            except Exception as e:
+                logger.error(f"AI Service Exception: {e}")
+                raise HTTPException(status_code=500, detail=f"AI service error: {e}")
 
     async def generate_statement(
         self, user_idea: str, model: str, user_prompt: str, history: List[Dict]
@@ -96,8 +101,13 @@ class TaskAIService:
             "Вы — автор задач по спортивному программированию. "
             "ПРАВИЛО: Пишите условия максимально простым и понятным языком, доступным школьнику. "
             "Избегайте излишней математической терминологии, если это возможно. "
-            "Используйте LaTeX для формул. Выводите ТОЛЬКО JSON: "
-            "{name, legend, input, output, notes, tutorial}."
+            "ФОРМАТИРОВАНИЕ — ТОЛЬКО LaTeX, никакого Markdown:\n"
+            "- жирный текст: \\textbf{текст}, НЕ **текст**\n"
+            "- курсив: \\textit{текст}, НЕ *текст*\n"
+            "- моноширинный/код: \\texttt{текст}, НЕ `текст`\n"
+            "- математика: $формула$, как обычно\n"
+            "- списки: не используй Markdown-списки (- item), пиши связным текстом или через enumerate/itemize LaTeX\n"
+            "Выводите ТОЛЬКО JSON: {name, legend, input, output, notes, tutorial}."
         )
 
         final_prompt = user_prompt or system_prompt
@@ -307,6 +317,160 @@ class TaskAIService:
         result = await self._base_ask(model, messages, json_mode=True)
         return {k: v for k, v in result.items() if isinstance(v, str) and v.strip()}
 
+    async def suggest_tags(self, statement: Dict, model: str) -> list[str]:
+        system_prompt = (
+            "Ты — эксперт по спортивному программированию. "
+            "На основе условия задачи предложи краткие теги (не более 8 штук), "
+            "которые точно описывают алгоритмы и техники, необходимые для решения. "
+            "Примеры тегов: binary search, dp, greedy, graphs, dfs and similar, "
+            "constructive algorithms, implementation, math, sortings, two pointers, "
+            "data structures, trees, strings, number theory, geometry, brute force. "
+            "Выведи JSON: {\"tags\": [\"tag1\", \"tag2\", ...]}. "
+            "Используй теги из стандартного набора Codeforces, только английский язык."
+        )
+        user_prompt = f"Условие задачи:\n{json.dumps(statement, ensure_ascii=False)}"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        result = await self._base_ask(model, messages)
+        tags = result.get("tags", [])
+        return [str(t) for t in tags if t]
+
+    async def generate_samples(
+        self, statement: Dict, model: str, count: int = 3
+    ) -> list[dict]:
+        system_prompt = (
+            "Ты — эксперт по задачам спортивного программирования. "
+            "Создай небольшие демонстрационные примеры (сэмплы) для задачи. "
+            f"Нужно {count} примера. Каждый пример должен быть небольшим (буквально 1–5 строк ввода), "
+            "понятным, покрывающим разные случаи: базовый, граничный, неочевидный. "
+            "Вычисли правильный ответ для каждого теста. "
+            "Выведи JSON: {\"examples\": [{\"input\": \"...\", \"output\": \"...\"}, ...]}"
+        )
+        user_prompt = f"Условие задачи:\n{json.dumps(statement, ensure_ascii=False)}"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        result = await self._base_ask(model, messages)
+        examples = result.get("examples", [])
+        return [{"input": str(e.get("input", "")), "output": str(e.get("output", ""))} for e in examples]
+
+    async def generate_solution_for_tag(
+        self, tag: str, name: str, statement: Dict, model: str
+    ) -> str:
+        tag_descs = {
+            "MA": "основное правильное решение (C++)",
+            "OK": "альтернативное правильное решение (C++)",
+            "WA": "решение с неверной логикой, которое выдаёт WA",
+            "TL": "правильное, но медленное решение (O(n²) или хуже), которое выдаёт TL",
+            "ML": "решение с избыточным расходом памяти, которое выдаёт ML",
+            "RE": "решение, которое вызывает Runtime Error на некоторых тестах",
+            "RJ": "отклоняемое решение (явно неверное)",
+        }
+        desc = tag_descs.get(tag, f"решение с тегом {tag}")
+        system_prompt = (
+            f"Ты — эксперт по разработке задач для Polygon. "
+            f"Напиши {desc} для задачи. "
+            "Верни ТОЛЬКО исходный код на C++ без объяснений и markdown."
+        )
+        user_prompt = f"Условие задачи:\n{json.dumps(statement, ensure_ascii=False)}"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        result = await self._base_ask(model, messages, json_mode=False)
+        return _strip_code_fences(result["text"].strip())
+
+    async def generate_scoring(
+        self,
+        statement: Dict,
+        model: str,
+        enable_groups: bool,
+        enable_points: bool,
+    ) -> str:
+        if not enable_groups and not enable_points:
+            return ""
+
+        system_prompt = (
+            "Ты — автор задач по спортивному программированию. "
+            "На основе условия задачи составь раздел Scoring в формате LaTeX-таблицы. "
+            "Используй следующий шаблон (подзадача 0 — это всегда тесты из условия без баллов):\n\n"
+            r"\begin{center}" "\n"
+            r"    \begin{tabular}{ | c | c | c | c | c | }" "\n"
+            r"        \hline" "\n"
+            r"        \textbf{\scriptsize{Подзадача}} &" "\n"
+            r"        \textbf{\scriptsize{Баллы}} &" "\n"
+            r"        \textbf{\scriptsize{Дополнительные ограничения}} &" "\n"
+            r"        \textbf{\scriptsize{Необходимые подзадачи}} &" "\n"
+            r"        \textbf{\scriptsize{Информация о проверке}} \\ \hline" "\n"
+            r"        $0$ & -- & тесты из условия & --  & полная        \\ \hline" "\n"
+            r"        $1$ & $X$ & ограничение & 0  & первая ошибка \\ \hline" "\n"
+            r"        ..." "\n"
+            r"    \end{tabular}" "\n"
+            r"\end{center}" "\n\n"
+            "ТРЕБОВАНИЯ К ПОДЗАДАЧАМ (очень важно!):\n"
+            "- Каждая подзадача должна быть алгоритмически осмысленной: её ограничения должны позволять "
+            "написать принципиально более простое решение, чем для полной задачи.\n"
+            "- Примеры хороших ограничений по типу задачи:\n"
+            "  • Строки: 'строка состоит только из символов «a»', 'алфавит из двух символов', "
+            "'строка является палиндромом'\n"
+            "  • Графы: 'граф является деревом', 'граф является путём', 'граф двудольный'\n"
+            "  • Массивы: 'массив отсортирован', 'все элементы различны', 'элементы не превышают $10^3$'\n"
+            "  • Числа: 'n является степенью двойки', 'n нечётное', 'все числа простые'\n"
+            "- Подзадачи с ограничениями только на n ($n \\le 1000$) допустимы, но должны сочетаться "
+            "с содержательными структурными ограничениями.\n"
+            "- Подзадачи должны идти от простых к сложным.\n"
+            "- Сумма баллов за все подзадачи (кроме 0) должна быть ровно 100.\n"
+            "Используй LaTeX для записи ограничений: $n \\le 10^4$, $n \\le 10^5$ и т.д. "
+            "Информация о проверке — «полная» или «первая ошибка». "
+            "Верни ТОЛЬКО LaTeX-код таблицы, без пояснений, без JSON."
+        )
+        user_prompt = f"Условие задачи:\n{json.dumps(statement, ensure_ascii=False)}"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        result = await self._base_ask(model, messages, json_mode=False)
+        return result["text"].strip()
+
+    async def generate_interactor(self, statement: Dict, model: str) -> str:
+        system_prompt = (
+            "Ты — эксперт по задачам с интерактором для Polygon (testlib.h). "
+            "Напиши interactor.cpp для интерактивной задачи, используя testlib.h. "
+            "Интерактор должен: читать ответы участника, проверять их, выводить подсказки. "
+            "Верни ТОЛЬКО исходный код без объяснений и markdown."
+        )
+        user_prompt = f"Условие задачи:\n{json.dumps(statement, ensure_ascii=False)}"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        result = await self._base_ask(model, messages, json_mode=False)
+        return _strip_code_fences(result["text"].strip())
+
+    async def generate_interaction_text(self, statement: Dict, model: str) -> str:
+        """Generates the Interaction section text for an interactive problem statement."""
+        system_prompt = (
+            "Ты — автор задач по спортивному программированию. "
+            "Напиши раздел «Взаимодействие» (Interaction) для интерактивной задачи. "
+            "Раздел должен описывать протокол общения между участником и жюри: "
+            "что читает программа, что она выводит, как завершается диалог, "
+            "сколько запросов допустимо, как жюри отвечает на каждый запрос. "
+            "Пиши кратко и ясно, как в условиях Codeforces. "
+            "ФОРМАТИРОВАНИЕ — ТОЛЬКО LaTeX: жирный \\textbf{}, курсив \\textit{}, "
+            "код \\texttt{}, математика $...$. Никакого Markdown. "
+            "Верни ТОЛЬКО текст раздела «Взаимодействие», без заголовка, без JSON."
+        )
+        user_prompt = f"Условие задачи:\n{json.dumps(statement, ensure_ascii=False)}"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        result = await self._base_ask(model, messages, json_mode=False)
+        return result["text"].strip()
+
     async def refine_file(
         self,
         file_key: str,
@@ -331,3 +495,72 @@ class TaskAIService:
         ]
         result = await self._base_ask(model, messages, json_mode=False)
         return result["text"].strip()
+
+    # ─────────────────────── Router Agent ───────────────────────────────────────
+
+    async def classify_intent(self, message: str, context: str, model: str) -> str:
+        """Router agent: returns 'modify' or 'answer'."""
+        context_desc = {
+            "statement": "problem statement / description",
+            "task": "any code files in the problem",
+        }.get(context, f"the {context} source file")
+
+        system = (
+            "You classify user intent in a competitive programming problem editor.\n"
+            "Return ONLY JSON: {\"intent\": \"modify\" | \"answer\"}\n"
+            "- \"modify\": user wants to change, fix, update, rewrite, add or improve something\n"
+            "- \"answer\": user asks a question, wants explanation, analysis, or information\n"
+            "Be decisive. When in doubt prefer \"answer\"."
+        )
+        user_msg = f"Context: user is viewing {context_desc}.\nUser message: \"{message}\""
+        try:
+            result = await self._base_ask(
+                model,
+                [{"role": "system", "content": system}, {"role": "user", "content": user_msg}],
+                json_mode=True,
+            )
+            intent = result.get("intent", "answer")
+            return intent if intent in ("modify", "answer") else "answer"
+        except Exception:
+            return "answer"
+
+    # ─────────────────────── Answer Agent ───────────────────────────────────────
+
+    async def answer_question(
+        self,
+        message: str,
+        context: str,
+        statement: Dict,
+        files: Dict,
+        model: str,
+        history: List[Dict],
+    ) -> str:
+        """Returns a plain-text answer to the user's question in Russian."""
+        ctx_parts: list[str] = []
+
+        if statement:
+            stmt_summary = {k: v for k, v in statement.items() if k in ("name", "legend", "input", "output")}
+            ctx_parts.append(f"ЗАДАЧА: {json.dumps(stmt_summary, ensure_ascii=False)}")
+
+        if context not in ("statement", "task") and context in files:
+            code = files[context]
+            ctx_parts.append(f"ФАЙЛ ({context}):\n```\n{code[:3000]}\n```")
+        elif files:
+            ctx_parts.append(f"Доступные файлы: {', '.join(files.keys())}")
+
+        system = (
+            "Ты — эксперт по спортивному программированию и разработке задач для Polygon. "
+            "Отвечай на вопросы пользователя чётко, полезно и по-русски. "
+            "Не вноси никаких изменений — только отвечай."
+        )
+
+        msgs: List[Dict] = [{"role": "system", "content": system}]
+        for h in (history or [])[-6:]:
+            if isinstance(h, dict) and h.get("role") in ("user", "assistant"):
+                msgs.append(h)
+
+        user_content = "\n\n".join(ctx_parts) + f"\n\nВОПРОС: {message}" if ctx_parts else message
+        msgs.append({"role": "user", "content": user_content})
+
+        result = await self._base_ask(model, msgs, json_mode=False)
+        return result.get("text", "Не удалось получить ответ.").strip()

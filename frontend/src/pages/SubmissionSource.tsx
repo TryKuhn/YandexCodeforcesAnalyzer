@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {ArrowLeft, Code2, User, Clock, CheckCircle2, AlertCircle, Zap, HardDrive} from 'lucide-react';
+import {ArrowLeft, Code2, User, Clock, CheckCircle2, AlertCircle, Zap, HardDrive, ShieldBan} from 'lucide-react';
 import { api } from '../api/instance';
 
 export const SubmissionSource = () => {
@@ -16,7 +16,6 @@ export const SubmissionSource = () => {
 
     const formatRunTime = (timeStr: string) => {
         if (!timeStr) return '0 ms';
-        // Обычно timedelta приходит в формате 0:00:00.050000
         const parts = timeStr.split(':');
         if (parts.length === 3) {
             const seconds = parseFloat(parts[2]);
@@ -39,57 +38,62 @@ export const SubmissionSource = () => {
                 <ArrowLeft size={20} /> Назад к списку посылок
             </button>
 
-            {/* Карточка информации */}
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-wrap gap-8 items-center">
-                <div className={`p-4 rounded-2xl ${sub.verdict === 'OK' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                    {sub.verdict === 'OK' ? <CheckCircle2 size={32}/> : <AlertCircle size={32}/>}
-                </div>
-
-                <div className="space-y-1">
-                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Задача</p>
-                    <h2 className="text-xl font-bold dark:text-white">{sub.task_name}</h2>
-                </div>
-
-                <div className="space-y-1">
-                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Участник</p>
-                    <div className="flex items-center gap-2 dark:text-white font-medium">
-                        <User size={16} className="text-blue-500" /> {sub.participant_login}
-                    </div>
-                </div>
-
-                <div className="space-y-1">
-                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Язык / Время отправки</p>
-                    <div className="flex items-center gap-2 text-slate-500 text-sm">
-                        <Code2 size={16} /> {sub.language}
-                        <span className="mx-2">|</span>
-                        <Clock size={16} /> {new Date(sub.send_time).toLocaleString()}
-                    </div>
-                </div>
-
-                <div className="ml-auto flex items-center gap-4 bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl">
-                    <div className="text-center">
-                        <p className="text-[10px] text-slate-400 uppercase font-bold">Баллы</p>
-                        <p className="text-lg font-bold text-blue-600">{sub.score}</p>
-                    </div>
-                    <div className="text-center border-l dark:border-slate-700 pl-6 pr-2">
-                        <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Время</p>
-                        <p className="text-sm font-bold dark:text-white flex items-center justify-center gap-1">
-                            <Zap size={14} className="text-amber-500"/>
-                            {formatRunTime(sub.run_time)}
-                        </p>
+            <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                <div className="flex flex-wrap gap-4 sm:gap-6 items-start">
+                    <div className={`p-3 rounded-2xl shrink-0 ${sub.banned ? 'bg-purple-100 text-purple-600' : sub.verdict === 'OK' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                        {sub.banned ? <ShieldBan size={28}/> : sub.verdict === 'OK' ? <CheckCircle2 size={28}/> : <AlertCircle size={28}/>}
                     </div>
 
-                    <div className="text-center border-l dark:border-slate-700 pl-6 pr-2">
-                        <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Память</p>
-                        <p className="text-sm font-bold dark:text-white flex items-center justify-center gap-1">
-                            <HardDrive size={14} className="text-blue-400"/>
-                            {formatMemory(sub.memory_bytes)}
-                        </p>
+                    <div className="space-y-0.5 min-w-0">
+                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Задача</p>
+                        <h2 className="text-base sm:text-xl font-bold dark:text-white truncate">{sub.task_name}</h2>
+                    </div>
+
+                    <div className="space-y-0.5">
+                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Участник</p>
+                        <div className="flex items-center gap-2 dark:text-white font-medium text-sm">
+                            <User size={14} className="text-blue-500" /> {sub.participant_login}
+                        </div>
+                    </div>
+
+                    <div className="space-y-0.5">
+                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Язык</p>
+                        <div className="flex items-center gap-2 text-slate-500 text-sm">
+                            <Code2 size={14} /> {sub.language}
+                        </div>
+                        <div className="flex items-center gap-1 text-slate-400 text-xs">
+                            <Clock size={12} /> {new Date(sub.send_time).toLocaleString()}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 px-4 py-3 rounded-2xl flex-wrap">
+                        <div className="text-center">
+                            <p className="text-[10px] text-slate-400 uppercase font-bold">Баллы</p>
+                            <p className={`text-lg font-bold ${sub.banned ? 'text-purple-500' : 'text-blue-600'}`}>{sub.banned ? 0 : sub.score}</p>
+                        </div>
+                        {sub.banned && (
+                            <div className="text-center border-l dark:border-slate-700 pl-3">
+                                <span className="text-xs font-bold text-purple-500 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded-lg">BANNED</span>
+                            </div>
+                        )}
+                        <div className="text-center border-l dark:border-slate-700 pl-3">
+                            <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Время</p>
+                            <p className="text-sm font-bold dark:text-white flex items-center gap-1">
+                                <Zap size={12} className="text-amber-500"/>
+                                {formatRunTime(sub.run_time)}
+                            </p>
+                        </div>
+                        <div className="text-center border-l dark:border-slate-700 pl-3">
+                            <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Память</p>
+                            <p className="text-sm font-bold dark:text-white flex items-center gap-1">
+                                <HardDrive size={12} className="text-blue-400"/>
+                                {formatMemory(sub.memory_bytes)}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Блок кода */}
             <div className="bg-slate-950 rounded-3xl border border-slate-800 overflow-hidden shadow-2xl">
                 <div className="bg-slate-900 px-6 py-3 border-b border-slate-800 flex justify-between items-center">
                     <span className="text-xs font-mono text-slate-500 uppercase">source_code.{sub.language.includes('C++') ? 'cpp' : 'py'}</span>

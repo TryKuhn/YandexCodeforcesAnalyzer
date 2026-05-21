@@ -1,9 +1,10 @@
 import asyncio
 import logging
+import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -33,12 +34,19 @@ setup_logging(LOG_LEVEL, LOG_TO_FILE, LOG_TO_STDOUT)
 logger = get_logger(__name__)
 
 
+SESSION_INACTIVITY_DAYS = 30
+
+
 async def cleanup_expired_tokens():
     while True:
         try:
             async with Session() as db:
                 now = datetime.now(timezone.utc).replace(tzinfo=None)
-                stmt = delete(RefreshToken).where(RefreshToken.expires_in < now)
+                inactivity_cutoff = now - timedelta(days=SESSION_INACTIVITY_DAYS)
+                stmt = delete(RefreshToken).where(
+                    (RefreshToken.expires_in < now)
+                    | (RefreshToken.last_seen < inactivity_cutoff)
+                )
                 await db.execute(stmt)
                 await db.commit()
         except Exception as e:
@@ -119,24 +127,31 @@ async def update_last_seen_middleware(request: Request, call_next):
         token = auth_header.split(" ")[1]
         try:
             payload = verify_token(token)
+        except HTTPException:
+            pass  # expired / invalid token is expected — auth endpoints handle it
         except Exception:
-            logger.exception("Failed to verify bearer token in middleware")
+            logger.warning("Unexpected error verifying bearer token in middleware", exc_info=True)
         else:
             sid = payload.get("sid")
             if sid:
-                async with Session() as db:
-                    try:
-                        await db.execute(
-                            update(RefreshToken)
-                            .where(RefreshToken.id == sid)
-                            .values(last_seen=datetime.now().replace(tzinfo=None))
-                        )
-                        await db.commit()
-                    except SQLAlchemyError:
-                        await db.rollback()
-                        logger.exception(
-                            "Failed to update last_seen for token in middleware"
-                        )
+                try:
+                    session_uuid = uuid.UUID(sid)
+                except ValueError:
+                    session_uuid = None
+                if session_uuid:
+                    async with Session() as db:
+                        try:
+                            await db.execute(
+                                update(RefreshToken)
+                                .where(RefreshToken.id == session_uuid)
+                                .values(last_seen=datetime.now().replace(tzinfo=None))
+                            )
+                            await db.commit()
+                        except SQLAlchemyError:
+                            await db.rollback()
+                            logger.exception(
+                                "Failed to update last_seen for token in middleware"
+                            )
 
     return await call_next(request)
 

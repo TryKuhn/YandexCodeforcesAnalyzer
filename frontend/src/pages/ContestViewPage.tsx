@@ -54,6 +54,7 @@ export const ContestViewPage = () => {
     };
 
     const getTextColor = (res: any) => {
+        if (res.banned) return 'text-blue-500';
         if (res.verdict === 'OK') return 'text-green-500';
         if (res.verdict === 'PARTIAL') return 'text-yellow-500';
         if (res.verdict === 'WA' || (res.tries > 0 && res.score === 0)) return 'text-red-500';
@@ -94,15 +95,14 @@ export const ContestViewPage = () => {
                         className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                     <ArrowLeft size={24} className="text-slate-500" />
                 </button>
-                <div className="flex-1">
-                    <h1 className="text-2xl font-bold dark:text-white">{data.contest_name}</h1>
+                <div className="flex-1 min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold dark:text-white truncate">{data.contest_name}</h1>
                     <span className="text-[10px] px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded font-bold uppercase">
                         {data.contest_type}
                     </span>
                 </div>
             </div>
 
-            {/* Поиск по участникам */}
             <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input

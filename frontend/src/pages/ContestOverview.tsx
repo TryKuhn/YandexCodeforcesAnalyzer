@@ -44,9 +44,8 @@ export const ContestOverview = () => {
                 <StatCard title="Посылок" value={data.stats.submissions} icon={FileCode} color="bg-emerald-600" />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Левая колонка: Детали */}
-                <div className="lg:col-span-1 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-1 space-y-6">
                     <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800">
                         <h3 className="font-bold dark:text-white mb-6">Информация</h3>
                         <div className="space-y-4">
@@ -66,8 +65,7 @@ export const ContestOverview = () => {
                     </div>
                 </div>
 
-                {/* Правая колонка: Быстрые действия */}
-                <div className="lg:col-span-2 space-y-4">
+                <div className="md:col-span-2 space-y-4">
                     <h3 className="font-bold dark:text-white px-2">Быстрые действия</h3>
                     {actionCards.map((card) => (
                         <button

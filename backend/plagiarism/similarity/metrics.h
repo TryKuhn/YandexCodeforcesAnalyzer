@@ -12,6 +12,11 @@ double jaccard_score(
     const std::vector<std::string>& rht
 );
 
+double weighted_jaccard_strings(
+    const std::vector<std::string>& lft,
+    const std::vector<std::string>& rht
+);
+
 double cosine_similarity_score(
     const std::unordered_map<std::string, int>& lft,
     const std::unordered_map<std::string, int>& rht

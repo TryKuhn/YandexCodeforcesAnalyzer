@@ -24,6 +24,8 @@ import {SubmissionSource} from "./pages/SubmissionSource.tsx";
 import {PlagiarismReport} from "./pages/PlagiarismReport.tsx";
 import {PlagiarismComparison} from "./pages/PlagiarismComparation.tsx";
 import {PlagiarismSetup} from "./pages/PlagiarismSetup.tsx";
+import {DashboardHome} from "./pages/DashboardHome.tsx";
+import {ContestVisualAnalytics} from "./pages/ContestVisualAnalytics.tsx";
 
 function App() {
     const {isAuthenticated} = useAuthStore();
@@ -33,11 +35,11 @@ function App() {
             <AuthInitializer/>
             <ThemeInitializer/>
             <Routes>
-                <Route path="/" element={isAuthenticated ? <MainLayout/> : <Landing/>}/>
-                <Route path="/login" element={isAuthenticated ? <MainLayout/> : <LoginPage/>}/>
-                <Route path="/register" element={isAuthenticated ? <MainLayout/> : <RegisterPage/>}/>
+                <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace/> : <LoginPage/>}/>
+                <Route path="/register" element={isAuthenticated ? <Navigate to="/" replace/> : <RegisterPage/>}/>
 
-                <Route path="/" element={isAuthenticated ? <MainLayout/> : <Navigate to="/login"/>}>
+                <Route path="/" element={isAuthenticated ? <MainLayout/> : <Landing/>}>
+                    <Route index element={<DashboardHome/>}/>
                     <Route path="contests" element={<ContestsPage/>}/>
                     <Route path="contests/sync" element={<LoadContestPage/>}/>
                     <Route path="contests/:id" element={<ContestLayout/>}>
@@ -47,6 +49,7 @@ function App() {
                         <Route path="/contests/:id/submissions/:subId" element={<SubmissionSource />} />
                         <Route path="import-submissions" element={<ImportSubmissions/>}/>
                         <Route path="analytics" element={<ContestAnalytics/>} />
+                        <Route path="analytics/visual" element={<ContestVisualAnalytics/>} />
                         <Route path="analytics/check" element={<PlagiarismSetup />} />
                         <Route path="analytics/reports/:reportId" element={<PlagiarismReport />} />
                         <Route path="analytics/compare/:pairId" element={<PlagiarismComparison />} />

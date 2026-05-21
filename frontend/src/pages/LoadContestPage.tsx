@@ -52,7 +52,7 @@ export const LoadContestPage = () => {
                 <span>Назад к списку</span>
             </button>
 
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-8 shadow-sm">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-5 sm:p-8 shadow-sm">
                 <div className="flex items-center gap-4 mb-8">
                     <div className="p-3 bg-blue-600 rounded-2xl text-white">
                         <CloudDownload size={28} />
@@ -64,7 +64,7 @@ export const LoadContestPage = () => {
                 </div>
 
                 <form onSubmit={handleSync} className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <button
                             type="button"
                             onClick={() => setPlatform('cf')}
@@ -98,7 +98,7 @@ export const LoadContestPage = () => {
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                         <div>
                             <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
                                 <Layers size={16} className="text-blue-600" />

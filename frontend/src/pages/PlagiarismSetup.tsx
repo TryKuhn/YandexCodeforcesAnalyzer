@@ -82,6 +82,7 @@ export const PlagiarismSetup = () => {
 
     const [config, setConfig] = useState({
         threshold: 70,
+        banThreshold: 90,
         onlyOk: true,
         languages: [] as string[],
         tasks: [] as string[],
@@ -98,6 +99,7 @@ export const PlagiarismSetup = () => {
         try {
             const res = await api.post(`/analytics/contests/${id}/check`, {
                 threshold: config.threshold / 100,
+                banThreshold: config.banThreshold / 100,
                 onlyOk: config.onlyOk,
                 languages: config.languages.length > 0 ? config.languages : null,
                 tasks: config.tasks.length > 0 ? config.tasks : null,
@@ -116,7 +118,7 @@ export const PlagiarismSetup = () => {
                 <ArrowLeft size={20} /> Назад
             </button>
 
-            <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+            <div className="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
                 <div className="flex items-center gap-4 mb-8">
                     <div className="p-3 bg-blue-600 rounded-2xl text-white shadow-lg shadow-blue-500/20">
                         <Settings2 size={24} />
@@ -128,21 +130,42 @@ export const PlagiarismSetup = () => {
                 </div>
 
                 <div className="space-y-8">
-                    {/* Слайдер порога */}
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <label className="font-bold dark:text-slate-300">Порог схожести: {config.threshold}%</label>
-                            <span className="text-[10px] uppercase font-black text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded">Рекомендуется 70%+</span>
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                                <label className="font-bold dark:text-slate-300">Порог отображения: {config.threshold}%</label>
+                                <span className="text-[10px] uppercase font-black text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded">Показывать подозрительные</span>
+                            </div>
+                            <input
+                                type="range" min="10" max="100" step="5"
+                                className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                value={config.threshold}
+                                onChange={(e) => {
+                                    const v = parseInt(e.target.value);
+                                    setConfig({ ...config, threshold: v, banThreshold: Math.max(config.banThreshold, v) });
+                                }}
+                            />
+                            <p className="text-xs text-slate-400">Пары с совпадением ≥ этого порога будут показаны в отчёте для ручной проверки.</p>
                         </div>
-                        <input
-                            type="range" min="10" max="100" step="5"
-                            className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                            value={config.threshold}
-                            onChange={(e) => setConfig({ ...config, threshold: parseInt(e.target.value) })}
-                        />
+
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                                <label className="font-bold dark:text-slate-300">Порог автобана: {config.banThreshold}%</label>
+                                <span className="text-[10px] uppercase font-black text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">Бан автоматически</span>
+                            </div>
+                            <input
+                                type="range" min="10" max="100" step="5"
+                                className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-red-500"
+                                value={config.banThreshold}
+                                onChange={(e) => {
+                                    const v = parseInt(e.target.value);
+                                    setConfig({ ...config, banThreshold: v, threshold: Math.min(config.threshold, v) });
+                                }}
+                            />
+                            <p className="text-xs text-slate-400">Пары с совпадением ≥ этого порога получат 0 баллов автоматически. Должен быть ≥ порога отображения.</p>
+                        </div>
                     </div>
 
-                    {/* Переключатель Only OK */}
                     <div className="space-y-3">
                         <label className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700">
                             <div className="flex items-center gap-3">
@@ -163,7 +186,6 @@ export const PlagiarismSetup = () => {
                         </label>
                     </div>
 
-                    {/* Фильтр по языкам */}
                     {meta.languages.length > 0 && (
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
                             <MultiSelect
@@ -176,7 +198,6 @@ export const PlagiarismSetup = () => {
                         </div>
                     )}
 
-                    {/* Фильтр по задачам */}
                     {meta.tasks.length > 0 && (
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
                             <MultiSelect

@@ -12,12 +12,11 @@ export const ImportSubmissions = () => {
     const [loading, setLoading] = useState(false);
     const [contestInfo, setContestInfo] = useState<any>(null);
 
-    // Общий стейт для всех полей
     const [formData, setFormData] = useState({
         from_pos: 1,
         count: 100,
-        as_manager: true,    // Только для CF
-        include_source: true // Только для CF
+        as_manager: true,
+        include_source: true
     });
 
     useEffect(() => {
@@ -30,7 +29,7 @@ export const ImportSubmissions = () => {
         e.preventDefault();
         setLoading(true);
 
-        const platform = contestInfo.type; // 'cf' или 'yandex'
+        const platform = contestInfo.type;
         const externalId = parseInt(contestInfo.external_id);
 
         try {
@@ -75,7 +74,7 @@ export const ImportSubmissions = () => {
                 <ArrowLeft size={20} /> Назад
             </button>
 
-            <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+            <div className="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
                 <div className="flex items-center gap-4 mb-8">
                     <div className="p-3 bg-blue-600 rounded-2xl text-white">
                         <Download size={28} />
@@ -87,8 +86,7 @@ export const ImportSubmissions = () => {
                 </div>
 
                 <form onSubmit={handleImport} className="space-y-6">
-                    {/* Платформа (выбирается автоматически на основе типа контеста) */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className={`p-4 rounded-2xl border-2 text-center transition-all ${isCF ? 'border-orange-500 bg-orange-50/50 dark:bg-orange-900/10' : 'border-transparent bg-slate-50 dark:bg-slate-800 opacity-50'}`}>
                             <span className={`block font-bold ${isCF ? 'text-orange-600' : 'dark:text-white'}`}>Codeforces</span>
                             <span className="text-[10px] text-slate-500 uppercase">Platform Active</span>
@@ -99,7 +97,6 @@ export const ImportSubmissions = () => {
                         </div>
                     </div>
 
-                    {/* Инфо-плашка с внешним ID */}
                     <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-between border border-dashed border-slate-200 dark:border-slate-700">
                         <div className="flex items-center gap-3 text-slate-500 text-sm">
                             <Database size={18} /> <span>Внешний ID контеста</span>
@@ -107,8 +104,7 @@ export const ImportSubmissions = () => {
                         <span className="font-mono font-bold text-blue-600">{contestInfo.external_id}</span>
                     </div>
 
-                    {/* Позиция и Количество */}
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                         <div className="space-y-2">
                             <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1 flex items-center gap-2">
                                 <Layers size={14} className="text-blue-600" /> Начиная с
@@ -138,7 +134,6 @@ export const ImportSubmissions = () => {
                         </div>
                     </div>
 
-                    {/* Дополнительные параметры (только для Codeforces) */}
                     {isCF && (
                         <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Настройки Codeforces</h3>

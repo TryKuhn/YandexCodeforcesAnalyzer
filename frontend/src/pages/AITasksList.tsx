@@ -81,10 +81,10 @@ export const AITasksList = () => {
 
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [importProblemId, setImportProblemId] = useState('');
+    const [importLoadFiles, setImportLoadFiles] = useState(true);
     const [importing, setImporting] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
 
-    // Загрузка списка сессий
     const fetchSessions = async () => {
         try {
             setLoading(true);
@@ -101,7 +101,6 @@ export const AITasksList = () => {
         fetchSessions();
     }, []);
 
-    // Создание новой пустой сессии
     const handleCreate = async () => {
         if (creating) return;
         setCreating(true);
@@ -120,7 +119,6 @@ export const AITasksList = () => {
         }
     };
 
-    // Импорт из Polygon
     const handleImport = async () => {
         const id = parseInt(importProblemId.trim(), 10);
         if (!id || isNaN(id)) { setImportError('Введите корректный ID задачи'); return; }
@@ -128,9 +126,10 @@ export const AITasksList = () => {
         setImportError(null);
         try {
             const settings = loadSettings();
-            const res = await api.post('/ai/import-from-polygon', {
+            const res = await api.post('/ai/import-from-polygon-full', {
                 polygon_problem_id: id,
                 model: settings.model,
+                load_files: importLoadFiles,
             });
             navigate(`/ai-tasks/${res.data.session_id}`);
         } catch (e: any) {
@@ -140,7 +139,6 @@ export const AITasksList = () => {
         }
     };
 
-    // Удаление сессии
     const handleDelete = async (sessionId: string, e: React.MouseEvent) => {
         e.stopPropagation();
         if (!confirm('Удалить эту сессию?')) return;
@@ -156,7 +154,6 @@ export const AITasksList = () => {
         }
     };
 
-    // Форматирование даты
     const formatDate = (dateStr: string | null) => {
         if (!dateStr) return '';
         const date = new Date(dateStr);
@@ -177,14 +174,11 @@ export const AITasksList = () => {
 
     return (
         <>
-        <div className="min-h-[calc(100vh-80px)] bg-slate-50 dark:bg-slate-950 p-6">
-            <div className="max-w-4xl mx-auto">
-
-                {/* Заголовок */}
-                <div className="flex items-center justify-between mb-8">
+        <div className="max-w-4xl mx-auto py-4 sm:py-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
                     <div>
-                        <h1 className="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
-                            <Sparkles className="text-blue-500" size={32} />
+                        <h1 className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
+                            <Sparkles className="text-blue-500" size={28} />
                             AI Задачи
                         </h1>
                         <p className="text-slate-500 mt-1 text-sm">
@@ -192,36 +186,37 @@ export const AITasksList = () => {
                         </p>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 shrink-0">
                         <button
                             onClick={() => { setShowImportDialog(true); setImportError(null); setImportProblemId(''); }}
                             className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800
                                        hover:bg-slate-200 dark:hover:bg-slate-700
-                                       text-slate-700 dark:text-slate-300 px-5 py-3 rounded-2xl font-bold
+                                       text-slate-700 dark:text-slate-300 px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl font-bold text-sm
                                        transition-all active:scale-95"
                         >
-                            <Download size={18} />
-                            Из Polygon
+                            <Download size={16} />
+                            <span className="hidden sm:inline">Из Polygon</span>
+                            <span className="sm:hidden">Polygon</span>
                         </button>
                         <button
                             onClick={handleCreate}
                             disabled={creating}
-                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700
-                                       text-white px-6 py-3 rounded-2xl font-bold
-                                       transition-all shadow-lg shadow-blue-500/20
-                                       hover:shadow-xl hover:shadow-blue-500/30
+                            className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600
+                                       hover:from-violet-700 hover:to-fuchsia-700
+                                       text-white px-4 py-2.5 sm:px-6 sm:py-3 rounded-2xl font-bold text-sm
+                                       transition-all shadow-lg shadow-violet-500/20
+                                       hover:shadow-xl hover:shadow-violet-500/30
                                        active:scale-95 disabled:opacity-60"
                         >
                             {creating
-                                ? <Loader2 size={20} className="animate-spin" />
-                                : <Plus size={20} />
+                                ? <Loader2 size={18} className="animate-spin" />
+                                : <Plus size={18} />
                             }
                             Новая задача
                         </button>
                     </div>
                 </div>
 
-                {/* Список сессий */}
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20">
                         <Loader2 size={32} className="animate-spin text-blue-500 mb-4" />
@@ -257,7 +252,6 @@ export const AITasksList = () => {
                                 >
                                     <div className="flex items-center justify-between">
                                         <div className="flex-1 min-w-0">
-                                            {/* Название задачи */}
                                             <h3 className="font-bold text-slate-800
                                                            dark:text-white text-lg truncate
                                                            group-hover:text-blue-600
@@ -266,10 +260,8 @@ export const AITasksList = () => {
                                                 {session.name}
                                             </h3>
 
-                                            {/* Мета-информация */}
                                             <div className="flex items-center gap-3 mt-2
                                                             flex-wrap">
-                                                {/* Стадия */}
                                                 <span className={`
                                                     flex items-center gap-1.5 px-2.5 py-1
                                                     rounded-full text-[11px] font-bold
@@ -279,16 +271,14 @@ export const AITasksList = () => {
                                                     {stageConf.label}
                                                 </span>
 
-                                                {/* Модель */}
-                                                <span className="text-[11px] text-slate-400
+                                                <span className="hidden sm:inline-flex text-[11px] text-slate-400
                                                                  bg-slate-100
                                                                  dark:bg-slate-800
                                                                  px-2 py-1 rounded-full
-                                                                 font-mono">
-                                                    {session.model}
+                                                                 font-mono max-w-[120px] truncate">
+                                                    {session.model.split('/').pop()}
                                                 </span>
 
-                                                {/* Polygon ID */}
                                                 {session.polygon_problem_id && (
                                                     <a
                                                         href={`https://polygon.codeforces.com/problems/${session.polygon_problem_id}`}
@@ -311,7 +301,6 @@ export const AITasksList = () => {
                                                     </a>
                                                 )}
 
-                                                {/* Время */}
                                                 <span className="flex items-center gap-1
                                                                  text-[11px] text-slate-400">
                                                     <Clock size={10} />
@@ -323,7 +312,6 @@ export const AITasksList = () => {
                                             </div>
                                         </div>
 
-                                        {/* Правая часть: кнопки */}
                                         <div className="flex items-center gap-2 ml-4">
                                             <button
                                                 onClick={e => handleDelete(
@@ -361,13 +349,11 @@ export const AITasksList = () => {
                         })}
                     </div>
                 )}
-            </div>
         </div>
 
-        {/* Диалог импорта из Polygon */}
         {showImportDialog && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 w-full max-w-md shadow-2xl">
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 w-full max-w-md shadow-2xl mx-4">
                     <div className="flex items-center justify-between mb-6">
                         <h2 className="text-xl font-black dark:text-white flex items-center gap-2">
                             <Download size={20} className="text-blue-500" />
@@ -377,8 +363,8 @@ export const AITasksList = () => {
                             <X size={18} />
                         </button>
                     </div>
-                    <p className="text-sm text-slate-500 mb-6">
-                        Введите ID задачи из Polygon. Условие будет импортировано как стартовая точка для AI-генерации.
+                    <p className="text-sm text-slate-500 mb-4">
+                        Введите ID задачи из Polygon. Условие, файлы, теги и настройки будут импортированы.
                     </p>
                     <input
                         type="number"
@@ -389,6 +375,15 @@ export const AITasksList = () => {
                         className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-2xl px-4 py-3 text-sm dark:text-white outline-none focus:border-blue-500 transition-all mb-3"
                         autoFocus
                     />
+                    <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 mb-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={importLoadFiles}
+                            onChange={e => setImportLoadFiles(e.target.checked)}
+                            className="rounded"
+                        />
+                        Загрузить файлы (решения, валидатор, чекер, скрипт)
+                    </label>
                     {importError && (
                         <p className="text-sm text-red-500 mb-3">{importError}</p>
                     )}

@@ -14,6 +14,7 @@ async def merge_table(contest, tasks, rows, user_id, db):
         if contest_copy:
             contest.id = contest_copy.id
 
+        prepared = []
         for participant, results in rows:
             global_participant = await db.execute(
                 select(Participant).filter_by(login=participant.login)
@@ -31,22 +32,18 @@ async def merge_table(contest, tasks, rows, user_id, db):
 
             participant.participant_id = global_participant.id
 
-            participant_copy = await db.execute(
-                select(ContestParticipant).filter_by(
-                    contest_id=contest.id, participant_id=global_participant.id
+            if contest.id:
+                participant_copy = await db.execute(
+                    select(ContestParticipant).filter_by(
+                        contest_id=contest.id, participant_id=global_participant.id
+                    )
                 )
-            )
-            participant_copy = participant_copy.scalars().first()
-
-            if participant_copy:
-                participant.id = participant_copy.id
-
-            participant.contest = contest
+                participant_copy = participant_copy.scalars().first()
+                if participant_copy:
+                    participant.id = participant_copy.id
 
             for result in results:
-                result.contest_participant = participant
-
-                if hasattr(participant, "id") and participant.id:
+                if participant.id:
                     row_copy = await db.execute(
                         select(TaskResult).filter_by(
                             contest_participant_id=participant.id,
@@ -57,7 +54,21 @@ async def merge_table(contest, tasks, rows, user_id, db):
                     if row_copy:
                         result.id = row_copy.id
 
-        await db.merge(contest)
+            prepared.append((participant, results))
+
+        merged_contest = await db.merge(contest)
+        await db.flush()
+
+        for participant, results in prepared:
+            participant.contest_id = merged_contest.id
+            merged_participant = await db.merge(participant)
+            if not participant.id:
+                await db.flush()
+
+            for result in results:
+                result.contest_participant_id = merged_participant.id
+                await db.merge(result)
+
         await db.commit()
 
         return {

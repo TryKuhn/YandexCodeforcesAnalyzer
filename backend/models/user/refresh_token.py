@@ -24,8 +24,8 @@ class RefreshToken(Base):
 
     user_agent: Mapped[str | None] = mapped_column(String(255))
     last_seen: Mapped[datetime] = mapped_column(
-        default=datetime.now().replace(tzinfo=None),
-        onupdate=datetime.now().replace(tzinfo=None),
+        default=lambda: datetime.now().replace(tzinfo=None),
+        onupdate=lambda: datetime.now().replace(tzinfo=None),
     )
 
     created_at: Mapped[datetime] = mapped_column()
