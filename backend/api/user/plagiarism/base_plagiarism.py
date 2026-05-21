@@ -168,8 +168,8 @@ async def get_contest_submissions_meta(
         select(Submission.task_name).distinct().filter_by(contest_id=contest_id)
     )
 
-    raw_langs = [l for l in languages_result.scalars().all() if l]
-    normalized_langs = sorted(set(_normalize_language_display(l) for l in raw_langs))
+    raw_langs = [lang for lang in languages_result.scalars().all() if lang]
+    normalized_langs = sorted(set(_normalize_language_display(lang) for lang in raw_langs))
 
     return {
         "languages": normalized_langs,
@@ -663,9 +663,9 @@ async def process_plagiarism_report(
                 raw_q = await db.execute(
                     select(Submission.language).distinct().filter_by(contest_id=contest_id)
                 )
-                all_raw = [l for l in raw_q.scalars().all() if l]
+                all_raw = [lang for lang in raw_q.scalars().all() if lang]
                 wanted = set(languages)
-                matching_raw = [l for l in all_raw if _normalize_language_display(l) in wanted]
+                matching_raw = [lang for lang in all_raw if _normalize_language_display(lang) in wanted]
                 if matching_raw:
                     query = query.filter(Submission.language.in_(matching_raw))
                 else:
