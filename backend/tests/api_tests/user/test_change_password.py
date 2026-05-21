@@ -4,7 +4,10 @@ BASE = "/api/auth"
 
 
 def _register_and_login(login, password="Aa1!aaaa"):
-    client.post(f"{BASE}/register", json={"login": login, "password": password, "email": f"{login}@example.com"})
+    client.post(
+        f"{BASE}/register",
+        json={"login": login, "password": password, "email": f"{login}@example.com"},
+    )
     r = client.post(f"{BASE}/login", json={"login": login, "password": password})
     return r.json()
 
@@ -58,7 +61,9 @@ def test_change_password_too_short_new_password():
 def test_change_password_old_password_is_invalid_after_change():
     tokens = _register_and_login("cp_old_invalid_user")
     _change_password(tokens["access_token"], "Aa1!aaaa", "Bb2@bbbb")
-    r = client.post(f"{BASE}/login", json={"login": "cp_old_invalid_user", "password": "Aa1!aaaa"})
+    r = client.post(
+        f"{BASE}/login", json={"login": "cp_old_invalid_user", "password": "Aa1!aaaa"}
+    )
     assert r.status_code == 401
     assert r.json() == {"detail": "Invalid login or password"}
 
@@ -66,14 +71,18 @@ def test_change_password_old_password_is_invalid_after_change():
 def test_change_password_new_password_works_after_change():
     tokens = _register_and_login("cp_new_valid_user")
     _change_password(tokens["access_token"], "Aa1!aaaa", "Bb2@bbbb")
-    r = client.post(f"{BASE}/login", json={"login": "cp_new_valid_user", "password": "Bb2@bbbb"})
+    r = client.post(
+        f"{BASE}/login", json={"login": "cp_new_valid_user", "password": "Bb2@bbbb"}
+    )
     assert r.status_code == 200
 
 
 def test_change_password_logs_out_all_sessions():
     tokens = _register_and_login("cp_logout_all_user")
     rt1 = tokens["refresh_token"]
-    rt2 = client.post(f"{BASE}/login", json={"login": "cp_logout_all_user", "password": "Aa1!aaaa"}).json()["refresh_token"]
+    rt2 = client.post(
+        f"{BASE}/login", json={"login": "cp_logout_all_user", "password": "Aa1!aaaa"}
+    ).json()["refresh_token"]
 
     _change_password(tokens["access_token"], "Aa1!aaaa", "Bb2@bbbb")
 
@@ -86,7 +95,9 @@ def test_change_password_logs_out_all_sessions():
 
 
 def test_change_password_without_payload():
-    r = client.post(f"{BASE}/change_password", json={}, headers={"Authorization": "Bearer dummy"})
+    r = client.post(
+        f"{BASE}/change_password", json={}, headers={"Authorization": "Bearer dummy"}
+    )
     assert r.status_code in (401, 422)
 
 
@@ -101,14 +112,18 @@ def test_change_password_without_lowercase():
     tokens = _register_and_login("cp_nolower_user")
     r = _change_password(tokens["access_token"], "Aa1!aaaa", "AA1!AAAA")
     assert r.status_code == 400
-    assert r.json() == {"detail": "Password must contain at least one lowercase Latin letter"}
+    assert r.json() == {
+        "detail": "Password must contain at least one lowercase Latin letter"
+    }
 
 
 def test_change_password_without_uppercase():
     tokens = _register_and_login("cp_noupper_user")
     r = _change_password(tokens["access_token"], "Aa1!aaaa", "aa1!aaaa")
     assert r.status_code == 400
-    assert r.json() == {"detail": "Password must contain at least one uppercase Latin letter"}
+    assert r.json() == {
+        "detail": "Password must contain at least one uppercase Latin letter"
+    }
 
 
 def test_change_password_without_special_symbol():

@@ -1,8 +1,7 @@
 import logging
 
 import httpx
-from fastapi import HTTPException
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,7 +71,9 @@ async def yandex_callback(
     user = _r.scalars().first()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
     user.yandex_access_token = token
     await db.commit()
 

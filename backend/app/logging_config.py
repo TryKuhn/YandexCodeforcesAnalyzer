@@ -17,7 +17,9 @@ LOG_FILE = LOG_DIR / "app.log"
 ERROR_LOG_FILE = LOG_DIR / "error.log"
 
 
-def setup_logging(level: int = logging.INFO, log_to_file: bool = True, log_to_console: bool = True) -> None:
+def setup_logging(
+    level: int = logging.INFO, log_to_file: bool = True, log_to_console: bool = True
+) -> None:
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
 
@@ -29,17 +31,19 @@ def setup_logging(level: int = logging.INFO, log_to_file: bool = True, log_to_co
     if log_to_console:
         console = logging.StreamHandler(sys.stdout)
         console.setLevel(level)
-        console.setFormatter(colorlog.ColoredFormatter(
-            COLOR_FORMAT,
-            datefmt=DATE_FORMAT,
-            log_colors={
-                "DEBUG": "cyan",
-                "INFO": "green",
-                "WARNING": "yellow",
-                "ERROR": "red",
-                "CRITICAL": "bold_red",
-            },
-        ))
+        console.setFormatter(
+            colorlog.ColoredFormatter(
+                COLOR_FORMAT,
+                datefmt=DATE_FORMAT,
+                log_colors={
+                    "DEBUG": "cyan",
+                    "INFO": "green",
+                    "WARNING": "yellow",
+                    "ERROR": "red",
+                    "CRITICAL": "bold_red",
+                },
+            )
+        )
         root_logger.addHandler(console)
 
     if log_to_file:

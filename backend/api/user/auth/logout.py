@@ -17,9 +17,7 @@ logger = logging.getLogger(__name__)
 async def logout(payload: LogoutRequest, db: AsyncSession = Depends(get_db)) -> dict:
     refresh_hash = hash_token(payload.refresh_token)
 
-    _r = await db.execute(
-        select(RefreshToken).filter_by(refresh_hash=refresh_hash)
-    )
+    _r = await db.execute(select(RefreshToken).filter_by(refresh_hash=refresh_hash))
     db_token = _r.scalars().first()
 
     if not db_token:
@@ -42,9 +40,7 @@ async def logout_all(
 ) -> dict:
     refresh_hash = hash_token(payload.refresh_token)
 
-    _r = await db.execute(
-        select(RefreshToken).filter_by(refresh_hash=refresh_hash)
-    )
+    _r = await db.execute(select(RefreshToken).filter_by(refresh_hash=refresh_hash))
     db_token = _r.scalars().first()
 
     if not db_token:

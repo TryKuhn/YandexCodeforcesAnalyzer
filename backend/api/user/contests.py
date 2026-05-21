@@ -129,7 +129,9 @@ async def get_contest_table(
 
     results_by_participant: dict[int, dict[int, TaskResult]] = {}
     for result in all_results:
-        results_by_participant.setdefault(result.contest_participant_id, {})[result.task_id] = result
+        results_by_participant.setdefault(result.contest_participant_id, {})[
+            result.task_id
+        ] = result
 
     def effective_total(p: ContestParticipant) -> float:
         return sum(
@@ -141,7 +143,7 @@ async def get_contest_table(
     sorted_participants = sorted(all_participants, key=effective_total, reverse=True)
 
     offset = (page - 1) * per_page
-    page_participants = sorted_participants[offset: offset + per_page]
+    page_participants = sorted_participants[offset : offset + per_page]
 
     rows = []
     for rank, participant in enumerate(page_participants, start=offset + 1):
@@ -280,10 +282,14 @@ async def get_visual_analytics(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    contest_q = await db.execute(select(Contest).filter_by(id=contest_id, user_id=user_id))
+    contest_q = await db.execute(
+        select(Contest).filter_by(id=contest_id, user_id=user_id)
+    )
     contest = contest_q.scalars().first()
     if not contest:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found"
+        )
 
     tasks_q = await db.execute(
         select(Task).filter_by(contest_id=contest_id).order_by(Task.short_name.asc())
@@ -303,7 +309,9 @@ async def get_visual_analytics(
     subs_q = await db.execute(select(Submission).filter_by(contest_id=contest_id))
     submissions = subs_q.scalars().all()
 
-    parts_q = await db.execute(select(ContestParticipant).filter_by(contest_id=contest_id))
+    parts_q = await db.execute(
+        select(ContestParticipant).filter_by(contest_id=contest_id)
+    )
     participants = parts_q.scalars().all()
     n_participants = len(participants)
 
@@ -357,22 +365,32 @@ async def get_visual_analytics(
         total = len(task_subs)
         ok = sum(1 for s in task_subs if s.verdict == "OK")
         wa = sum(1 for s in task_subs if s.verdict == "WA")
-        tle = sum(1 for s in task_subs if (s.verdict or "").upper() in ("TL", "TLE", "TIME_LIMIT_EXCEEDED"))
-        re = sum(1 for s in task_subs if (s.verdict or "").upper() in ("RE", "RUNTIME_ERROR"))
+        tle = sum(
+            1
+            for s in task_subs
+            if (s.verdict or "").upper() in ("TL", "TLE", "TIME_LIMIT_EXCEEDED")
+        )
+        re = sum(
+            1 for s in task_subs if (s.verdict or "").upper() in ("RE", "RUNTIME_ERROR")
+        )
         other = max(0, total - ok - wa - tle - re)
         solvers = len({s.participant_login for s in task_subs if s.verdict == "OK"})
-        task_stats.append({
-            "task": name,
-            "full_name": short_to_full.get(name, name),
-            "total": total,
-            "ok": ok,
-            "wa": wa,
-            "tle": tle,
-            "re": re,
-            "other": other,
-            "solvers": solvers,
-            "solve_rate": round(solvers / n_participants * 100, 1) if n_participants else 0,
-        })
+        task_stats.append(
+            {
+                "task": name,
+                "full_name": short_to_full.get(name, name),
+                "total": total,
+                "ok": ok,
+                "wa": wa,
+                "tle": tle,
+                "re": re,
+                "other": other,
+                "solvers": solvers,
+                "solve_rate": (
+                    round(solvers / n_participants * 100, 1) if n_participants else 0
+                ),
+            }
+        )
 
     scores = [p.score for p in participants if p.score is not None]
     score_distribution: list[dict] = []
@@ -417,7 +435,9 @@ async def get_visual_analytics(
                 }
         first_solves = sorted(
             best.values(),
-            key=lambda x: task_names.index(x["task"]) if x["task"] in task_names else 999,
+            key=lambda x: (
+                task_names.index(x["task"]) if x["task"] in task_names else 999
+            ),
         )
 
     return {

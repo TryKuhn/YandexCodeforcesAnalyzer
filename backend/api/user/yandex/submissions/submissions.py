@@ -27,7 +27,9 @@ async def yandex_submissions(
     user = user.scalars().first()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     if not user.yandex_access_token:
         raise HTTPException(

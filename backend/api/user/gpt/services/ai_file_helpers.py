@@ -4,17 +4,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.ai.ai_generated_file import AIGeneratedFile
 
 FILE_NAME_MAP: dict[str, str] = {
-    "validator":    "validator.cpp",
-    "generator":    "generator.cpp",
-    "checker":      "checker.cpp",
-    "interactor":   "interactor.cpp",
+    "validator": "validator.cpp",
+    "generator": "generator.cpp",
+    "checker": "checker.cpp",
+    "interactor": "interactor.cpp",
     "solution_cpp": "solution.cpp",
-    "solution_py":  "solution_python.py",
-    "wa_sol":       "wa.cpp",
-    "tl_sol":       "tl.cpp",
-    "re_sol":       "re.cpp",
-    "ml_sol":       "ml.cpp",
-    "script":       "script.txt",
+    "solution_py": "solution_python.py",
+    "wa_sol": "wa.cpp",
+    "tl_sol": "tl.cpp",
+    "re_sol": "re.cpp",
+    "ml_sol": "ml.cpp",
+    "script": "script.txt",
 }
 
 
@@ -54,13 +54,15 @@ async def upsert_ai_file(
         existing.filename = filename
         existing.uploaded = uploaded
     else:
-        db.add(AIGeneratedFile(
-            session_id=session_id,
-            filename=filename,
-            content=content,
-            file_type=file_type,
-            uploaded=uploaded,
-        ))
+        db.add(
+            AIGeneratedFile(
+                session_id=session_id,
+                filename=filename,
+                content=content,
+                file_type=file_type,
+                uploaded=uploaded,
+            )
+        )
 
 
 async def upsert_all_ai_files(

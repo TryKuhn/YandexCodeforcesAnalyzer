@@ -7,12 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yarl import URL
 
 from api.user.polygon.create_signature import create_signature
-from api.user.polygon.get_response import get_response, PolygonAPIError
+from api.user.polygon.get_response import PolygonAPIError, get_response
 from models import User
 from settings import settings
 
 
-async def get_problem_statement(problem_id: int, user_id: int, db: AsyncSession) -> dict:
+async def get_problem_statement(
+    problem_id: int, user_id: int, db: AsyncSession
+) -> dict:
     """Returns the first available statement for the given Polygon problem.
 
     Returns a dict with keys: name, legend, input, output, notes, tutorial.
@@ -47,7 +49,9 @@ async def get_problem_statement(problem_id: int, user_id: int, db: AsyncSession)
             raise HTTPException(status_code=400, detail=f"Polygon error: {e}")
 
     if not result:
-        raise HTTPException(status_code=404, detail="No statement found for this problem")
+        raise HTTPException(
+            status_code=404, detail="No statement found for this problem"
+        )
 
     statement = (
         result.get("russian")
@@ -56,7 +60,9 @@ async def get_problem_statement(problem_id: int, user_id: int, db: AsyncSession)
     )
 
     if not statement:
-        raise HTTPException(status_code=404, detail="No statement found for this problem")
+        raise HTTPException(
+            status_code=404, detail="No statement found for this problem"
+        )
 
     return {
         "name": statement.get("name", ""),

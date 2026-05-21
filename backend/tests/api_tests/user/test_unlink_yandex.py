@@ -5,7 +5,10 @@ YANDEX = "/api/yandex"
 
 
 def _register_and_login(login):
-    client.post(f"{AUTH}/register", json={"login": login, "password": "Aa1!aaaa", "email": f"{login}@example.com"})
+    client.post(
+        f"{AUTH}/register",
+        json={"login": login, "password": "Aa1!aaaa", "email": f"{login}@example.com"},
+    )
     r = client.post(f"{AUTH}/login", json={"login": login, "password": "Aa1!aaaa"})
     return r.json()["access_token"]
 

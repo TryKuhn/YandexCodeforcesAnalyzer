@@ -40,14 +40,18 @@ def _run_plagiarism_check(sub_rows: list, threshold: float) -> list[tuple]:
         py_submissions.append(py_sub)
     pairs = plagiarism_cpp.compute_similarity_pairs(py_submissions, threshold)
     return [
-        (str(pair.first_submission_id), str(pair.second_submission_id), pair.plagiarism_percent)
+        (
+            str(pair.first_submission_id),
+            str(pair.second_submission_id),
+            pair.plagiarism_percent,
+        )
         for pair in pairs
     ]
 
 
 class PlagiarismCheckBody(BaseModel):
-    threshold: float       # display threshold (lower) — passed to C++ as the scan cutoff
-    banThreshold: float    # auto-ban threshold (upper, >= threshold)
+    threshold: float  # display threshold (lower) — passed to C++ as the scan cutoff
+    banThreshold: float  # auto-ban threshold (upper, >= threshold)
     onlyOk: bool = False
     languages: list[str] | None = None
     tasks: list[str] | None = None
@@ -101,7 +105,9 @@ async def get_contest_submissions_meta(
         select(Contest).filter_by(id=contest_id, user_id=user_id)
     )
     if not contest.scalars().first():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found"
+        )
 
     languages_result = await db.execute(
         select(Submission.language).distinct().filter_by(contest_id=contest_id)
@@ -312,7 +318,9 @@ async def ban_pair_submission(
     db: AsyncSession = Depends(get_db),
 ):
     if position not in (1, 2):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Position must be 1 or 2")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Position must be 1 or 2"
+        )
 
     _pair_q = await db.execute(
         select(PairOfBannedSubmissions)
@@ -325,15 +333,23 @@ async def ban_pair_submission(
     pair = _pair_q.scalars().first()
 
     if not pair:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pair not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pair not found"
+        )
 
     _contest_q = await db.execute(
         select(Contest).filter_by(id=pair.contest_id, user_id=user_id)
     )
     if not _contest_q.scalars().first():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found"
+        )
 
-    sub_id = str(pair.first_submission_id) if position == 1 else str(pair.second_submission_id)
+    sub_id = (
+        str(pair.first_submission_id)
+        if position == 1
+        else str(pair.second_submission_id)
+    )
     await _ban_task_result_for_submission(db, sub_id)
     await db.commit()
 
@@ -348,7 +364,9 @@ async def unban_pair_submission(
     db: AsyncSession = Depends(get_db),
 ):
     if position not in (1, 2):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Position must be 1 or 2")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Position must be 1 or 2"
+        )
 
     _pair_q = await db.execute(
         select(PairOfBannedSubmissions)
@@ -361,15 +379,23 @@ async def unban_pair_submission(
     pair = _pair_q.scalars().first()
 
     if not pair:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pair not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pair not found"
+        )
 
     _contest_q = await db.execute(
         select(Contest).filter_by(id=pair.contest_id, user_id=user_id)
     )
     if not _contest_q.scalars().first():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found"
+        )
 
-    sub_id = str(pair.first_submission_id) if position == 1 else str(pair.second_submission_id)
+    sub_id = (
+        str(pair.first_submission_id)
+        if position == 1
+        else str(pair.second_submission_id)
+    )
     await _unban_task_result_for_submission(db, sub_id)
     await db.commit()
 
@@ -444,7 +470,9 @@ async def _unban_task_result_for_submission(db: AsyncSession, sub_id: str) -> No
         return
 
     score_q = await db.execute(
-        select(func.max(Submission.score)).where(Submission.task_result_id == task_result.id)
+        select(func.max(Submission.score)).where(
+            Submission.task_result_id == task_result.id
+        )
     )
     restored_score = score_q.scalar() or 0.0
 
@@ -579,7 +607,9 @@ async def process_plagiarism_report(
 
         # ── 4. Auto-ban pairs above ban_threshold ────────────────────────────
         if ban_threshold is not None:
-            ban_pairs = [(fid, sid) for fid, sid, pct in pairs if pct >= ban_threshold * 100]
+            ban_pairs = [
+                (fid, sid) for fid, sid, pct in pairs if pct >= ban_threshold * 100
+            ]
             if ban_pairs:
                 async with Session() as db:
                     banned_ids: set[str] = set()

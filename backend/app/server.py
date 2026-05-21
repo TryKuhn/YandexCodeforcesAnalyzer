@@ -130,7 +130,9 @@ async def update_last_seen_middleware(request: Request, call_next):
         except HTTPException:
             pass  # expired / invalid token is expected — auth endpoints handle it
         except Exception:
-            logger.warning("Unexpected error verifying bearer token in middleware", exc_info=True)
+            logger.warning(
+                "Unexpected error verifying bearer token in middleware", exc_info=True
+            )
         else:
             sid = payload.get("sid")
             if sid:

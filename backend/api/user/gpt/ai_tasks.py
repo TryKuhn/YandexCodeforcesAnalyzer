@@ -4,18 +4,29 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-
-logger = logging.getLogger(__name__)
+from typing import Dict, Any
 
 from fastapi import BackgroundTasks, Depends, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from app.database import get_db
+from models.ai.ai_generated_file import AIGeneratedFile
+from models.ai.ai_session import AISession, PipelineStage
+
 from api.crypt import get_current_user
-from api.pydantic_schemas.user.ai_task import (AIStatementRequest,
+from api.user.gpt import gpt_router
+from api.user.gpt.services.ai_file_helpers import (get_all_file_contents,
+                                                   get_session_files,
+                                                   upsert_ai_file,
+                                                   upsert_all_ai_files)
+from api.user.gpt.services.ai_service import TaskAIService
+from api.user.gpt.services.upload_orchestrator import (
+    retry_upload_after_manual_fix, run_upload_pipeline)
+from api.pydantic_schemas.user.ai_task import (AddCustomSolutionRequest,
+                                               AIStatementRequest,
                                                AIStatementResponse,
-                                               AddCustomSolutionRequest,
                                                ApproveFilesRequest,
                                                ApproveStatementRequest,
                                                ChatRequest,
@@ -32,19 +43,8 @@ from api.pydantic_schemas.user.ai_task import (AIStatementRequest,
                                                UpdateProblemSettingsRequest,
                                                UpdateSessionSettingsRequest,
                                                UpdateStatementFieldRequest)
-from api.user.gpt import gpt_router
-from api.user.gpt.services.ai_file_helpers import (get_all_file_contents,
-                                                   get_session_files,
-                                                   upsert_ai_file,
-                                                   upsert_all_ai_files)
-from api.user.gpt.services.ai_service import TaskAIService
-from api.user.gpt.services.upload_orchestrator import (
-    retry_upload_after_manual_fix, run_upload_pipeline)
-from app.database import get_db
-from models.ai.ai_generated_file import AIGeneratedFile
-from models.ai.ai_session import AISession, PipelineStage
 
-# ─────────────────── Вспомогательные функции ────────────────────────────────
+logger = logging.getLogger(__name__)
 
 
 def now_utc() -> datetime:
@@ -73,12 +73,14 @@ def _reconstruct_chat_log_from_history(history: list) -> list:
                     content = "Ответ получен (JSON)"
             except (json.JSONDecodeError, TypeError):
                 pass
-        entries.append({
-            "id": f"hist-{i}",
-            "role": role,
-            "content": content[:3000],
-            "timestamp": "",
-        })
+        entries.append(
+            {
+                "id": f"hist-{i}",
+                "role": role,
+                "content": content[:3000],
+                "timestamp": "",
+            }
+        )
     return entries
 
 
@@ -139,9 +141,14 @@ async def create_session(
     idea = (request.idea or "").strip()
 
     default_settings = {
-        "input_file": "stdin", "output_file": "stdout", "interactive": False,
-        "time_limit": 2000, "memory_limit": 256,
-        "tags": [], "enable_groups": False, "enable_points": False,
+        "input_file": "stdin",
+        "output_file": "stdout",
+        "interactive": False,
+        "time_limit": 2000,
+        "memory_limit": 256,
+        "tags": [],
+        "enable_groups": False,
+        "enable_points": False,
     }
 
     if not idea:
@@ -162,7 +169,11 @@ async def create_session(
         )
         db.add(session)
         await db.commit()
-        return {"session_id": session.id, "statement": None, "stage": PipelineStage.STATEMENT}
+        return {
+            "session_id": session.id,
+            "statement": None,
+            "stage": PipelineStage.STATEMENT,
+        }
 
     try:
         ai = TaskAIService()
@@ -210,7 +221,9 @@ async def delete_session(
     db: AsyncSession = Depends(get_db),
 ):
     session = await get_session_or_404(session_id, user_id, db)
-    await db.execute(delete(AIGeneratedFile).where(AIGeneratedFile.session_id == session_id))
+    await db.execute(
+        delete(AIGeneratedFile).where(AIGeneratedFile.session_id == session_id)
+    )
     await db.delete(session)
     await db.commit()
     return {"status": "deleted"}
@@ -268,7 +281,9 @@ async def refine_statement(
         if prev_interaction:
             stmt["interaction"] = prev_interaction
         else:
-            stmt["interaction"] = await ai.generate_interaction_text(stmt, session.model)
+            stmt["interaction"] = await ai.generate_interaction_text(
+                stmt, session.model
+            )
 
     # Preserve / regenerate scoring when groups or points are enabled
     if problem_settings.get("enable_groups") or problem_settings.get("enable_points"):
@@ -277,7 +292,8 @@ async def refine_statement(
             stmt["scoring"] = prev_scoring
         else:
             stmt["scoring"] = await ai.generate_scoring(
-                stmt, session.model,
+                stmt,
+                session.model,
                 enable_groups=bool(problem_settings.get("enable_groups")),
                 enable_points=bool(problem_settings.get("enable_points")),
             )
@@ -294,7 +310,9 @@ async def refine_statement(
             ai_regen = TaskAIService()
             tech_data = await ai_regen.generate_technical_stuff(stmt, session.model)
             if problem_settings.get("interactive"):
-                interactor_code = await ai_regen.generate_interactor(stmt, session.model)
+                interactor_code = await ai_regen.generate_interactor(
+                    stmt, session.model
+                )
                 tech_data["interactor"] = interactor_code
             await upsert_all_ai_files(db, session.id, tech_data, uploaded=False)
             touch(session)
@@ -311,9 +329,6 @@ async def refine_statement(
     if tech_data:
         response_data["technical_data"] = tech_data
     return response_data
-
-
-# ─────────────────── ЭТАП 2: Одобрение условия ──────────────────────────────
 
 
 @gpt_router.post("/approve-statement")
@@ -339,32 +354,33 @@ async def approve_statement(
         ai = TaskAIService()
         tech_data = await ai.generate_technical_stuff(session.statement, session.model)
 
-        # Use settings passed from frontend as authoritative source (covers unsaved UI state)
         problem_settings = request.problem_settings or session.problem_settings or {}
         stmt = dict(session.statement or {})
         stmt_changed = False
 
-        # Persist settings if frontend passed them and DB doesn't have them yet
         if request.problem_settings:
             merged = {**(session.problem_settings or {}), **request.problem_settings}
             session.problem_settings = merged
             flag_modified(session, "problem_settings")
 
-        # Generate interactor + interaction description for interactive problems
         if problem_settings.get("interactive"):
             interactor_code = await ai.generate_interactor(stmt, session.model)
             tech_data["interactor"] = interactor_code
 
             if not stmt.get("interaction"):
-                interaction_text = await ai.generate_interaction_text(stmt, session.model)
+                interaction_text = await ai.generate_interaction_text(
+                    stmt, session.model
+                )
                 stmt["interaction"] = interaction_text
                 stmt_changed = True
 
-        # Auto-generate scoring when groups or points are enabled
-        if problem_settings.get("enable_groups") or problem_settings.get("enable_points"):
+        if problem_settings.get("enable_groups") or problem_settings.get(
+            "enable_points"
+        ):
             if not stmt.get("scoring"):
                 scoring_text = await ai.generate_scoring(
-                    stmt, session.model,
+                    stmt,
+                    session.model,
                     enable_groups=bool(problem_settings.get("enable_groups")),
                     enable_points=bool(problem_settings.get("enable_points")),
                 )
@@ -411,16 +427,12 @@ async def approve_statement(
         raise HTTPException(500, f"Ошибка генерации файлов: {e}")
 
 
-# ─────────────────── ЭТАП 3: Правка файлов ──────────────────────────────────
-
-
 @gpt_router.post("/refine-file")
 async def refine_file(
     request: RefineFileRequest,
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """ИИ правит конкретный файл по фидбеку пользователя"""
     session = await get_session_or_404(request.session_id, user_id, db)
 
     session_files = await get_session_files(db, session.id)
@@ -458,7 +470,9 @@ async def manual_fix_file(
     """Пользователь вручную правит файл — сохраняем на сервере"""
     session = await get_session_or_404(request.session_id, user_id, db)
 
-    await upsert_ai_file(db, session.id, request.file_key, request.new_content, uploaded=False)
+    await upsert_ai_file(
+        db, session.id, request.file_key, request.new_content, uploaded=False
+    )
 
     upload_errors = dict(session.upload_errors or {})
     upload_errors.pop(request.file_key, None)
@@ -473,9 +487,6 @@ async def manual_fix_file(
         "stage": session.stage,
         "remaining_errors": list(upload_errors.keys()),
     }
-
-
-# ─────────────────── ЭТАП 4: Одобрение файлов ───────────────────────────────
 
 
 @gpt_router.post("/approve-files")
@@ -511,9 +522,6 @@ async def approve_files(
 
     background_tasks.add_task(run_upload_pipeline, request.session_id)
     return {"status": "upload_started", "session_id": request.session_id}
-
-
-# ──────────────── ЭТАП 5: Повтор после ручного фикса / доработка ────────────
 
 
 @gpt_router.post("/retry-after-manual-fix")
@@ -630,7 +638,11 @@ async def update_session_settings(
 
     touch(session)
     await db.commit()
-    return {"status": "ok", "model": session.model, "system_prompt": session.system_prompt}
+    return {
+        "status": "ok",
+        "model": session.model,
+        "system_prompt": session.system_prompt,
+    }
 
 
 # ──────────────── Импорт из Polygon ─────────────────────────────────────────
@@ -679,11 +691,13 @@ async def import_from_polygon_full(
     db: AsyncSession = Depends(get_db),
 ):
     """Создаёт AI-сессию, загружая условие, файлы, настройки и теги из Polygon."""
-    from api.user.polygon.get_problem_files import (
-        get_problem_files, get_problem_solutions, get_problem_tags,
-        get_problem_script, get_problem_tests, get_test_input,
-        view_solution, view_file,
-    )
+    from api.user.polygon.get_problem_files import (get_problem_files,
+                                                    get_problem_script,
+                                                    get_problem_solutions,
+                                                    get_problem_tags,
+                                                    get_problem_tests,
+                                                    get_test_input, view_file,
+                                                    view_solution)
     from api.user.polygon.get_problem_statement import get_problem_statement
     from api.user.polygon.problem_info import problem_info as get_problem_info
 
@@ -697,7 +711,7 @@ async def import_from_polygon_full(
     except Exception:
         info = {}
 
-    problem_settings = {
+    problem_settings: Dict[str, Any] = {
         "input_file": info.get("inputFile", "stdin") or "stdin",
         "output_file": info.get("outputFile", "stdout") or "stdout",
         "interactive": bool(info.get("interactive", False)),
@@ -752,17 +766,19 @@ async def import_from_polygon_full(
                 name = f.get("name", "")
                 if name in KNOWN_SOURCE_FILES:
                     try:
-                        content = await view_file(problem_id, "source", name, user_id, db)
+                        content = await view_file(
+                            problem_id, "source", name, user_id, db
+                        )
                         file_type = KNOWN_SOURCE_FILES[name]
                         tech_data[file_type] = content
-                        await upsert_ai_file(db, session.id, file_type, content, uploaded=True)
+                        await upsert_ai_file(
+                            db, session.id, file_type, content, uploaded=True
+                        )
                     except Exception as e:
                         logger.warning(f"Failed to load file {name}: {e}")
         except Exception as e:
             logger.warning(f"Failed to load problem files: {e}")
 
-        # Load solutions
-        KNOWN_TAGS = {"MA": "solution_cpp", "OK": "solution_py"}
         try:
             solutions = await get_problem_solutions(problem_id, user_id, db)
             solution_meta = {}
@@ -786,7 +802,9 @@ async def import_from_polygon_full(
                         file_type = f"sol_custom_{uuid.uuid4().hex[:8]}"
                         solution_meta[file_type] = {"tag": tag, "name": name}
                     tech_data[file_type] = content
-                    await upsert_ai_file(db, session.id, file_type, content, uploaded=True)
+                    await upsert_ai_file(
+                        db, session.id, file_type, content, uploaded=True
+                    )
                 except Exception as e:
                     logger.warning(f"Failed to load solution {name}: {e}")
             if solution_meta:
@@ -811,7 +829,9 @@ async def import_from_polygon_full(
                 if t.get("useInStatements"):
                     idx = t.get("index", 0)
                     try:
-                        inp = await get_test_input(problem_id, "tests", idx, user_id, db)
+                        inp = await get_test_input(
+                            problem_id, "tests", idx, user_id, db
+                        )
                         examples.append({"index": idx, "input": inp, "output": ""})
                     except Exception:
                         pass
@@ -848,11 +868,17 @@ def _append_chat(session: AISession, *entries: dict) -> None:
 
 
 _FILE_LABELS = {
-    "validator": "validator.cpp", "generator": "generator.cpp",
-    "checker": "checker.cpp", "interactor": "interactor.cpp",
-    "solution_cpp": "solution.cpp", "solution_py": "solution.py",
-    "wa_sol": "wa.cpp", "tl_sol": "tl.cpp", "re_sol": "re.cpp",
-    "ml_sol": "ml.cpp", "script": "script.txt",
+    "validator": "validator.cpp",
+    "generator": "generator.cpp",
+    "checker": "checker.cpp",
+    "interactor": "interactor.cpp",
+    "solution_cpp": "solution.cpp",
+    "solution_py": "solution.py",
+    "wa_sol": "wa.cpp",
+    "tl_sol": "tl.cpp",
+    "re_sol": "re.cpp",
+    "ml_sol": "ml.cpp",
+    "script": "script.txt",
 }
 
 
@@ -898,7 +924,12 @@ async def unified_chat(
             # Reuse statement-refine logic
             history = list(session.history or [])
             if session.statement:
-                history.append({"role": "assistant", "content": json.dumps(session.statement, ensure_ascii=False)})
+                history.append(
+                    {
+                        "role": "assistant",
+                        "content": json.dumps(session.statement, ensure_ascii=False),
+                    }
+                )
             history.append({"role": "user", "content": request.message})
 
             new_stmt = await ai.generate_statement(
@@ -925,7 +956,9 @@ async def unified_chat(
                     model=session.model,
                 )
                 for file_key, content in updated.items():
-                    await upsert_ai_file(db, session.id, file_key, content, uploaded=False)
+                    await upsert_ai_file(
+                        db, session.id, file_key, content, uploaded=False
+                    )
                 updated_files = list(updated.keys())
                 new_tech_data = await get_all_file_contents(db, session.id)
                 if updated_files:
@@ -1058,9 +1091,20 @@ async def update_statement_field(
     if not session.statement:
         raise HTTPException(400, "Условие не создано")
 
-    allowed_fields = {"scoring", "interaction", "notes", "tutorial", "legend", "input", "output", "name"}
+    allowed_fields = {
+        "scoring",
+        "interaction",
+        "notes",
+        "tutorial",
+        "legend",
+        "input",
+        "output",
+        "name",
+    }
     if request.field not in allowed_fields:
-        raise HTTPException(400, f"Поле '{request.field}' не может быть изменено через этот эндпоинт")
+        raise HTTPException(
+            400, f"Поле '{request.field}' не может быть изменено через этот эндпоинт"
+        )
 
     stmt = dict(session.statement)
     stmt[request.field] = request.value
@@ -1083,9 +1127,14 @@ async def generate_samples(
         raise HTTPException(400, "Условие ещё не создано")
 
     ai = TaskAIService()
-    examples = await ai.generate_samples(session.statement, session.model, count=request.count or 3)
+    examples = await ai.generate_samples(
+        session.statement, session.model, count=request.count or 3
+    )
 
-    indexed = [{"index": i + 1, "input": ex["input"], "output": ex["output"]} for i, ex in enumerate(examples)]
+    indexed = [
+        {"index": i + 1, "input": ex["input"], "output": ex["output"]}
+        for i, ex in enumerate(examples)
+    ]
     session.examples = indexed
     touch(session)
     await db.commit()
@@ -1147,7 +1196,9 @@ async def add_custom_solution(
     meta[file_type] = {"tag": request.tag, "name": name}
     session.solution_meta = meta
 
-    await upsert_ai_file(db, session.id, file_type, "", uploaded=False, solution_meta=meta)
+    await upsert_ai_file(
+        db, session.id, file_type, "", uploaded=False, solution_meta=meta
+    )
     touch(session)
     await db.commit()
 
@@ -1210,16 +1261,32 @@ async def generate_solution_for_custom(
 
     solution_meta = session.solution_meta or {}
     meta = solution_meta.get(request.file_key)
-    if not meta and request.file_key not in ("wa_sol", "tl_sol", "re_sol", "ml_sol", "solution_cpp", "solution_py"):
+    if not meta and request.file_key not in (
+        "wa_sol",
+        "tl_sol",
+        "re_sol",
+        "ml_sol",
+        "solution_cpp",
+        "solution_py",
+    ):
         raise HTTPException(400, f"Файл '{request.file_key}' не найден")
 
     tag = meta["tag"] if meta else request.file_key.upper()
     name = meta.get("name", request.file_key) if meta else request.file_key
 
     ai = TaskAIService()
-    code = await ai.generate_solution_for_tag(tag, name, session.statement, session.model)
+    code = await ai.generate_solution_for_tag(
+        tag, name, session.statement, session.model
+    )
 
-    await upsert_ai_file(db, session.id, request.file_key, code, uploaded=False, solution_meta=solution_meta)
+    await upsert_ai_file(
+        db,
+        session.id,
+        request.file_key,
+        code,
+        uploaded=False,
+        solution_meta=solution_meta,
+    )
     touch(session)
     await db.commit()
 
@@ -1239,7 +1306,11 @@ async def post_build_refine(
     """Доработка задачи после успешной сборки — ИИ обновляет нужные файлы."""
     session = await get_session_or_404(request.session_id, user_id, db)
 
-    if session.stage not in (PipelineStage.DONE, PipelineStage.FILES_REVIEW, PipelineStage.FIXING_ERRORS):
+    if session.stage not in (
+        PipelineStage.DONE,
+        PipelineStage.FILES_REVIEW,
+        PipelineStage.FIXING_ERRORS,
+    ):
         raise HTTPException(400, f"Доработка недоступна на этапе '{session.stage}'")
 
     current_files = await get_all_file_contents(db, session.id)

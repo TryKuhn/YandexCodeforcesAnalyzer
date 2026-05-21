@@ -4,7 +4,10 @@ BASE = "/api/auth"
 
 
 def _register_and_login(login, password="Aa1!aaaa"):
-    client.post(f"{BASE}/register", json={"login": login, "password": password, "email": f"{login}@example.com"})
+    client.post(
+        f"{BASE}/register",
+        json={"login": login, "password": password, "email": f"{login}@example.com"},
+    )
     r = client.post(f"{BASE}/login", json={"login": login, "password": password})
     return r.json()
 
@@ -44,8 +47,14 @@ def test_logout_without_refresh_token():
 
 def test_logout_from_two_sessions():
     _register_and_login("logout_two_sessions_user")
-    rt1 = client.post(f"{BASE}/login", json={"login": "logout_two_sessions_user", "password": "Aa1!aaaa"}).json()["refresh_token"]
-    rt2 = client.post(f"{BASE}/login", json={"login": "logout_two_sessions_user", "password": "Aa1!aaaa"}).json()["refresh_token"]
+    rt1 = client.post(
+        f"{BASE}/login",
+        json={"login": "logout_two_sessions_user", "password": "Aa1!aaaa"},
+    ).json()["refresh_token"]
+    rt2 = client.post(
+        f"{BASE}/login",
+        json={"login": "logout_two_sessions_user", "password": "Aa1!aaaa"},
+    ).json()["refresh_token"]
     assert rt1 != rt2
     r1 = _logout(rt1)
     r2 = _logout(rt2)

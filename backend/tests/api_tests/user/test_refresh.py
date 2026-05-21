@@ -4,7 +4,10 @@ BASE = "/api/auth"
 
 
 def _register_and_login(login, password="Aa1!aaaa"):
-    client.post(f"{BASE}/register", json={"login": login, "password": password, "email": f"{login}@example.com"})
+    client.post(
+        f"{BASE}/register",
+        json={"login": login, "password": password, "email": f"{login}@example.com"},
+    )
     r = client.post(f"{BASE}/login", json={"login": login, "password": password})
     return r.json()
 

@@ -80,7 +80,9 @@ class TaskAIService:
                 raise
             except (httpx.ConnectError, httpx.TimeoutException) as e:
                 logger.error(f"AI Service network error: {e}")
-                raise HTTPException(status_code=503, detail="AI service unavailable: network error")
+                raise HTTPException(
+                    status_code=503, detail="AI service unavailable: network error"
+                )
             except Exception as e:
                 logger.error(f"AI Service Exception: {e}")
                 raise HTTPException(status_code=500, detail=f"AI service error: {e}")
@@ -276,9 +278,7 @@ class TaskAIService:
             f"Current error: {error}{history_note} "
             "Return ONLY the corrected code without any explanation or markdown."
         )
-        user_prompt = (
-            f"Statement:\n{json.dumps(statement, ensure_ascii=False)}\n\nBroken code:\n{code}"
-        )
+        user_prompt = f"Statement:\n{json.dumps(statement, ensure_ascii=False)}\n\nBroken code:\n{code}"
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -294,8 +294,7 @@ class TaskAIService:
         model: str,
     ) -> Dict[str, str]:
         files_text = "\n\n".join(
-            f"=== {key} ===\n{content}"
-            for key, content in current_files.items()
+            f"=== {key} ===\n{content}" for key, content in current_files.items()
         )
         system_prompt = (
             "Ты — эксперт по задачам Polygon. Пользователь хочет доработать уже созданную задачу. "
@@ -325,7 +324,7 @@ class TaskAIService:
             "Примеры тегов: binary search, dp, greedy, graphs, dfs and similar, "
             "constructive algorithms, implementation, math, sortings, two pointers, "
             "data structures, trees, strings, number theory, geometry, brute force. "
-            "Выведи JSON: {\"tags\": [\"tag1\", \"tag2\", ...]}. "
+            'Выведи JSON: {"tags": ["tag1", "tag2", ...]}. '
             "Используй теги из стандартного набора Codeforces, только английский язык."
         )
         user_prompt = f"Условие задачи:\n{json.dumps(statement, ensure_ascii=False)}"
@@ -346,7 +345,7 @@ class TaskAIService:
             f"Нужно {count} примера. Каждый пример должен быть небольшим (буквально 1–5 строк ввода), "
             "понятным, покрывающим разные случаи: базовый, граничный, неочевидный. "
             "Вычисли правильный ответ для каждого теста. "
-            "Выведи JSON: {\"examples\": [{\"input\": \"...\", \"output\": \"...\"}, ...]}"
+            'Выведи JSON: {"examples": [{"input": "...", "output": "..."}, ...]}'
         )
         user_prompt = f"Условие задачи:\n{json.dumps(statement, ensure_ascii=False)}"
         messages = [
@@ -355,7 +354,10 @@ class TaskAIService:
         ]
         result = await self._base_ask(model, messages)
         examples = result.get("examples", [])
-        return [{"input": str(e.get("input", "")), "output": str(e.get("output", ""))} for e in examples]
+        return [
+            {"input": str(e.get("input", "")), "output": str(e.get("output", ""))}
+            for e in examples
+        ]
 
     async def generate_solution_for_tag(
         self, tag: str, name: str, statement: Dict, model: str
@@ -397,19 +399,32 @@ class TaskAIService:
             "Ты — автор задач по спортивному программированию. "
             "На основе условия задачи составь раздел Scoring в формате LaTeX-таблицы. "
             "Используй следующий шаблон (подзадача 0 — это всегда тесты из условия без баллов):\n\n"
-            r"\begin{center}" "\n"
-            r"    \begin{tabular}{ | c | c | c | c | c | }" "\n"
-            r"        \hline" "\n"
-            r"        \textbf{\scriptsize{Подзадача}} &" "\n"
-            r"        \textbf{\scriptsize{Баллы}} &" "\n"
-            r"        \textbf{\scriptsize{Дополнительные ограничения}} &" "\n"
-            r"        \textbf{\scriptsize{Необходимые подзадачи}} &" "\n"
-            r"        \textbf{\scriptsize{Информация о проверке}} \\ \hline" "\n"
-            r"        $0$ & -- & тесты из условия & --  & полная        \\ \hline" "\n"
-            r"        $1$ & $X$ & ограничение & 0  & первая ошибка \\ \hline" "\n"
-            r"        ..." "\n"
-            r"    \end{tabular}" "\n"
-            r"\end{center}" "\n\n"
+            r"\begin{center}"
+            "\n"
+            r"    \begin{tabular}{ | c | c | c | c | c | }"
+            "\n"
+            r"        \hline"
+            "\n"
+            r"        \textbf{\scriptsize{Подзадача}} &"
+            "\n"
+            r"        \textbf{\scriptsize{Баллы}} &"
+            "\n"
+            r"        \textbf{\scriptsize{Дополнительные ограничения}} &"
+            "\n"
+            r"        \textbf{\scriptsize{Необходимые подзадачи}} &"
+            "\n"
+            r"        \textbf{\scriptsize{Информация о проверке}} \\ \hline"
+            "\n"
+            r"        $0$ & -- & тесты из условия & --  & полная        \\ \hline"
+            "\n"
+            r"        $1$ & $X$ & ограничение & 0  & первая ошибка \\ \hline"
+            "\n"
+            r"        ..."
+            "\n"
+            r"    \end{tabular}"
+            "\n"
+            r"\end{center}"
+            "\n\n"
             "ТРЕБОВАНИЯ К ПОДЗАДАЧАМ (очень важно!):\n"
             "- Каждая подзадача должна быть алгоритмически осмысленной: её ограничения должны позволять "
             "написать принципиально более простое решение, чем для полной задачи.\n"
@@ -507,16 +522,21 @@ class TaskAIService:
 
         system = (
             "You classify user intent in a competitive programming problem editor.\n"
-            "Return ONLY JSON: {\"intent\": \"modify\" | \"answer\"}\n"
-            "- \"modify\": user wants to change, fix, update, rewrite, add or improve something\n"
-            "- \"answer\": user asks a question, wants explanation, analysis, or information\n"
-            "Be decisive. When in doubt prefer \"answer\"."
+            'Return ONLY JSON: {"intent": "modify" | "answer"}\n'
+            '- "modify": user wants to change, fix, update, rewrite, add or improve something\n'
+            '- "answer": user asks a question, wants explanation, analysis, or information\n'
+            'Be decisive. When in doubt prefer "answer".'
         )
-        user_msg = f"Context: user is viewing {context_desc}.\nUser message: \"{message}\""
+        user_msg = (
+            f'Context: user is viewing {context_desc}.\nUser message: "{message}"'
+        )
         try:
             result = await self._base_ask(
                 model,
-                [{"role": "system", "content": system}, {"role": "user", "content": user_msg}],
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_msg},
+                ],
                 json_mode=True,
             )
             intent = result.get("intent", "answer")
@@ -539,7 +559,11 @@ class TaskAIService:
         ctx_parts: list[str] = []
 
         if statement:
-            stmt_summary = {k: v for k, v in statement.items() if k in ("name", "legend", "input", "output")}
+            stmt_summary = {
+                k: v
+                for k, v in statement.items()
+                if k in ("name", "legend", "input", "output")
+            }
             ctx_parts.append(f"ЗАДАЧА: {json.dumps(stmt_summary, ensure_ascii=False)}")
 
         if context not in ("statement", "task") and context in files:
@@ -559,7 +583,9 @@ class TaskAIService:
             if isinstance(h, dict) and h.get("role") in ("user", "assistant"):
                 msgs.append(h)
 
-        user_content = "\n\n".join(ctx_parts) + f"\n\nВОПРОС: {message}" if ctx_parts else message
+        user_content = (
+            "\n\n".join(ctx_parts) + f"\n\nВОПРОС: {message}" if ctx_parts else message
+        )
         msgs.append({"role": "user", "content": user_content})
 
         result = await self._base_ask(model, msgs, json_mode=False)

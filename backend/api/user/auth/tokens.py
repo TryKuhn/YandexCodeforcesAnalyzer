@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Tuple
+from uuid import uuid4
 
 from api.crypt import create_token
 from settings import settings
@@ -12,6 +13,7 @@ def get_tokens(user_id: int, session_id: str) -> Tuple[str, str, datetime, datet
     data = {
         "user_id": user_id,
         "sid": session_id,
+        "jti": str(uuid4()),
     }
 
     access_token = create_token(

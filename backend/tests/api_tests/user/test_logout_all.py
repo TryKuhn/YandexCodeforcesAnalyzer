@@ -4,7 +4,10 @@ BASE = "/api/auth"
 
 
 def _register_and_login(login, password="Aa1!aaaa"):
-    client.post(f"{BASE}/register", json={"login": login, "password": password, "email": f"{login}@example.com"})
+    client.post(
+        f"{BASE}/register",
+        json={"login": login, "password": password, "email": f"{login}@example.com"},
+    )
     r = client.post(f"{BASE}/login", json={"login": login, "password": password})
     return r.json()
 
@@ -32,8 +35,14 @@ def test_logout_all_invalid_refresh_token():
 
 def test_logout_all_removes_all_user_sessions():
     _register_and_login("logout_all_two_sessions_user")
-    rt1 = client.post(f"{BASE}/login", json={"login": "logout_all_two_sessions_user", "password": "Aa1!aaaa"}).json()["refresh_token"]
-    rt2 = client.post(f"{BASE}/login", json={"login": "logout_all_two_sessions_user", "password": "Aa1!aaaa"}).json()["refresh_token"]
+    rt1 = client.post(
+        f"{BASE}/login",
+        json={"login": "logout_all_two_sessions_user", "password": "Aa1!aaaa"},
+    ).json()["refresh_token"]
+    rt2 = client.post(
+        f"{BASE}/login",
+        json={"login": "logout_all_two_sessions_user", "password": "Aa1!aaaa"},
+    ).json()["refresh_token"]
 
     r = _logout_all(rt1)
     assert r.status_code == 200
@@ -46,8 +55,12 @@ def test_logout_all_removes_all_user_sessions():
 def test_logout_all_does_not_affect_another_user():
     _register_and_login("first_logout_all_user")
     tokens2 = _register_and_login("second_logout_all_user", password="Bb2@bbbb")
-    rt1a = client.post(f"{BASE}/login", json={"login": "first_logout_all_user", "password": "Aa1!aaaa"}).json()["refresh_token"]
-    rt1b = client.post(f"{BASE}/login", json={"login": "first_logout_all_user", "password": "Aa1!aaaa"}).json()["refresh_token"]
+    rt1a = client.post(
+        f"{BASE}/login", json={"login": "first_logout_all_user", "password": "Aa1!aaaa"}
+    ).json()["refresh_token"]
+    rt1b = client.post(
+        f"{BASE}/login", json={"login": "first_logout_all_user", "password": "Aa1!aaaa"}
+    ).json()["refresh_token"]
 
     r = _logout_all(rt1a)
     assert r.status_code == 200

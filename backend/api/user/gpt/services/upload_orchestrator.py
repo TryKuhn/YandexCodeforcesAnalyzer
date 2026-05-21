@@ -11,8 +11,9 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from api.user.gpt.services.ai_file_helpers import (
-    get_session_files, mark_uploaded, upsert_ai_file)
+from api.user.gpt.services.ai_file_helpers import (get_session_files,
+                                                   mark_uploaded,
+                                                   upsert_ai_file)
 from api.user.gpt.services.ai_service import TaskAIService
 from api.user.polygon.commit.commit_problem import commit
 from api.user.polygon.commit.get_packages import get_packages
@@ -42,15 +43,15 @@ PACKAGE_POLL_INTERVAL = 10
 PACKAGE_POLL_TIMEOUT = 600
 
 STEP_MAP: list[tuple[str, Callable[..., Any], str, str, list[str]]] = [
-    ("validator",  set_validator, "validator",     "validator.cpp",     []),
-    ("generator",  set_generator, "generator",     "generator.cpp",     []),
-    ("checker",    set_checker,   "checker",       "checker.cpp",       []),
-    ("sol_main",   set_solution,  "solution_cpp",  "solution.cpp",      ["MA"]),
-    ("sol_py",     set_solution,  "solution_py",   "solution_py.py",    ["OK"]),
-    ("sol_wa",     set_solution,  "wa_sol",        "wa.cpp",            ["WA"]),
-    ("sol_tl",     set_solution,  "tl_sol",        "tl.cpp",            ["TL"]),
-    ("sol_re",     set_solution,  "re_sol",        "re.cpp",            ["RE"]),
-    ("sol_ml",     set_solution,  "ml_sol",        "ml.cpp",            ["ML"]),
+    ("validator", set_validator, "validator", "validator.cpp", []),
+    ("generator", set_generator, "generator", "generator.cpp", []),
+    ("checker", set_checker, "checker", "checker.cpp", []),
+    ("sol_main", set_solution, "solution_cpp", "solution.cpp", ["MA"]),
+    ("sol_py", set_solution, "solution_py", "solution_py.py", ["OK"]),
+    ("sol_wa", set_solution, "wa_sol", "wa.cpp", ["WA"]),
+    ("sol_tl", set_solution, "tl_sol", "tl.cpp", ["TL"]),
+    ("sol_re", set_solution, "re_sol", "re.cpp", ["RE"]),
+    ("sol_ml", set_solution, "ml_sol", "ml.cpp", ["ML"]),
 ]
 
 
@@ -62,26 +63,28 @@ def _parse_scoring_groups(scoring_latex: str | None) -> list[dict]:
     if not scoring_latex:
         return []
 
-    tab_match = re.search(r'\\begin\{tabular\}(.*?)\\end\{tabular\}', scoring_latex, re.DOTALL)
+    tab_match = re.search(
+        r"\\begin\{tabular\}(.*?)\\end\{tabular\}", scoring_latex, re.DOTALL
+    )
     if not tab_match:
         return []
 
     inner = tab_match.group(1)
-    inner = re.sub(r'^\s*\{[^}]*\}\s*', '', inner)
+    inner = re.sub(r"^\s*\{[^}]*\}\s*", "", inner)
 
     def clean_cell(cell: str) -> str:
-        cell = re.sub(r'\\textbf\s*\{\\scriptsize\s*\{([^}]*)\}\}', r'\1', cell)
-        cell = re.sub(r'\\textbf\s*\{([^}]*)\}', r'\1', cell)
-        cell = re.sub(r'\\scriptsize\s*\{([^}]*)\}', r'\1', cell)
-        cell = re.sub(r'\$([^$]+)\$', r'\1', cell)
-        cell = cell.replace('\\hline', '').strip()
+        cell = re.sub(r"\\textbf\s*\{\\scriptsize\s*\{([^}]*)\}\}", r"\1", cell)
+        cell = re.sub(r"\\textbf\s*\{([^}]*)\}", r"\1", cell)
+        cell = re.sub(r"\\scriptsize\s*\{([^}]*)\}", r"\1", cell)
+        cell = re.sub(r"\$([^$]+)\$", r"\1", cell)
+        cell = cell.replace("\\hline", "").strip()
         return cell
 
     rows = []
-    for seg in inner.split('\\\\'):
-        seg = seg.replace('\\hline', '').strip()
+    for seg in inner.split("\\\\"):
+        seg = seg.replace("\\hline", "").strip()
         if seg:
-            rows.append([clean_cell(c) for c in seg.split('&')])
+            rows.append([clean_cell(c) for c in seg.split("&")])
 
     if len(rows) < 2:
         return []
@@ -95,33 +98,35 @@ def _parse_scoring_groups(scoring_latex: str | None) -> list[dict]:
         deps_str = row[3].strip()
         feedback_str = row[4].strip()
 
-        if group_num == '0' or points_str == '--':
+        if group_num == "0" or points_str == "--":
             continue
 
         try:
-            points = int(float(re.sub(r'[^0-9.]', '', points_str) or '0'))
+            points = int(float(re.sub(r"[^0-9.]", "", points_str) or "0"))
         except (ValueError, TypeError):
             continue
 
         deps = []
-        if deps_str and deps_str != '--':
-            for d in deps_str.split(','):
+        if deps_str and deps_str != "--":
+            for d in deps_str.split(","):
                 d = d.strip()
-                if d and d != '--':
+                if d and d != "--":
                     deps.append(d)
 
         feedback = (
-            'icpc'
-            if ('первая' in feedback_str.lower() or 'first' in feedback_str.lower())
-            else 'complete'
+            "icpc"
+            if ("первая" in feedback_str.lower() or "first" in feedback_str.lower())
+            else "complete"
         )
 
-        groups.append({
-            'group': group_num,
-            'points': points,
-            'dependencies': deps,
-            'feedback_policy': feedback,
-        })
+        groups.append(
+            {
+                "group": group_num,
+                "points": points,
+                "dependencies": deps,
+                "feedback_policy": feedback,
+            }
+        )
 
     return groups
 
@@ -192,7 +197,9 @@ async def _upload_steps(
             progress["current_step"] = "Загрузка interactor.cpp..."
             await _update_session(session_id, {"progress": progress}, db)
             try:
-                await set_interactor(problem_id, "interactor.cpp", interactor_obj.content, user_id, db)
+                await set_interactor(
+                    problem_id, "interactor.cpp", interactor_obj.content, user_id, db
+                )
                 await mark_uploaded(db, session_id, "interactor")
                 await db.commit()
             except Exception as e:
@@ -227,7 +234,9 @@ async def _upload_steps(
                 break
             except Exception as e:
                 last_error = str(e)
-                logger.warning(f"[{session_id}] {step_name} attempt {attempt} failed: {e}")
+                logger.warning(
+                    f"[{session_id}] {step_name} attempt {attempt} failed: {e}"
+                )
                 progress["retries"] = attempt
                 progress["current_step"] = (
                     f"Ошибка в {file_name}, ИИ правит "
@@ -238,14 +247,22 @@ async def _upload_steps(
                 if attempt < MAX_RETRIES:
                     try:
                         code = await ai.fix_code(
-                            last_error, step_name, code, statement, model,
+                            last_error,
+                            step_name,
+                            code,
+                            statement,
+                            model,
                             previous_errors=error_history if error_history else None,
                         )
                         error_history.append(last_error)
-                        await upsert_ai_file(db, session_id, data_key, code, uploaded=False)
+                        await upsert_ai_file(
+                            db, session_id, data_key, code, uploaded=False
+                        )
                         await db.commit()
                     except Exception as fix_err:
-                        logger.warning(f"[{session_id}] AI fix failed for {step_name}: {fix_err}")
+                        logger.warning(
+                            f"[{session_id}] AI fix failed for {step_name}: {fix_err}"
+                        )
                 else:
                     error_history.append(last_error)
 
@@ -339,7 +356,9 @@ async def _setup_groups_and_points(
                 f"({group_cfg['points']} pts, deps={group_cfg['dependencies']})"
             )
         except Exception as e:
-            logger.warning(f"[{session_id}] Failed to configure group {group_cfg['group']}: {e}")
+            logger.warning(
+                f"[{session_id}] Failed to configure group {group_cfg['group']}: {e}"
+            )
 
     return groups
 
@@ -358,11 +377,10 @@ async def _assign_tests_to_groups(
 
     try:
         from api.user.polygon.get_problem_files import get_problem_tests
+
         tests = await get_problem_tests(problem_id, "tests", user_id, db)
         non_example_indices = sorted(
-            t.get("index", 0)
-            for t in tests
-            if not t.get("useInStatements", False)
+            t.get("index", 0) for t in tests if not t.get("useInStatements", False)
         )
 
         if not non_example_indices:
@@ -388,10 +406,12 @@ async def _assign_tests_to_groups(
                 indices_str = ",".join(str(idx) for idx in slice_indices)
                 try:
                     await set_test_group(
-                        problem_id, "tests",
+                        problem_id,
+                        "tests",
                         group_cfg["group"],
                         indices_str,
-                        user_id, db,
+                        user_id,
+                        db,
                     )
                     logger.info(
                         f"[{session_id}] Assigned tests [{indices_str}] to group {group_cfg['group']}"
@@ -497,19 +517,27 @@ async def run_upload_pipeline(session_id: str):
             # 1. Создаём задачу если ещё нет
             if res.polygon_problem_id:
                 problem_id = res.polygon_problem_id
-                logger.info(f"[{session_id}] Reusing existing Polygon problem {problem_id}")
+                logger.info(
+                    f"[{session_id}] Reusing existing Polygon problem {problem_id}"
+                )
             else:
                 polygon_name = _make_polygon_name(model, statement, session_id)
                 logger.info(f"[{session_id}] Creating Polygon problem '{polygon_name}'")
-                problem_id = await create_problem(name=polygon_name, user_id=user_id, db=db)
+                problem_id = await create_problem(
+                    name=polygon_name, user_id=user_id, db=db
+                )
                 logger.info(f"[{session_id}] Problem created: polygon_id={problem_id}")
-                await _update_session(session_id, {"polygon_problem_id": problem_id}, db)
+                await _update_session(
+                    session_id, {"polygon_problem_id": problem_id}, db
+                )
 
             # 2. Настройки задачи (TL, ML, interactive, input/output files)
             if problem_settings:
                 progress["current_step"] = "Настройка параметров задачи..."
                 await _update_session(session_id, {"progress": progress}, db)
-                await _upload_problem_settings(problem_id, user_id, problem_settings, db)
+                await _upload_problem_settings(
+                    problem_id, user_id, problem_settings, db
+                )
 
             # 3. Условие
             progress["current_step"] = "Загрузка условия..."
@@ -544,15 +572,24 @@ async def run_upload_pipeline(session_id: str):
 
             # 5.5. Группы тестов и баллы
             scoring_groups = await _setup_groups_and_points(
-                session_id, problem_id, user_id,
+                session_id,
+                problem_id,
+                user_id,
                 problem_settings,
                 (statement or {}).get("scoring"),
-                progress, db,
+                progress,
+                db,
             )
 
             # 6. Технические файлы
             upload_errors = await _upload_steps(
-                session_id, problem_id, user_id, statement, model, progress, db,
+                session_id,
+                problem_id,
+                user_id,
+                statement,
+                model,
+                progress,
+                db,
                 solution_meta=solution_meta,
                 include_interactor=interactive,
             )
@@ -568,7 +605,11 @@ async def run_upload_pipeline(session_id: str):
 
             # 8. Сборка пакета
             await _build_and_poll_package(
-                session_id, problem_id, user_id, progress, db,
+                session_id,
+                problem_id,
+                user_id,
+                progress,
+                db,
                 scoring_groups=scoring_groups if scoring_groups else None,
             )
 
@@ -598,11 +639,16 @@ async def retry_upload_after_manual_fix(session_id: str):
         scoring_groups = _parse_scoring_groups((statement or {}).get("scoring"))
 
         if not problem_id:
-            logger.error(f"[{session_id}] retry_upload called but polygon_problem_id is not set")
+            logger.error(
+                f"[{session_id}] retry_upload called but polygon_problem_id is not set"
+            )
             await _update_session(
                 session_id,
                 {
-                    "progress": {"status": "failed", "error": "Polygon problem ID not set"},
+                    "progress": {
+                        "status": "failed",
+                        "error": "Polygon problem ID not set",
+                    },
                     "stage": PipelineStage.FAILED,
                 },
                 db,
@@ -621,7 +667,13 @@ async def retry_upload_after_manual_fix(session_id: str):
 
         try:
             upload_errors = await _upload_steps(
-                session_id, problem_id, user_id, statement, model, progress, db,
+                session_id,
+                problem_id,
+                user_id,
+                statement,
+                model,
+                progress,
+                db,
                 solution_meta=solution_meta,
                 include_interactor=interactive,
             )
@@ -647,7 +699,11 @@ async def retry_upload_after_manual_fix(session_id: str):
             await commit(problem_id, user_id, db)
 
             await _build_and_poll_package(
-                session_id, problem_id, user_id, progress, db,
+                session_id,
+                problem_id,
+                user_id,
+                progress,
+                db,
                 scoring_groups=scoring_groups if scoring_groups else None,
             )
 
@@ -678,7 +734,9 @@ async def _build_and_poll_package(
             else "Запуск сборки пакета..."
         )
         await _update_session(
-            session_id, {"progress": progress, "stage": PipelineStage.BUILDING_PACKAGE}, db
+            session_id,
+            {"progress": progress, "stage": PipelineStage.BUILDING_PACKAGE},
+            db,
         )
 
         await polygon_build_package(problem_id=problem_id, user_id=user_id, db=db)
@@ -714,11 +772,15 @@ async def _build_and_poll_package(
                     )
                     # Recommit after group assignment so it takes effect
                     try:
-                        progress["current_step"] = "Финальный коммит после назначения групп..."
+                        progress["current_step"] = (
+                            "Финальный коммит после назначения групп..."
+                        )
                         await _update_session(session_id, {"progress": progress}, db)
                         await commit(problem_id, user_id, db)
                     except Exception as e:
-                        logger.warning(f"[{session_id}] Re-commit after group assignment failed: {e}")
+                        logger.warning(
+                            f"[{session_id}] Re-commit after group assignment failed: {e}"
+                        )
 
                 progress["status"] = "done"
                 progress["current_step"] = (
@@ -733,30 +795,36 @@ async def _build_and_poll_package(
                     },
                     db,
                 )
-                await _append_chat_log(session_id, [
-                    {
-                        "id": str(_uuid.uuid4()),
-                        "role": "system",
-                        "content": (
-                            f"✅ Задача успешно создана на Polygon. ID задачи: {problem_id}. "
-                            f"Найдите её на polygon.codeforces.com в списке своих задач."
-                        ),
-                        "timestamp": _now_iso(),
-                    },
-                    {
-                        "id": str(_uuid.uuid4()),
-                        "role": "system",
-                        "content": (
-                            "⚠️ Не рекомендуется изменять файлы напрямую на Polygon — "
-                            "такие правки не попадут в контекст ИИ и будут перезаписаны при следующей загрузке."
-                        ),
-                        "timestamp": _now_iso(),
-                    },
-                ], db)
+                await _append_chat_log(
+                    session_id,
+                    [
+                        {
+                            "id": str(_uuid.uuid4()),
+                            "role": "system",
+                            "content": (
+                                f"✅ Задача успешно создана на Polygon. ID задачи: {problem_id}. "
+                                f"Найдите её на polygon.codeforces.com в списке своих задач."
+                            ),
+                            "timestamp": _now_iso(),
+                        },
+                        {
+                            "id": str(_uuid.uuid4()),
+                            "role": "system",
+                            "content": (
+                                "⚠️ Не рекомендуется изменять файлы напрямую на Polygon — "
+                                "такие правки не попадут в контекст ИИ и будут перезаписаны при следующей загрузке."
+                            ),
+                            "timestamp": _now_iso(),
+                        },
+                    ],
+                    db,
+                )
                 return
 
             elif state == "FAILED":
-                error_comment = latest.get("comment", "Неизвестная ошибка сборки пакета")
+                error_comment = latest.get(
+                    "comment", "Неизвестная ошибка сборки пакета"
+                )
                 logger.error(
                     f"[{session_id}] Package build attempt {build_attempt} failed: {error_comment}"
                 )
@@ -770,8 +838,12 @@ async def _build_and_poll_package(
             )
 
         if build_attempt < MAX_BUILD_RETRIES:
-            logger.info(f"[{session_id}] Retrying package build (attempt {build_attempt + 1})...")
-            progress["current_step"] = f"Повторная попытка сборки ({build_attempt + 1}/{MAX_BUILD_RETRIES})..."
+            logger.info(
+                f"[{session_id}] Retrying package build (attempt {build_attempt + 1})..."
+            )
+            progress["current_step"] = (
+                f"Повторная попытка сборки ({build_attempt + 1}/{MAX_BUILD_RETRIES})..."
+            )
             await _update_session(session_id, {"progress": progress}, db)
             try:
                 await commit(problem_id, user_id, db)
@@ -802,7 +874,9 @@ async def _build_and_poll_package(
             )
             return
 
-    logger.error(f"[{session_id}] Package build timed out after {PACKAGE_POLL_TIMEOUT}s")
+    logger.error(
+        f"[{session_id}] Package build timed out after {PACKAGE_POLL_TIMEOUT}s"
+    )
     progress["status"] = "failed"
     progress["current_step"] = "Таймаут сборки пакета"
     await _update_session(

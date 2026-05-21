@@ -18,9 +18,7 @@ logger = logging.getLogger(__name__)
 async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
     old_refresh_hash = hash_token(payload.refresh_token)
 
-    _r = await db.execute(
-        select(RefreshToken).filter_by(refresh_hash=old_refresh_hash)
-    )
+    _r = await db.execute(select(RefreshToken).filter_by(refresh_hash=old_refresh_hash))
     db_token = _r.scalars().first()
 
     if not db_token:
