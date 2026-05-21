@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 480" width="400" height="480">
+  <title>TaskForge</title>
+  <defs>
+    <linearGradient id="tf-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="50%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+    <linearGradient id="tf-soft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#ef4444" stop-opacity="0.12"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon -->
+  <g transform="translate(80, 40)">
+    <rect x="0" y="0" width="240" height="240" rx="56" fill="url(#tf-soft)"/>
+    <rect x="0" y="0" width="240" height="240" rx="56" fill="none" stroke="url(#tf-grad)" stroke-width="2" opacity="0.4"/>
+
+    <!-- Hexagon outline (pointy-top, r=100, center 120,120) -->
+    <path d="M 120 20 L 206.6 70 L 206.6 170 L 120 220 L 33.4 170 L 33.4 70 Z"
+          fill="none" stroke="url(#tf-grad)" stroke-width="7" stroke-linejoin="round" opacity="0.85"/>
+
+    <!-- Upward arrow -->
+    <path d="M 120 65 L 170 125 L 145 125 L 145 195 L 95 195 L 95 125 L 70 125 Z"
+          fill="url(#tf-grad)"/>
+
+    <!-- AI sparkle (4-pointed star, upper-right) -->
+    <path d="M 185 81 L 188.9 91.1 L 199 95 L 188.9 98.9 L 185 109 L 181.1 98.9 L 171 95 L 181.1 91.1 Z"
+          fill="url(#tf-grad)" opacity="0.9"/>
+    <circle cx="185" cy="95" r="4" fill="white" opacity="0.9"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="200" y="370" text-anchor="middle"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-size="48" font-weight="500" letter-spacing="-0.5"
+        fill="url(#tf-grad)">TaskForge</text>
+</svg>
