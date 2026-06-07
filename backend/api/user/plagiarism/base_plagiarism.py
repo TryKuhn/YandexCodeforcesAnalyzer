@@ -283,10 +283,27 @@ async def get_report(
         for cp in cp_result.scalars().all():
             name_map[cp.login] = cp.name
 
+    # Tasks that have at least one banned submission among this report's pairs.
+    _fb_q = await db.execute(
+        select(Submission.task_name).distinct()
+        .join(PairOfBannedSubmissions, PairOfBannedSubmissions.first_submission_id == Submission.id)
+        .filter(PairOfBannedSubmissions.report_id == report_id, Submission.banned == True)
+    )
+    _sb_q = await db.execute(
+        select(Submission.task_name).distinct()
+        .join(PairOfBannedSubmissions, PairOfBannedSubmissions.second_submission_id == Submission.id)
+        .filter(PairOfBannedSubmissions.report_id == report_id, Submission.banned == True)
+    )
+    banned_tasks = list(
+        {t for t in _fb_q.scalars().all() if t} |
+        {t for t in _sb_q.scalars().all() if t}
+    )
+
     return {
         "id": report.id,
         "status": report.status,
         "tasks": available_tasks,
+        "banned_tasks": banned_tasks,
         "pairs": [
             {
                 "id": pair.id,
@@ -382,6 +399,53 @@ async def get_pair(
         "score1": _original_score(pair.first_submission),
         "score2": _original_score(pair.second_submission),
     }
+
+
+@router.post("/reports/{report_id}/ban-task")
+async def ban_report_task(
+    report_id: int,
+    task_name: str | None = Query(None),
+    user_id: int = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ban every submission that appears in the report's pairs (optionally filtered by task)."""
+    _report_q = await db.execute(select(PlagiarismReport).filter_by(id=report_id))
+    report = _report_q.scalars().first()
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    _contest_q = await db.execute(
+        select(Contest).filter_by(id=report.contest_id, user_id=user_id)
+    )
+    if not _contest_q.scalars().first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+
+    query = (
+        select(PairOfBannedSubmissions)
+        .options(
+            joinedload(PairOfBannedSubmissions.first_submission),
+            joinedload(PairOfBannedSubmissions.second_submission),
+        )
+        .filter_by(report_id=report_id)
+    )
+    if task_name:
+        query = query.join(
+            Submission, PairOfBannedSubmissions.first_submission_id == Submission.id
+        ).filter(Submission.task_name == task_name)
+
+    _pairs_q = await db.execute(query)
+    pairs = _pairs_q.scalars().all()
+
+    sub_ids: set[str] = set()
+    for pair in pairs:
+        sub_ids.add(str(pair.first_submission_id))
+        sub_ids.add(str(pair.second_submission_id))
+
+    for sub_id in sub_ids:
+        await _ban_task_result_for_submission(db, sub_id)
+
+    await db.commit()
+    return {"banned_submissions": len(sub_ids)}
 
 
 @router.post("/reports/{report_id}/unban-task")

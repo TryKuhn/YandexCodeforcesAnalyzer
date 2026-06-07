@@ -15,25 +15,25 @@ from api.user.gpt.services.ai_file_helpers import (get_session_files,
                                                    mark_uploaded,
                                                    upsert_ai_file)
 from api.user.gpt.services.ai_service import TaskAIService
-from api.user.polygon.commit.commit_problem import commit
-from api.user.polygon.commit.get_packages import get_packages
-from api.user.polygon.create_problem import create_problem
-from api.user.polygon.files.gen.set_checker import set_checker
-from api.user.polygon.files.gen.set_generator import set_generator
-from api.user.polygon.files.gen.set_interactor import set_interactor
-from api.user.polygon.files.gen.set_script import set_script
-from api.user.polygon.files.gen.set_solution import set_solution
-from api.user.polygon.files.gen.set_validator import set_validator
-from api.user.polygon.files.save_statement import save_statement
-from api.user.polygon.files.save_test import save_test
-from api.user.polygon.settings.enable_groups import enable_groups
-from api.user.polygon.settings.enable_points import enable_points
-from api.user.polygon.settings.save_test_group import save_test_group
-from api.user.polygon.settings.set_tags import set_tags
-from api.user.polygon.settings.set_test_group import set_test_group
-from api.user.polygon.settings.update_info import update_info
+from api.user.polygon.files.checker.post.set_checker import set_checker
+from api.user.polygon.files.generator.post.save_file import set_generator
+from api.user.polygon.files.interactor.post.set_interactor import set_interactor
+from api.user.polygon.files.script.post.save_script import save_script as set_script
+from api.user.polygon.files.solution.post.save_solution import save_solution as set_solution
+from api.user.polygon.files.test.post.save_test import save_test
+from api.user.polygon.files.validator.post.set_validator import set_validator
+from api.user.polygon.problem.get.packages import get_packages
+from api.user.polygon.problem.post.commit import commit_changes as commit
+from api.user.polygon.problem.post.create import create_problem
+from api.user.polygon.problem.settings.enable_groups import enable_groups
+from api.user.polygon.problem.settings.enable_points import enable_points
+from api.user.polygon.problem.settings.save_test_group import save_test_group
+from api.user.polygon.problem.settings.set_tags import set_tags
+from api.user.polygon.problem.settings.set_test_group import set_test_group
+from api.user.polygon.problem.settings.update_info import update_info
+from api.user.polygon.statement.post.statement import save_statement
 from app.database import Session
-from models.ai.ai_session import AISession, PipelineStage
+from models.task.session import TaskSession as AISession, PipelineStage
 
 logger = logging.getLogger(__name__)
 
@@ -376,9 +376,9 @@ async def _assign_tests_to_groups(
         return
 
     try:
-        from api.user.polygon.get_problem_files import get_problem_tests
+        from api.user.polygon.files.test.get.tests import get_tests
 
-        tests = await get_problem_tests(problem_id, "tests", user_id, db)
+        tests = await get_tests(problem_id, "tests", user_id, db)
         non_example_indices = sorted(
             t.get("index", 0) for t in tests if not t.get("useInStatements", False)
         )
@@ -476,11 +476,9 @@ async def _upload_examples(
         try:
             await save_test(
                 problem_id=problem_id,
-                test_set="tests",
+                testset="tests",
                 test_index=i,
                 test_input=ex.get("input", ""),
-                test_group="",
-                test_points=0.0,
                 test_use_in_statements=True,
                 user_id=user_id,
                 db=db,
@@ -601,7 +599,7 @@ async def run_upload_pipeline(session_id: str):
             # 7. Коммит
             progress["current_step"] = "Коммит изменений..."
             await _update_session(session_id, {"progress": progress}, db)
-            await commit(problem_id, user_id, db)
+            await commit(problem_id, user_id, db, minor_changes=True, message="gpt-generated-task")
 
             # 8. Сборка пакета
             await _build_and_poll_package(
@@ -696,7 +694,7 @@ async def retry_upload_after_manual_fix(session_id: str):
 
             progress["current_step"] = "Коммит изменений..."
             await _update_session(session_id, {"progress": progress}, db)
-            await commit(problem_id, user_id, db)
+            await commit(problem_id, user_id, db, minor_changes=True, message="gpt-generated-task")
 
             await _build_and_poll_package(
                 session_id,
@@ -776,7 +774,7 @@ async def _build_and_poll_package(
                             "Финальный коммит после назначения групп..."
                         )
                         await _update_session(session_id, {"progress": progress}, db)
-                        await commit(problem_id, user_id, db)
+                        await commit(problem_id, user_id, db, minor_changes=True, message="gpt-generated-task")
                     except Exception as e:
                         logger.warning(
                             f"[{session_id}] Re-commit after group assignment failed: {e}"
@@ -846,7 +844,7 @@ async def _build_and_poll_package(
             )
             await _update_session(session_id, {"progress": progress}, db)
             try:
-                await commit(problem_id, user_id, db)
+                await commit(problem_id, user_id, db, minor_changes=True, message="gpt-generated-task")
             except Exception as e:
                 logger.warning(f"[{session_id}] Re-commit before retry failed: {e}")
             await asyncio.sleep(5)

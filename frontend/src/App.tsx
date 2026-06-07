@@ -19,6 +19,8 @@ import {ContestSubmissions} from "./pages/ContestSubmissions.tsx";
 import {ContestAnalytics} from "./pages/ContestAnalytics.tsx";
 import {AITasksList} from "./pages/AITasksList.tsx";
 import {AITaskSession} from "./pages/AITaskSession.tsx";
+import {TasksList} from "./pages/tasks/TasksList.tsx";
+import {TaskPage} from "./pages/tasks/TaskPage.tsx";
 import {ImportSubmissions} from "./pages/ImportSubmissions.tsx";
 import {SubmissionSource} from "./pages/SubmissionSource.tsx";
 import {PlagiarismReport} from "./pages/PlagiarismReport.tsx";
@@ -57,6 +59,8 @@ function App() {
                     <Route path="participants" element={<div>Страница участников</div>}/>
                     <Route path="ai-tasks" element={<AITasksList/>}/>
                     <Route path="ai-tasks/:sessionId" element={<AITaskSession/>}/>
+                    <Route path="tasks" element={<TasksList/>}/>
+                    <Route path="tasks/:polygonId" element={<TaskPage/>}/>
                     <Route path="profile" element={<Profile/>}/>
                     <Route path="yandex/callback" element={<YandexCallback/>}/>
                     <Route path="codeforces/callback" element={<CodeforcesCallback/>}/>

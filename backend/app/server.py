@@ -19,6 +19,7 @@ from api.user.codeforces import codeforces_router
 from api.user.gpt import gpt_router
 from api.user.plagiarism import plagiarism_router
 from api.user.polygon.base_polygon import polygon_router
+from api.user.polygon.get_response import PolygonAPIError
 from api.user.yandex import yandex_router
 from app.database import Session, engine
 from app.logging_config import get_logger, setup_logging
@@ -101,6 +102,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         msg = value_errors[0].get("ctx", {}).get("error", "Validation failed")
         return JSONResponse(status_code=400, content={"detail": str(msg)})
     return JSONResponse(status_code=422, content={"detail": "Validation error"})
+
+
+@app.exception_handler(PolygonAPIError)
+async def polygon_api_error_handler(request: Request, exc: PolygonAPIError):
+    status = exc.http_status or 400
+    return JSONResponse(status_code=status, content={"detail": str(exc)})
 
 
 @app.exception_handler(Exception)

@@ -1,7 +1,7 @@
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.ai.ai_generated_file import AIGeneratedFile
+from models.task.generated_file import TaskGeneratedFile as AIGeneratedFile
 
 FILE_NAME_MAP: dict[str, str] = {
     "validator": "validator.cpp",

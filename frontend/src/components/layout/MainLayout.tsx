@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { TaskForgeIcon } from '../TaskForgeLogo';
 import {
     LayoutDashboard, Trophy, Users, User,
-    LogOut, ChevronRight, Sparkles, Menu,
+    LogOut, ChevronRight, Menu, LayoutList,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { ThemeToggle } from '../ThemeToggle';
@@ -55,6 +55,7 @@ export const MainLayout = () => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     const isAISession = /^\/ai-tasks\/.+/.test(location.pathname);
+    const isTaskPage  = /^\/tasks\/.+/.test(location.pathname);
 
     const handleLogout = async () => {
         const { accessToken, refreshToken, tokenType } = useAuthStore.getState();
@@ -73,7 +74,7 @@ export const MainLayout = () => {
         { icon: LayoutDashboard, label: 'Обзор',        path: '/' },
         { icon: Trophy,          label: 'Соревнования', path: '/contests' },
         { icon: Users,           label: 'Участники',    path: '/participants' },
-        { icon: Sparkles,        label: 'AI Создание',  path: '/ai-tasks', isAi: true },
+        { icon: LayoutList,      label: 'Задачи',       path: '/tasks' },
         { icon: User,            label: 'Профиль',      path: '/profile' },
     ];
 
@@ -170,7 +171,7 @@ export const MainLayout = () => {
                     </div>
                 </header>
 
-                {isAISession ? (
+                {(isAISession || isTaskPage) ? (
                     <main className="flex-1 overflow-hidden bg-slate-50 dark:bg-slate-950">
                         <Outlet />
                     </main>

@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db
-from models.ai.ai_generated_file import AIGeneratedFile
-from models.ai.ai_session import AISession, PipelineStage
+from models.task.generated_file import TaskGeneratedFile as AIGeneratedFile
+from models.task.session import TaskSession as AISession, PipelineStage
 
 from api.crypt import get_current_user
 from api.user.gpt import gpt_router
@@ -655,9 +655,21 @@ async def import_from_polygon(
     db: AsyncSession = Depends(get_db),
 ):
     """Создаёт AI-сессию с условием существующей задачи из Polygon (только условие)."""
-    from api.user.polygon.get_problem_statement import get_problem_statement
+    from api.user.polygon.statement.get.setatement import get_statements
 
-    statement = await get_problem_statement(request.polygon_problem_id, user_id, db)
+    raw = await get_statements(request.polygon_problem_id, user_id, db)
+    stmt_data = (
+        raw.get("russian") or raw.get("english") or next(iter(raw.values()), {})
+        if isinstance(raw, dict) else {}
+    )
+    statement = {
+        "name": stmt_data.get("name", ""),
+        "legend": stmt_data.get("legend", ""),
+        "input": stmt_data.get("input", ""),
+        "output": stmt_data.get("output", ""),
+        "notes": stmt_data.get("notes") or "",
+        "tutorial": stmt_data.get("tutorial") or "",
+    }
 
     ts = now_utc()
     session = AISession(
@@ -691,19 +703,32 @@ async def import_from_polygon_full(
     db: AsyncSession = Depends(get_db),
 ):
     """Создаёт AI-сессию, загружая условие, файлы, настройки и теги из Polygon."""
-    from api.user.polygon.get_problem_files import (get_problem_files,
-                                                    get_problem_script,
-                                                    get_problem_solutions,
-                                                    get_problem_tags,
-                                                    get_problem_tests,
-                                                    get_test_input, view_file,
-                                                    view_solution)
-    from api.user.polygon.get_problem_statement import get_problem_statement
-    from api.user.polygon.problem_info import problem_info as get_problem_info
+    from api.user.polygon.files.get.files import get_files as get_problem_files
+    from api.user.polygon.files.get.view_file import view_file
+    from api.user.polygon.files.script.get.script import get_script as get_problem_script
+    from api.user.polygon.files.solution.get.solutions import get_solutions as get_problem_solutions
+    from api.user.polygon.files.solution.get.view_solution import view_solution
+    from api.user.polygon.files.test.get.test_input import get_test_input
+    from api.user.polygon.files.test.get.tests import get_tests as get_problem_tests
+    from api.user.polygon.problem.get.info import get_problem_info
+    from api.user.polygon.problem.get.tags import view_tags as get_problem_tags
+    from api.user.polygon.statement.get.setatement import get_statements
 
     problem_id = request.polygon_problem_id
 
-    statement = await get_problem_statement(problem_id, user_id, db)
+    raw_stmts = await get_statements(problem_id, user_id, db)
+    stmt_data = (
+        raw_stmts.get("russian") or raw_stmts.get("english") or next(iter(raw_stmts.values()), {})
+        if isinstance(raw_stmts, dict) else {}
+    )
+    statement = {
+        "name": stmt_data.get("name", ""),
+        "legend": stmt_data.get("legend", ""),
+        "input": stmt_data.get("input", ""),
+        "output": stmt_data.get("output", ""),
+        "notes": stmt_data.get("notes") or "",
+        "tutorial": stmt_data.get("tutorial") or "",
+    }
 
     # Problem info (TL, ML, interactive, etc.)
     try:
