@@ -32,10 +32,10 @@ async def build_package(
     """
     method_name = "problem.buildPackage"
 
-    user = await db.execute(select(User).filter_by(id=user_id))
-    user = user.scalars().first()
+    result = await db.execute(select(User).filter_by(id=user_id))
+    user = result.scalars().first()
 
-    if not user.polygon_api_key:
+    if not user or not user.polygon_api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Polygon API is not configured",
@@ -51,7 +51,7 @@ async def build_package(
         "verify": "true",
     }
 
-    signature = create_signature(method_name, params, user.polygon_api_secret)
+    signature = create_signature(method_name, params, user.polygon_api_secret or "")
 
     params["apiSig"] = signature
 

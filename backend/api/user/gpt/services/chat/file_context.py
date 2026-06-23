@@ -42,6 +42,8 @@ async def _load_all(db: AsyncSession, session: TaskSession) -> int:
     """Load source files + solutions + script from Polygon into the session
     (upsert overwrites existing rows). Returns the number of files loaded."""
     problem_id = session.polygon_problem_id
+    if problem_id is None:
+        return 0
     tech: dict = {}
     await _load_source_files(db, session.id, problem_id, session.user_id, tech)
     await _load_solutions(db, session, problem_id, session.user_id, tech)

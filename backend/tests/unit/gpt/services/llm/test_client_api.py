@@ -4,7 +4,6 @@ httpx.AsyncClient is replaced with a fake async context manager whose ``post``
 returns a canned response object exposing ``status_code``, ``.json()`` and
 ``.text``. strip_code_fences is covered in test_client.py; not duplicated here.
 """
-import json
 
 import httpx
 import pytest

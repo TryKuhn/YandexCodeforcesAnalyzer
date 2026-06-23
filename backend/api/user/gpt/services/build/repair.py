@@ -12,8 +12,7 @@ import traceback
 from api.user.gpt.services.build import package_loop
 from api.user.gpt.services.build.pipeline import _apply_build_result
 from api.user.gpt.services.build.scoring_groups import (parse_scoring_groups,
-                                                        setup_groups_and_points,
-                                                        subtasks_to_groups)
+                                                        setup_groups_and_points)
 from api.user.gpt.services.chat.file_context import ensure_files_loaded
 from api.user.gpt.services.generation import subtask_plan_gen
 from api.user.gpt.services.sessions import update_session

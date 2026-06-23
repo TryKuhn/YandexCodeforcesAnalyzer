@@ -2,8 +2,7 @@
 import pytest
 
 from api.user.gpt.services.sync import file_sync as fs
-from api.user.gpt.services.ai_file_helpers import (get_all_file_contents,
-                                                   get_session_files)
+from api.user.gpt.services.ai_file_helpers import get_session_files
 
 
 def _record(bucket, name):
@@ -203,7 +202,6 @@ async def test_sync_files_resilient_to_one_failure(db, task_session, monkeypatch
     )
     # validator failed and was skipped, checker still synced
     assert synced == ["checker"]
-    contents = await get_all_file_contents(db, task_session.id)
     # both rows upserted (upsert happens before push), but only checker uploaded
     files = await get_session_files(db, task_session.id)
     assert files["validator"].uploaded is False

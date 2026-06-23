@@ -8,13 +8,14 @@ import importlib
 
 import pytest
 
+from api.pydantic_schemas import UserLogin, UserRegister
+from models import RefreshToken, Role, User
+
 # NOTE: ``api.user.auth.__init__`` binds the *function* ``login`` as an
 # attribute of the package, which shadows the submodule when accessed via
 # attribute lookup. Use importlib to reliably grab the real module object so
 # monkeypatching ``get_location`` targets the module-under-test namespace.
 login_mod = importlib.import_module("api.user.auth.login")
-from api.pydantic_schemas import UserLogin, UserRegister
-from models import RefreshToken, Role, User
 
 
 class _FakeClient:

@@ -1,6 +1,6 @@
 """Routes for reading and updating a problem's general info (limits, files, interactivity)."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

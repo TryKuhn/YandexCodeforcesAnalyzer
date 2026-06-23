@@ -47,7 +47,6 @@ async def test_run_build_with_repair_happy_path(task_session, db, monkeypatch):
     task_session.examples = []
     await db.commit()
 
-    steps = []
     apply_args = {}
 
     async def fake_ensure(db_, session):

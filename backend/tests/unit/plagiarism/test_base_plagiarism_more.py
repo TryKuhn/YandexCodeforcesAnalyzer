@@ -17,7 +17,6 @@ from fastapi import HTTPException
 
 import api.user.plagiarism.base_plagiarism as plag
 from api.user.plagiarism.base_plagiarism import (
-    PlagiarismCheckBody,
     ban_pair_submission,
     ban_report_task,
     get_contest_reports,
@@ -25,7 +24,6 @@ from api.user.plagiarism.base_plagiarism import (
     get_pair,
     get_report,
     process_plagiarism_report,
-    run_plagiarism_check,
     unban_pair_submission,
     unban_report_task,
 )
@@ -117,8 +115,8 @@ async def test_get_contest_reports_lists_with_pairs_count(db, user):
     await _seed_submission(db, user, sub_id="s1", tr_id=1, cp_id=1, part_id=1)
     await _seed_submission(db, user, sub_id="s2", tr_id=2, cp_id=2, part_id=2,
                            login="bob", name="Bob")
-    r1 = await _seed_report(db, report_id=1)
-    r2 = await _seed_report(db, report_id=2, status="processing")
+    await _seed_report(db, report_id=1)
+    await _seed_report(db, report_id=2, status="processing")
     await _seed_pair(db, pair_id=1, report_id=1, first="s1", second="s2", pct=80.0)
     await db.commit()
 

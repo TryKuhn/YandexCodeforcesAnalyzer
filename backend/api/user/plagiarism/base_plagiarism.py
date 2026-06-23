@@ -313,12 +313,12 @@ async def get_report(
     _fb_q = await db.execute(
         select(Submission.task_name).distinct()
         .join(PairOfBannedSubmissions, PairOfBannedSubmissions.first_submission_id == Submission.id)
-        .filter(PairOfBannedSubmissions.report_id == report_id, Submission.banned == True)
+        .filter(PairOfBannedSubmissions.report_id == report_id, Submission.banned.is_(True))
     )
     _sb_q = await db.execute(
         select(Submission.task_name).distinct()
         .join(PairOfBannedSubmissions, PairOfBannedSubmissions.second_submission_id == Submission.id)
-        .filter(PairOfBannedSubmissions.report_id == report_id, Submission.banned == True)
+        .filter(PairOfBannedSubmissions.report_id == report_id, Submission.banned.is_(True))
     )
     banned_tasks = list(
         {t for t in _fb_q.scalars().all() if t} |

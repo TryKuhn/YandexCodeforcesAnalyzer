@@ -11,7 +11,6 @@ problem if it does not exist yet). Package rebuild is NOT triggered here.
 """
 import json
 import logging
-from typing import Dict
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -55,7 +54,7 @@ async def execute(
     """Dispatch a modify intent to the statement/file/task branch by scope."""
     if resolved.scope == "statement":
         return await _modify_statement(db, session, message)
-    if resolved.scope == "file":
+    if resolved.scope == "file" and resolved.file_key:
         return await _modify_file(db, session, message, resolved.file_key)
     return await _modify_task(db, session, message)
 
@@ -133,7 +132,7 @@ async def _modify_file(db: AsyncSession, session: TaskSession, message: str,
     if current.strip():
         new_code = await file_gen.refine(
             file_type=file_key, current_code=current, feedback=message,
-            statement=session.statement, model=session.model, interactive=interactive,
+            statement=session.statement or {}, model=session.model, interactive=interactive,
             problem_type=session.problem_type,
         )
         verb = "обновлён"

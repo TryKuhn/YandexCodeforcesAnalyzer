@@ -30,7 +30,7 @@ async def refine_file(
         file_type=request.file_key,
         current_code=file_obj.content,
         feedback=request.feedback,
-        statement=session.statement,
+        statement=session.statement or {},
         model=session.model,
         interactive=is_interactive(session),
     )

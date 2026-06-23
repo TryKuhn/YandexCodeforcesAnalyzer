@@ -9,14 +9,14 @@ REGISTRY order matters: it is also the generation/upload order within a pack.
 Note that the output-only ``scorer`` is registered under the ``checker``
 category because Polygon sets the scorer as the problem's checker.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from api.user.gpt.services.ai_file_helpers import FILE_NAME_MAP
 from models.task.session import ProblemType
 
-R = ProblemType.REGULAR
-I = ProblemType.INTERACTIVE
-O = ProblemType.OUTPUT_ONLY
+REG = ProblemType.REGULAR
+INT = ProblemType.INTERACTIVE
+OUT = ProblemType.OUTPUT_ONLY
 
 
 @dataclass(frozen=True)
@@ -37,19 +37,19 @@ class FileSpec:
 
 
 REGISTRY: list[FileSpec] = [
-    FileSpec("validator", "validator", {R, I, O}),
-    FileSpec("generator", "generator", {R, I, O}),
-    FileSpec("script", "script", {R, I, O}),
-    FileSpec("checker", "checker", {R, I}),
-    FileSpec("interactor", "interactor", {I}),
-    FileSpec("scorer", "checker", {O}),
-    FileSpec("jury_answer", "solution", {O}, tag="MA"),
-    FileSpec("solution_cpp", "solution", {R, I}, tag="MA"),
-    FileSpec("solution_py", "solution", {R, I}, tag="OK"),
-    FileSpec("wa_sol", "solution", {R, I}, tag="WA"),
-    FileSpec("tl_sol", "solution", {R, I}, tag="TL"),
-    FileSpec("re_sol", "solution", {R, I}, tag="RE"),
-    FileSpec("ml_sol", "solution", {R, I}, tag="ML"),
+    FileSpec("validator", "validator", {REG, INT, OUT}),
+    FileSpec("generator", "generator", {REG, INT, OUT}),
+    FileSpec("script", "script", {REG, INT, OUT}),
+    FileSpec("checker", "checker", {REG, INT}),
+    FileSpec("interactor", "interactor", {INT}),
+    FileSpec("scorer", "checker", {OUT}),
+    FileSpec("jury_answer", "solution", {OUT}, tag="MA"),
+    FileSpec("solution_cpp", "solution", {REG, INT}, tag="MA"),
+    FileSpec("solution_py", "solution", {REG, INT}, tag="OK"),
+    FileSpec("wa_sol", "solution", {REG, INT}, tag="WA"),
+    FileSpec("tl_sol", "solution", {REG, INT}, tag="TL"),
+    FileSpec("re_sol", "solution", {REG, INT}, tag="RE"),
+    FileSpec("ml_sol", "solution", {REG, INT}, tag="ML"),
 ]
 
 _BY_TYPE: dict[str, FileSpec] = {s.file_type: s for s in REGISTRY}

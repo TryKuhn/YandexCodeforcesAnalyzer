@@ -6,7 +6,6 @@ their points. Moved verbatim (behaviour-preserving) out of upload_orchestrator.
 """
 import logging
 import re
-from typing import Dict
 
 from sqlalchemy.ext.asyncio import AsyncSession
 

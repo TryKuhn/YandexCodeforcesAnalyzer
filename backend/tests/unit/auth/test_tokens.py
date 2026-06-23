@@ -1,5 +1,5 @@
 """Unit tests for api/user/auth/tokens.py — access/refresh token issuance."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from api.crypt import verify_token
 from api.user.auth.tokens import get_tokens

@@ -42,12 +42,12 @@ class PolygonProblem(Base):
     latest_package: Mapped[int] = mapped_column(nullable=True)
     modified: Mapped[bool] = mapped_column(default=False)
 
-    input_file: Mapped[str] = mapped_column(String(255), nullable=True)
-    output_file: Mapped[str] = mapped_column(String(255), nullable=True)
+    input_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    output_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
     interactive: Mapped[bool] = mapped_column(default=False)
     well_formed: Mapped[bool] = mapped_column(default=False)
-    time_limit: Mapped[int] = mapped_column(nullable=True)
-    memory_limit: Mapped[int] = mapped_column(nullable=True)
+    time_limit: Mapped[int | None] = mapped_column(nullable=True)
+    memory_limit: Mapped[int | None] = mapped_column(nullable=True)
 
     list_fetched_at: Mapped[datetime] = mapped_column(nullable=True)
     info_fetched_at: Mapped[datetime] = mapped_column(nullable=True)

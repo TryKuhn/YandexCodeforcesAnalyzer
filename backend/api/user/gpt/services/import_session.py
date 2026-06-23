@@ -44,7 +44,7 @@ _TAG_TO_TYPE = {
 
 def _extract_statement(raw) -> dict:
     """Pick the russian (else english, else first) statement and normalise its fields."""
-    data = (
+    data: dict = (
         raw.get("russian") or raw.get("english") or next(iter(raw.values()), {})
         if isinstance(raw, dict) else {}
     )
@@ -116,7 +116,7 @@ async def import_full(db: AsyncSession, user_id: int, problem_id: int,
         info = {}
 
     is_interactive = bool(info.get("interactive", False))
-    problem_settings = {
+    problem_settings: dict = {
         "input_file": info.get("inputFile", "stdin") or "stdin",
         "output_file": info.get("outputFile", "stdout") or "stdout",
         "interactive": is_interactive,

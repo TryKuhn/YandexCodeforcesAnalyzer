@@ -544,7 +544,7 @@ def extract_page_items(page: fitz.Page) -> list:
     finder = page.find_tables()
     table_rects = [fitz.Rect(t.bbox) for t in finder.tables]
 
-    items = []
+    items: list[tuple] = []
     for t, rect in zip(finder.tables, table_rects):
         kind = classify_table(t)
         if kind == "examples":

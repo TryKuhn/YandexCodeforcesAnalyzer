@@ -10,6 +10,7 @@ Modify pushes changes to Polygon immediately; a build runs in the background.
 """
 import asyncio
 import logging
+from typing import Literal
 
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -116,7 +117,9 @@ async def unified_chat(
     technical_data = None
     synced = False
     is_error = False
-    resp_action = "answer" if action == "answer" else "modify"
+    resp_action: Literal["answer", "modify"] = (
+        "answer" if action == "answer" else "modify"
+    )
 
     try:
         if action == "answer":

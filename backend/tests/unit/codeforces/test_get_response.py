@@ -27,7 +27,7 @@ class _FakeClient:
 
     def __init__(self, response: _FakeResponse):
         self._response = response
-        self.calls = []
+        self.calls: list = []
 
     def post(self, url, data):
         self.calls.append((url, data))

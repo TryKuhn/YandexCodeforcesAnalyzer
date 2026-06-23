@@ -1,5 +1,4 @@
 """Statement generation / refinement."""
-import json
 from typing import Dict, List
 
 from fastapi import HTTPException

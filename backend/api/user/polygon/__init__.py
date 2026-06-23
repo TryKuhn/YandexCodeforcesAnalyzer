@@ -3,9 +3,6 @@ from api.user.polygon.auth.logout import unlink_polygon
 from api.user.polygon.base_polygon import polygon_router
 from api.user.polygon.problems import problems_router
 from api.user.polygon.archive import archive_router
-
-polygon_router.include_router(problems_router)
-polygon_router.include_router(archive_router)
 from api.user.polygon.client import get_user, polygon_call, polygon_call_binary
 from api.user.polygon.create_signature import create_signature
 from api.user.polygon.get_response import PolygonAPIError, get_response
@@ -43,6 +40,9 @@ from api.user.polygon.files.get.files import get_files
 from api.user.polygon.files.get.view_file import view_file
 from api.user.polygon.files.solution.get.view_solution import view_solution
 from api.user.polygon.files.test.get.tests import get_tests
+
+polygon_router.include_router(problems_router)
+polygon_router.include_router(archive_router)
 
 __all__ = [
     # Auth & router

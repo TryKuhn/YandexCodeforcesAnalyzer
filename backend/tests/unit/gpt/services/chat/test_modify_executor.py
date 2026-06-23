@@ -359,7 +359,7 @@ async def test_generate_pack_with_subtasks_adds_partials(db, task_session, monke
 
     captured = _stub_sync_files(monkeypatch)
 
-    out = await me._generate_pack(db, task_session)
+    await me._generate_pack(db, task_session)
     # subtasks forwarded to generate_pack
     assert pack_subtasks["v"] == [{"i": 1}]
     # partial solution merged into pack and synced

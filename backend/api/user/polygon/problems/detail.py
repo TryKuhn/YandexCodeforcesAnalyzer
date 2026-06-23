@@ -47,7 +47,7 @@ async def route_get_problem(
         await db.execute(
             select(func.count()).where(PolygonTestGroup.problem_id == problem.id)
         )
-    ).scalar()
+    ).scalar() or 0
 
     return {
         "id": problem.id,

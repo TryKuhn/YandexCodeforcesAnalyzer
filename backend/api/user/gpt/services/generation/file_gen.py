@@ -17,11 +17,9 @@ from api.user.gpt.services.prompts import (checker, generator, interactor,
                                            solution, validator)
 from api.user.gpt.services.prompts.solution import build_system_prompt as _sol_prompt
 from api.user.gpt.services.prompts import problem_type as problem_type_guide
+from api.user.gpt.services.prompts.base import ASCII_CODE_RULE
 
 _PACK_CONCURRENCY = 4
-
-
-from api.user.gpt.services.prompts.base import ASCII_CODE_RULE
 
 
 def _system_prompt(file_type: str, interactive: bool = False, problem_type=None) -> str:

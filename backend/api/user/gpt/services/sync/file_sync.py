@@ -14,7 +14,7 @@ one-line registry change, not an edit here.
 import logging
 import re
 import time
-from typing import Awaitable, Callable, Dict, Iterable
+from typing import Iterable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 

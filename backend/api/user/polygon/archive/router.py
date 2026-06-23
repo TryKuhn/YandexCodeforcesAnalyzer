@@ -75,8 +75,8 @@ async def route_import_archive(
         run_import(
             job,
             archive_bytes,
-            api_key=user.polygon_api_key,
-            api_secret=user.polygon_api_secret,
+            api_key=user.polygon_api_key or "",
+            api_secret=user.polygon_api_secret or "",
             prefix=resolved_prefix,
             generate_ai=generate_ai,
             ai_model=ai_model,

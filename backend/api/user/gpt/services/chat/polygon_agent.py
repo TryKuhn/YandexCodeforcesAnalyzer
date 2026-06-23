@@ -162,6 +162,8 @@ async def run_agent(db: AsyncSession, session: TaskSession, user_id: int,
                     message: str, model: str, attachments: list[dict]) -> str:
     """Run the tool loop, persist history + chat_log, return the final answer."""
     polygon_id = session.polygon_problem_id
+    if polygon_id is None:
+        return "Задача ещё не создана в Polygon, нечего анализировать."
     history: list[dict] = list(session.history or [])
 
     user_content = message

@@ -4,6 +4,7 @@ Provides a function-scoped in-memory SQLite session (every model table is
 registered by importing ``app.server``) plus factories for the AI task entities
 the service layer operates on, and a helper to stub the shared LLM client.
 """
+from collections.abc import AsyncGenerator
 from datetime import datetime
 
 import pytest
@@ -16,7 +17,7 @@ import app.server  # noqa: F401  — registers every model on Base.metadata
 
 
 @pytest_asyncio.fixture
-async def db() -> AsyncSession:
+async def db() -> AsyncGenerator[AsyncSession, None]:
     """Yield a clean in-memory SQLite session with all tables created."""
     from models.base import Base
 

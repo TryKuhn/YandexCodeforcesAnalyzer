@@ -46,13 +46,13 @@ async def polygon_call(method_name: str, params: dict, user: User):
         else:
             text_params[k] = str(v)
 
-    full_params = {
-        "apiKey": user.polygon_api_key,
+    full_params: dict[str, str] = {
+        "apiKey": user.polygon_api_key or "",
         "time": str(int(time())),
         **text_params,
     }
 
-    sig = create_signature(method_name, full_params, user.polygon_api_secret)
+    sig = create_signature(method_name, full_params, user.polygon_api_secret or "")
     full_params["apiSig"] = sig
 
     request_data: dict = {**full_params, **binary_params}
@@ -64,12 +64,12 @@ async def polygon_call(method_name: str, params: dict, user: User):
 
 async def polygon_call_binary(method_name: str, params: dict, user: User) -> bytes:
     """Like polygon_call but returns raw bytes (for package zip downloads)."""
-    full_params = {
-        "apiKey": user.polygon_api_key,
+    full_params: dict[str, str] = {
+        "apiKey": user.polygon_api_key or "",
         "time": str(int(time())),
         **{k: str(v) for k, v in params.items()},
     }
-    sig = create_signature(method_name, full_params, user.polygon_api_secret)
+    sig = create_signature(method_name, full_params, user.polygon_api_secret or "")
     full_params["apiSig"] = sig
 
     url = URL(settings.POLYGON_HOST) / method_name

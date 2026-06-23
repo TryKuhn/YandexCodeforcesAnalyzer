@@ -482,7 +482,7 @@ async def test_visual_analytics_task_without_valid_subs(db, user):
     p = await _make_participant(db, user)
     cp = await _make_contest_participant(db, c, p, login="alice", score=10.0)
     t_a = await _make_task(db, c, "tA", "A", "Apples")
-    t_b = await _make_task(db, c, "tB", "B", "Bananas")
+    await _make_task(db, c, "tB", "B", "Bananas")
     r = await _make_result(db, cp, t_a)
 
     await _make_submission(

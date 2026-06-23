@@ -89,6 +89,8 @@ class PolygonImportClient:
         Returns the ``result`` field on success, ``{}`` for non-JSON HTTP 200,
         and raises ``PolygonError`` otherwise.
         """
+        if self.session is None:
+            raise PolygonError(f"{method}: HTTP-сессия не инициализирована")
         text = {
             k: decode_text(v) if isinstance(v, bytes) else str(v)
             for k, v in params.items()

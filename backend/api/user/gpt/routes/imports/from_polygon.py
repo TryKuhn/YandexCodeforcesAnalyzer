@@ -14,7 +14,7 @@ from models.task.session import PipelineStage, ProblemType, TaskSession
 
 def _extract_statement(raw) -> dict:
     """Pick the russian/english (or first) statement and normalize its fields."""
-    data = (
+    data: dict = (
         raw.get("russian") or raw.get("english") or next(iter(raw.values()), {})
         if isinstance(raw, dict) else {}
     )
