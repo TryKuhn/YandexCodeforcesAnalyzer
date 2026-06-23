@@ -146,8 +146,20 @@ jobs:
       - name: Run migrations
         run: alembic upgrade head
 
-      - name: Run tests
-        run: pytest --ignore=tests/api_tests/yandex -q --tb=short
+      # Restore testmon's coverage DB so pytest runs only tests whose covered
+      # code changed. Primary key always misses (run_id) so each run saves a
+      # fresh DB; restore-keys pulls the most recent prior DB (incl. main's,
+      # which a PR inherits). Cold cache => testmon safely runs the whole suite.
+      - name: Restore testmon data
+        uses: actions/cache@v4
+        with:
+          path: ./backend/.testmondata
+          key: testmon-${{ runner.os }}-py3.11-${{ github.run_id }}
+          restore-keys: |
+            testmon-${{ runner.os }}-py3.11-
+
+      - name: Run tests (only those affected by the change)
+        run: pytest --ignore=tests/api_tests/yandex --testmon -q --tb=short
 
   frontend-build:
     needs: changes

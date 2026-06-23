@@ -31,6 +31,7 @@ uliweb-alembic>=0.6.9
 pytest>=9.0.2
 pytest-asyncio
 pytest-cov>=7.0.0
+pytest-testmon>=2.1.0
 aiosqlite>=0.20.0
 pyjwt
 
