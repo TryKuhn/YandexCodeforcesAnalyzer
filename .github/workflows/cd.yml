@@ -108,8 +108,8 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes \
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-            GHCR_USERNAME='${{ secrets.GHCR_USERNAME }}' \
-            GHCR_TOKEN='${{ secrets.GHCR_TOKEN }}' \
+            GHCR_USERNAME='${{ github.actor }}' \
+            GHCR_TOKEN='${{ secrets.GITHUB_TOKEN }}' \
             IMAGE_TAG='${{ env.IMAGE_TAG }}' \
             DEPLOY_BACKEND='${{ env.DEPLOY_BACKEND }}' \
             DEPLOY_FRONTEND='${{ env.DEPLOY_FRONTEND }}' \

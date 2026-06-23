@@ -111,7 +111,7 @@ export const TasksList = () => {
         setError(null);
         setPolygonNotConfigured(false);
         try {
-            const res = await api.get<PaginatedResponse>('/polygon/problems', {
+            const res = await api.get<PaginatedResponse>('/polygon/problems/', {
                 params: { page: p, per_page: pp, search: q, refresh: doRefresh },
             });
             const data = res.data;
@@ -175,7 +175,7 @@ export const TasksList = () => {
         setCreating(true);
         setCreateError(null);
         try {
-            const res = await api.post('/polygon/problems', { name: newName.trim() });
+            const res = await api.post('/polygon/problems/', { name: newName.trim() });
             navigate(`/tasks/${res.data.polygon_id}`);
         } catch (e: any) {
             setCreateError(e?.response?.data?.detail || 'Ошибка создания задачи');
