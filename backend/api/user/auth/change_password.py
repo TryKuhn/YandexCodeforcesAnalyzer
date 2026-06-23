@@ -1,3 +1,4 @@
+"""Change-password endpoint that also revokes all of the user's sessions."""
 import logging
 
 from fastapi import Depends, HTTPException, status
@@ -19,6 +20,12 @@ async def change_password(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    """Change the current user's password after verifying the old one.
+
+    Confirms the old password and the new/confirm match, stores the new hash,
+    and invalidates all of the user's refresh tokens so every active session
+    must log in again.
+    """
     _r = await db.execute(select(User).filter_by(id=user_id))
     user = _r.scalars().first()
 
@@ -40,7 +47,6 @@ async def change_password(
 
     user.password = hash_password(payload.new_password)
 
-    # Invalidate all active sessions for security
     await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
     await db.commit()
 

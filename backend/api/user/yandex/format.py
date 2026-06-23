@@ -1,3 +1,4 @@
+"""Convert Yandex.Contest API payloads into ORM contest/task/submission objects."""
 import logging
 from base64 import b64encode
 from datetime import datetime, timedelta
@@ -14,6 +15,14 @@ logger = logging.getLogger(__name__)
 def format_yandex_standings(
     contest_info: dict, standings: Dict[str, dict], user_id: int, unofficial: bool
 ) -> Tuple[Contest, List[Task], List[Tuple[ContestParticipant, List[TaskResult]]]]:
+    """Convert a Yandex contest + standings payload into ORM objects.
+
+    Returns the Contest, its Tasks, and per-participant rows of TaskResults.
+    The contest type is ICPC for the ``acm`` standings plugin, otherwise IOI.
+    An empty problem score means accepted-only scoring (1.0 if ACCEPTED).
+    Repeated rows per participant are merged, keeping the best score and
+    earliest success time; verdicts are derived as OK/PARTIAL/WA/NULL.
+    """
     contest = contest_info
     problems: list[Any] = standings.get("titles", [])  # type: ignore[assignment]
     rows: list[Any] = standings.get("rows", [])  # type: ignore[assignment]
@@ -145,6 +154,12 @@ def format_yandex_standings(
 async def format_yandex_submissions(
     submissions: Tuple[Any], user_id: int, contest_id: int, db: AsyncSession
 ) -> List[Submission]:
+    """Convert Yandex submission entries into Submission objects.
+
+    Each submission is matched to an existing Task, ContestParticipant, and
+    TaskResult in the database; entries without a known match are skipped.
+    Source is stored base64-encoded.
+    """
     formatted_submissions = []
     for submission in submissions:
         logger.debug(f"Processing submission id={submission.get('id')}")

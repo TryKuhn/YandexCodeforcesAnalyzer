@@ -1,7 +1,9 @@
+"""Decorator that logs entry, exit, and exceptions of an async function."""
 import logging
 
 
 def log_middleware(func):
+    """Wrap an async function to log its start, end, and any raised exception."""
     async def wrapper(*args, **kwargs):
         logging.info(f"Started {func.__name__} c args={args} kwargs={kwargs}")
 

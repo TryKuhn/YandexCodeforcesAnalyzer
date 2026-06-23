@@ -1,3 +1,4 @@
+"""User registration and login endpoints issuing JWT token pairs."""
 import logging
 import uuid
 
@@ -21,6 +22,12 @@ logger = logging.getLogger(__name__)
 async def register(
     payload: UserRegister, request: Request, db: AsyncSession = Depends(get_db)
 ):
+    """Register a new user, then log them in and return auth tokens.
+
+    Rejects duplicate logins, assigns the default "Admin" role (500 if it is
+    missing), stores the hashed password, and delegates to ``login`` to issue
+    tokens.
+    """
     _r = await db.execute(select(User).filter_by(login=payload.login))
     user = _r.scalars().first()
 
@@ -67,6 +74,12 @@ async def register(
 async def login(
     payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)
 ) -> Token:
+    """Authenticate a user and issue access/refresh tokens.
+
+    Verifies the password, creates a new session (refresh token stored hashed
+    alongside the client's resolved location and user-agent), and returns the
+    token pair.
+    """
     client_ip = request.client.host if request.client else "unknown"
 
     _r = await db.execute(select(User).filter_by(login=payload.login))

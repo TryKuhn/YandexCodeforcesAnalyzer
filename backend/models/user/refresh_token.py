@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 
 class RefreshToken(Base):
+    """A persisted refresh-token / session record for a user."""
     __tablename__ = "refresh_tokens"
 
     id: Mapped[uuid.UUID] = mapped_column(

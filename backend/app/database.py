@@ -1,3 +1,4 @@
+"""Async SQLAlchemy engine, session factory, and request-scoped DB dependency."""
 from sqlalchemy.ext.asyncio import (AsyncSession, async_sessionmaker,
                                     create_async_engine)
 
@@ -8,5 +9,6 @@ Session = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=
 
 
 async def get_db():
+    """Yield an async database session, closing it when the request finishes."""
     async with Session() as session:
         yield session

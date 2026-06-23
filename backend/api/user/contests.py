@@ -1,3 +1,5 @@
+"""Contest read endpoints: listing, overview, standings table, submissions,
+visual analytics, and deletion."""
 from base64 import b64decode
 from math import ceil
 
@@ -17,6 +19,7 @@ contest_router = APIRouter()
 async def get_user_contests(
     user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
+    """List the current user's contests, newest first."""
     contests = await db.execute(
         select(Contest).filter_by(user_id=user_id).order_by(Contest.id.desc())
     )
@@ -45,6 +48,7 @@ async def get_contest_overview(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return a contest's metadata plus task/participant/submission counts."""
     contest = await db.execute(select(Contest).filter_by(id=contest_id))
     contest = contest.scalars().first()
 
@@ -64,9 +68,9 @@ async def get_contest_overview(
     return {
         "id": contest.id,
         "name": contest.name,
-        "external_id": contest.external_id,  # Тот самый ID для Codeforces
+        "external_id": contest.external_id,
         "start_time": contest.start_time,
-        "type": contest.platform,  # 'cf' или 'yandex'
+        "type": contest.platform,
         "stats": {
             "tasks": tasks_count.scalar(),
             "participants": participants_count.scalar(),
@@ -84,6 +88,11 @@ async def get_contest_table(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return a paginated, searchable standings table for a contest.
+
+    Participants are ranked by their effective total score (banned task
+    results excluded), and each row carries per-task score/verdict/tries/time.
+    """
     contest = await db.execute(select(Contest).filter_by(id=contest_id))
     contest = contest.scalars().first()
 
@@ -134,6 +143,7 @@ async def get_contest_table(
         ] = result
 
     def effective_total(p: ContestParticipant) -> float:
+        """Sum a participant's non-banned task-result scores."""
         return sum(
             (r.score or 0)
             for r in results_by_participant.get(p.id, {}).values()
@@ -203,6 +213,11 @@ async def get_contest_submissions_headers(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return a paginated, searchable list of submission headers for a contest.
+
+    Ordered newest-first; search matches participant login, task name, or
+    submission id. Source code is omitted.
+    """
     submissions_query = select(Submission).filter_by(contest_id=contest_id)
     count_query = select(func.count(Submission.id)).filter_by(contest_id=contest_id)
 
@@ -258,6 +273,7 @@ async def get_submission_source(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return a single submission's full metadata and decoded source code."""
     submission = await db.execute(select(Submission).filter_by(id=submission_id))
     submission = submission.scalars().first()
 
@@ -282,6 +298,12 @@ async def get_visual_analytics(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Compute charting data for a contest's analytics dashboard.
+
+    Aggregates submissions-over-time (15-minute buckets), per-task verdict
+    stats and solve rates, score distribution, language breakdown, and the
+    first solver of each task.
+    """
     contest_q = await db.execute(
         select(Contest).filter_by(id=contest_id, user_id=user_id)
     )
@@ -302,6 +324,7 @@ async def get_visual_analytics(
     task_names = [t.short_name for t in tasks]
 
     def to_short(sub_task_name: str) -> str | None:
+        """Map a submission's task name (short or full) to its short name."""
         if sub_task_name in short_names_set:
             return sub_task_name
         return full_to_short.get(sub_task_name)
@@ -457,6 +480,7 @@ async def delete_contest(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Delete one of the current user's contests."""
     result = await db.execute(select(Contest).filter_by(id=contest_id, user_id=user_id))
     contest = result.scalars().first()
 

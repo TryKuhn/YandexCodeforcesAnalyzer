@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 
 class Contest(Base):
+    """A competitive-programming contest imported for a user."""
     __tablename__ = "contests"
 
     id: Mapped[int] = mapped_column(primary_key=True)

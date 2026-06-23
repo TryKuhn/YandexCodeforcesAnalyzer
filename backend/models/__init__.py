@@ -1,5 +1,4 @@
-from models.ai.ai_generated_file import AIGeneratedFile
-from models.ai.ai_session import AISession
+"""Aggregates all ORM models and re-exports them for convenient importing."""
 from models.base import Base
 from models.contest.contest import Contest
 from models.contest.contest_participant import ContestParticipant
@@ -10,14 +9,26 @@ from models.plagiarism.pair_of_banned_submissions import \
     PairOfBannedSubmissions
 from models.plagiarism.plagiarism_report import PlagiarismReport
 from models.submissions.submission import Submission
+from models.task.checker import PolygonChecker
+from models.task.generated_file import TaskGeneratedFile
+from models.task.generator import PolygonGenerator
+from models.task.problem import PolygonProblem
+from models.task.script import PolygonScript
+from models.task.session import PipelineStage, TaskSession
+from models.task.solution import PolygonSolution
+from models.task.statement import PolygonStatement
+from models.task.test import PolygonTest
+from models.task.test_group import PolygonTestGroup
+from models.task.validator import PolygonValidator
 from models.user.refresh_token import RefreshToken
 from models.user.role import Role
 from models.user.user import User
 
 __all__ = [
     "Base",
-    "AISession",
-    "AIGeneratedFile",
+    "TaskSession",
+    "TaskGeneratedFile",
+    "PipelineStage",
     "Contest",
     "ContestParticipant",
     "Task",
@@ -29,4 +40,13 @@ __all__ = [
     "RefreshToken",
     "Role",
     "User",
+    "PolygonProblem",
+    "PolygonStatement",
+    "PolygonChecker",
+    "PolygonValidator",
+    "PolygonSolution",
+    "PolygonTest",
+    "PolygonTestGroup",
+    "PolygonGenerator",
+    "PolygonScript",
 ]

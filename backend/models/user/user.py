@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 
 class User(Base):
+    """An application user with platform credentials and owned resources."""
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)

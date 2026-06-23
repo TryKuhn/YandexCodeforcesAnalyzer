@@ -1,7 +1,14 @@
+"""Persistence helpers for per-session generated technical files.
+
+Maps logical ``file_type`` keys to Polygon filenames and provides upsert/query
+helpers over the TaskGeneratedFile table. The output-only ``scorer`` is set on
+Polygon as the checker, and ``jury_answer`` is the reference solver (tag MA)
+that produces the ``*.a`` answer files.
+"""
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.ai.ai_generated_file import AIGeneratedFile
+from models.task.generated_file import TaskGeneratedFile as AIGeneratedFile
 
 FILE_NAME_MAP: dict[str, str] = {
     "validator": "validator.cpp",
@@ -15,6 +22,8 @@ FILE_NAME_MAP: dict[str, str] = {
     "re_sol": "re.cpp",
     "ml_sol": "ml.cpp",
     "script": "script.txt",
+    "scorer": "scorer.cpp",
+    "jury_answer": "jury.cpp",
 }
 
 
@@ -41,6 +50,7 @@ async def upsert_ai_file(
     uploaded: bool = False,
     solution_meta: dict | None = None,
 ) -> None:
+    """Insert or update the session's stored file for ``file_type``."""
     filename = resolve_filename(file_type, solution_meta)
     result = await db.execute(
         select(AIGeneratedFile).where(
@@ -72,6 +82,7 @@ async def upsert_all_ai_files(
     *,
     uploaded: bool = False,
 ) -> None:
+    """Upsert every non-empty {file_type: content} entry in ``tech_data``."""
     for file_type, content in tech_data.items():
         if content:
             await upsert_ai_file(db, session_id, file_type, content, uploaded=uploaded)
@@ -82,6 +93,7 @@ async def mark_uploaded(
     session_id: str,
     file_type: str,
 ) -> None:
+    """Mark the session's file of ``file_type`` as uploaded to Polygon."""
     await db.execute(
         update(AIGeneratedFile)
         .where(

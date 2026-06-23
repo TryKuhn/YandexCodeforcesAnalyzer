@@ -1,3 +1,4 @@
+"""Yandex OAuth endpoints: authorization URL and token-exchange callback."""
 import logging
 
 import httpx
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 @yandex_router.get("/auth_url")
 async def get_yandex_auth_url():
+    """Return the Yandex OAuth authorization URL for the configured client."""
     url = (
         f"https://oauth.yandex.ru/authorize?response_type=code"
         f"&client_id={settings.YANDEX_CLIENT_ID}"
@@ -27,6 +29,8 @@ async def get_yandex_auth_url():
 
 
 class YandexCallbackRequest(BaseModel):
+    """Request body carrying the OAuth authorization ``code``."""
+
     code: str
 
 
@@ -36,6 +40,11 @@ async def yandex_callback(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Exchange a Yandex OAuth code for an access token and store it.
+
+    Posts the authorization code to Yandex's token endpoint and persists the
+    returned access token on the current user.
+    """
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(

@@ -1,3 +1,4 @@
+"""Codeforces integration: account linking, standings, and submissions."""
 from api.user.codeforces.auth.login import link_codeforces
 from api.user.codeforces.auth.logout import unlink_codeforces
 from api.user.codeforces.base_codeforces import router as codeforces_router

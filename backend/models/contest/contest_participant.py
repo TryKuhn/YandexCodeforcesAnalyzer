@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 
 class ContestParticipant(Base):
+    """A participant's entry and score within a specific contest."""
     __tablename__ = "contest_participants"
 
     id: Mapped[int] = mapped_column(primary_key=True)

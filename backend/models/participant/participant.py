@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 
 class Participant(Base):
+    """A competitor tracked across a user's contests."""
     __tablename__ = "participants"
 
     id: Mapped[int] = mapped_column(primary_key=True)

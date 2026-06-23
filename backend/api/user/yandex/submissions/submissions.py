@@ -1,3 +1,4 @@
+"""Endpoint for fetching and persisting Yandex contest submissions."""
 import asyncio
 
 import httpx
@@ -21,6 +22,12 @@ async def yandex_submissions(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Fetch a Yandex contest's submissions and merge them into the DB.
+
+    Requires a linked Yandex token; a 401 from Yandex auto-unlinks it. Fetches
+    the paged submission list, retrieves each submission's source concurrently,
+    formats the results against the stored contest, and upserts them.
+    """
     method_name = f"contests/{submissions.contest_id}/submissions"
 
     user = await db.execute(select(User).filter_by(id=user_id))
@@ -81,6 +88,7 @@ async def yandex_submissions(
         submissions_info = submissions_info.json()["submissions"]
 
         async def fetch_source(submission_info):
+            """Attach each submission's source code, defaulting to empty on failure."""
             source_url = (
                 f'{settings.YANDEX_HOST}/{method_name}/{submission_info["id"]}/source'
             )

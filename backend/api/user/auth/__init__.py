@@ -1,3 +1,4 @@
+"""User authentication: registration, login/logout, sessions, and tokens."""
 from api.user.auth.base_auth import router as auth_router
 from api.user.auth.change_password import change_password
 from api.user.auth.location import get_location

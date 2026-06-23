@@ -1,3 +1,4 @@
+"""Yandex.Contest integration: OAuth linking, standings, and submissions."""
 from api.user.yandex.auth.login import get_yandex_auth_url, yandex_callback
 from api.user.yandex.auth.logout import logout_yandex
 from api.user.yandex.base_yandex import router as yandex_router

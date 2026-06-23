@@ -1,3 +1,4 @@
+"""Idempotent upsert of formatted standings into the database."""
 from fastapi import HTTPException, status
 from sqlalchemy import select
 
@@ -5,6 +6,13 @@ from models import Contest, ContestParticipant, Participant, TaskResult
 
 
 async def merge_table(contest, tasks, rows, user_id, db):
+    """Upsert a formatted contest, its participants, and task results.
+
+    Reuses existing rows by external/contest/participant/task identifiers so
+    re-fetching standings updates in place rather than duplicating. Global
+    Participant records are created on first sight. Rolls back and raises HTTP
+    500 on any error.
+    """
     try:
         contest_copy = await db.execute(
             select(Contest).filter_by(external_id=contest.external_id, user_id=user_id)

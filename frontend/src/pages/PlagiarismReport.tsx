@@ -8,6 +8,7 @@ import {
     CheckCircle2,
     Search,
     ShieldCheck,
+    ShieldBan,
 } from 'lucide-react';
 import { api } from '../api/instance';
 import { Pagination } from '../components/Pagination';
@@ -61,10 +62,11 @@ export const PlagiarismReport = () => {
     });
 
     const [availableTasks, setAvailableTasks] = useState<string[]>([]);
+    const [bannedTasks, setBannedTasks] = useState<Set<string>>(new Set());
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [isUnbanning, setIsUnbanning] = useState(false);
+    const [isBanToggling, setIsBanToggling] = useState(false);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -91,6 +93,7 @@ export const PlagiarismReport = () => {
             setStatus(res.data.status);
             setPairs(res.data.pairs || []);
             setAvailableTasks(res.data.tasks || []);
+            setBannedTasks(new Set(res.data.banned_tasks || []));
             setPagination(res.data.pagination || {
                 page: 1,
                 per_page: 10,
@@ -127,20 +130,28 @@ export const PlagiarismReport = () => {
         setPage(1);
     };
 
-    const handleUnbanTask = async () => {
-        const label = selectedTask ? `задачу «${selectedTask}»` : 'всё';
-        if (!confirm(`Разбанить ${label}? Это вернёт очки всем участникам.`)) return;
+    const isCurrentTaskBanned = selectedTask
+        ? bannedTasks.has(selectedTask)
+        : availableTasks.length > 0 && availableTasks.every(t => bannedTasks.has(t));
 
-        setIsUnbanning(true);
+    const handleBanToggle = async () => {
+        const banning = !isCurrentTaskBanned;
+        const verb = banning ? 'Забанить' : 'Разбанить';
+        const label = selectedTask ? `задачу «${selectedTask}»` : 'всё';
+        const hint = banning ? 'Это обнулит очки участников.' : 'Это вернёт очки участникам.';
+        if (!confirm(`${verb} ${label}? ${hint}`)) return;
+
+        setIsBanToggling(true);
         try {
-            await api.post(`/analytics/reports/${reportId}/unban-task`, null, {
+            const endpoint = banning ? 'ban-task' : 'unban-task';
+            await api.post(`/analytics/reports/${reportId}/${endpoint}`, null, {
                 params: selectedTask ? { task_name: selectedTask } : {},
             });
             fetchReport();
         } catch {
-            alert('Ошибка при разбане');
+            alert('Ошибка при изменении статуса бана');
         } finally {
-            setIsUnbanning(false);
+            setIsBanToggling(false);
         }
     };
 
@@ -174,21 +185,45 @@ export const PlagiarismReport = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap justify-between items-center gap-3">
                 <h1 className="text-2xl font-bold dark:text-white flex items-center gap-3">
                     <AlertTriangle className="text-amber-500" />
                     Подозрительные пары
                     {isLoading && <Loader2 size={18} className="animate-spin text-blue-500" />}
                 </h1>
 
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
-                    <CheckCircle2 size={14} className="text-green-500" />
-                    АНАЛИЗ ЗАВЕРШЕН
+                <div className="flex items-center gap-2">
+                    {availableTasks.length > 0 && (
+                        <button
+                            onClick={handleBanToggle}
+                            disabled={isBanToggling}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all disabled:opacity-50 ${
+                                isCurrentTaskBanned
+                                    ? 'bg-white dark:bg-slate-900 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-900/20'
+                                    : 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20'
+                            }`}
+                        >
+                            {isBanToggling
+                                ? <Loader2 size={13} className="animate-spin" />
+                                : isCurrentTaskBanned
+                                    ? <ShieldCheck size={13} />
+                                    : <ShieldBan size={13} />
+                            }
+                            {isCurrentTaskBanned
+                                ? (selectedTask ? `Разбанить «${selectedTask}»` : 'Разбанить всё')
+                                : (selectedTask ? `Забанить «${selectedTask}»` : 'Забанить всё')
+                            }
+                        </button>
+                    )}
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
+                        <CheckCircle2 size={14} className="text-green-500" />
+                        АНАЛИЗ ЗАВЕРШЕН
+                    </div>
                 </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
+            <div className="flex flex-col gap-3">
+                <div className="relative">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input
                         type="text"
@@ -199,8 +234,6 @@ export const PlagiarismReport = () => {
                     />
                 </div>
 
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3">
                 {availableTasks.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                         <button
@@ -226,18 +259,6 @@ export const PlagiarismReport = () => {
                                 {task}
                             </button>
                         ))}
-
-                        <button
-                            onClick={handleUnbanTask}
-                            disabled={isUnbanning}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-bold transition-all bg-white dark:bg-slate-900 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50"
-                        >
-                            {isUnbanning
-                                ? <Loader2 size={13} className="animate-spin" />
-                                : <ShieldCheck size={13} />
-                            }
-                            {selectedTask ? `Разбанить «${selectedTask}»` : 'Разбанить всё'}
-                        </button>
                     </div>
                 )}
             </div>

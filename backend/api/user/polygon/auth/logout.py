@@ -1,3 +1,4 @@
+"""Unlink a user's stored Polygon API credentials."""
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,7 @@ from models import User
 async def unlink_polygon(
     user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
+    """Clear the user's stored Polygon API key and secret."""
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 

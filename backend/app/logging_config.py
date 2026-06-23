@@ -1,3 +1,4 @@
+"""Logging setup: colored console output and rotating app/error log files."""
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
@@ -20,6 +21,12 @@ ERROR_LOG_FILE = LOG_DIR / "error.log"
 def setup_logging(
     level: int = logging.INFO, log_to_file: bool = True, log_to_console: bool = True
 ) -> None:
+    """Configure the root logger with optional colored console and rotating file handlers.
+
+    Routes uvicorn startup/error logs through the root handlers and disables
+    uvicorn's built-in access log, since HTTP requests are logged by
+    LoggingMiddleware instead.
+    """
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
 
@@ -61,17 +68,16 @@ def setup_logging(
         error_handler.setFormatter(plain_formatter)
         root_logger.addHandler(error_handler)
 
-    # Route uvicorn startup/error messages through our root handlers
     for name in ("uvicorn", "uvicorn.error"):
         uv_logger = logging.getLogger(name)
         uv_logger.handlers = []
         uv_logger.propagate = True
 
-    # Disable uvicorn's built-in access log — HTTP requests are logged by LoggingMiddleware
     uv_access = logging.getLogger("uvicorn.access")
     uv_access.handlers = []
     uv_access.propagate = False
 
 
 def get_logger(name: str) -> logging.Logger:
+    """Return a named logger that inherits the configured root handlers."""
     return logging.getLogger(name)
