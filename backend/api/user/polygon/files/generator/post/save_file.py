@@ -1,3 +1,5 @@
+"""Upload a generator source file for a Polygon problem."""
+
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession

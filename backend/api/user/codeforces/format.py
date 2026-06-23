@@ -1,3 +1,4 @@
+"""Convert Codeforces API payloads into ORM contest/task/submission objects."""
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 
@@ -10,6 +11,13 @@ from models import Contest, ContestParticipant, Submission, Task, TaskResult
 def format_codeforces_standings(
     standings: Dict[str, dict], user_id: int, unofficial: bool
 ) -> Tuple[Contest, List[Task], List[ContestParticipant]]:
+    """Convert a Codeforces ``contest.standings`` payload into ORM objects.
+
+    Returns the Contest, its Tasks, and per-participant rows of TaskResults.
+    Multiple rows for the same handle/team are merged, keeping the best score
+    and earliest success time per task; verdicts are derived (OK/PARTIAL/WA/
+    NULL) from score and attempt counts.
+    """
     contest = standings["contest"]
     problems = standings["problems"]
     rows = standings["rows"]
@@ -131,6 +139,12 @@ def format_codeforces_standings(
 async def format_codeforces_submissions(
     submissions: List[dict], user_id: int, contest_id: int, db: AsyncSession
 ) -> List[Submission]:
+    """Convert Codeforces ``contest.status`` entries into Submission objects.
+
+    Each submission is matched to an existing Task, ContestParticipant, and
+    TaskResult in the database; submissions without a known participant or
+    task result are skipped.
+    """
     formatted_submissions = []
     for submission in submissions:
         problem = submission["problem"]

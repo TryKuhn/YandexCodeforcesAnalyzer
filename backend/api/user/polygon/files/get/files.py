@@ -1,3 +1,5 @@
+"""List the resource, source and aux files of a Polygon problem."""
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user.polygon.client import get_user, polygon_call

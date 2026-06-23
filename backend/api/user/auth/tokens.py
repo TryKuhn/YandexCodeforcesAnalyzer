@@ -1,3 +1,4 @@
+"""Minting of access/refresh JWT pairs for user sessions."""
 from datetime import datetime, timedelta, timezone
 from typing import Tuple
 from uuid import uuid4
@@ -7,6 +8,12 @@ from settings import settings
 
 
 def get_tokens(user_id: int, session_id: str) -> Tuple[str, str, datetime, datetime]:
+    """Mint an access/refresh JWT pair for a user session.
+
+    Both tokens share the same user id, session id, and a unique ``jti``.
+    Returns ``(access_token, refresh_token, created_at, expires_in)`` with the
+    timestamps as naive UTC for storage.
+    """
     created_at = datetime.now(timezone.utc)
     expires_in = created_at + timedelta(minutes=settings.EXPIRES_REFRESH)
 

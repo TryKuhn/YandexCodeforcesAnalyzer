@@ -1,3 +1,4 @@
+"""Refresh-token rotation endpoint."""
 import logging
 
 from fastapi import Depends, HTTPException, status
@@ -16,6 +17,11 @@ logger = logging.getLogger(__name__)
 
 @auth_router.post("/refresh", response_model=Token)
 async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    """Rotate a valid refresh token, issuing a fresh access/refresh pair.
+
+    The existing session row is updated in place with the new token hash and
+    timestamps; an unknown refresh token is rejected with 401.
+    """
     old_refresh_hash = hash_token(payload.refresh_token)
 
     _r = await db.execute(select(RefreshToken).filter_by(refresh_hash=old_refresh_hash))

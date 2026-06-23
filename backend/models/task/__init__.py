@@ -1,3 +1,4 @@
+"""Re-exports Polygon problem models and AI task-session models."""
 from models.task.checker import PolygonChecker
 from models.task.generated_file import TaskGeneratedFile
 from models.task.generator import PolygonGenerator

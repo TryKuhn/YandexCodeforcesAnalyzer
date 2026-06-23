@@ -1,3 +1,4 @@
+"""FastAPI application entry point: middleware, exception handlers, and routers."""
 import asyncio
 import logging
 import uuid
@@ -39,6 +40,7 @@ SESSION_INACTIVITY_DAYS = 30
 
 
 async def cleanup_expired_tokens():
+    """Periodically delete expired or long-inactive refresh tokens (daily loop)."""
     while True:
         try:
             async with Session() as db:
@@ -58,6 +60,7 @@ async def cleanup_expired_tokens():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Run startup tasks (token cleanup, DB readiness, seed roles) and clean shutdown."""
     logger.info("=" * 60)
     logger.info("App startup complete.")
     logger.info("=" * 60)
@@ -96,6 +99,7 @@ app = FastAPI(lifespan=lifespan)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Return 400 with the first value_error message, else a generic 422."""
     errors = exc.errors()
     value_errors = [e for e in errors if e.get("type") == "value_error"]
     if value_errors:
@@ -106,12 +110,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(PolygonAPIError)
 async def polygon_api_error_handler(request: Request, exc: PolygonAPIError):
+    """Map a PolygonAPIError to a JSON response using its HTTP status (default 400)."""
     status = exc.http_status or 400
     return JSONResponse(status_code=status, content={"detail": str(exc)})
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    """Log any unhandled exception and return a generic 500 response."""
     logger.exception(f"Unhandled error on {request.method} {request.url.path}: {exc}")
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
@@ -129,13 +135,17 @@ app.add_middleware(
 
 @app.middleware("http")
 async def update_last_seen_middleware(request: Request, call_next):
+    """Refresh the session's last_seen timestamp from a valid bearer token.
+
+    Invalid or expired tokens are ignored here; the auth endpoints handle them.
+    """
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
         try:
             payload = verify_token(token)
         except HTTPException:
-            pass  # expired / invalid token is expected — auth endpoints handle it
+            pass
         except Exception:
             logger.warning(
                 "Unexpected error verifying bearer token in middleware", exc_info=True

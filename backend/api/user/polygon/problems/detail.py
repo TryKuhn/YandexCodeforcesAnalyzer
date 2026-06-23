@@ -1,3 +1,5 @@
+"""Routes for fetching a single cached problem and syncing it from Polygon."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +21,7 @@ async def route_get_problem(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return the cached problem; populate the cache from Polygon on miss, 404 if still absent."""
     result = await db.execute(
         select(PolygonProblem).where(
             PolygonProblem.user_id == user_id,
@@ -28,7 +31,6 @@ async def route_get_problem(
     problem = result.scalars().first()
 
     if problem is None:
-        # Try to populate cache from Polygon before giving up
         await list_problems(user_id=user_id, db=db)
         result = await db.execute(
             select(PolygonProblem).where(
@@ -77,6 +79,7 @@ async def route_sync_problem(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Refresh cached info and statements for the problem from Polygon."""
     await get_problem_info(problem_id=polygon_id, user_id=user_id, db=db)
     await get_statements(problem_id=polygon_id, user_id=user_id, db=db)
     return {"ok": True}

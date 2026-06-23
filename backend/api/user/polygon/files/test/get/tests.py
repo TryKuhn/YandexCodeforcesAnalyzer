@@ -1,3 +1,5 @@
+"""List the tests of a Polygon problem testset."""
+
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +14,7 @@ async def get_tests(
     db: AsyncSession,
     no_inputs: Optional[bool] = None,
 ):
+    """Return the testset's tests (problem.tests); set no_inputs to omit inputs."""
     user = await get_user(user_id, db)
     params = {"problemId": str(problem_id), "testset": testset}
     if no_inputs:

@@ -11,7 +11,10 @@ async def set_test_group(
     user_id: int,
     db: AsyncSession,
 ):
-    """test_indices: comma-separated list of test indices."""
+    """Assign tests to a group via problem.setTestGroup.
+
+    ``test_indices`` is a comma-separated list of test indices.
+    """
     user = await get_user(user_id, db)
     return await polygon_call(
         "problem.setTestGroup",

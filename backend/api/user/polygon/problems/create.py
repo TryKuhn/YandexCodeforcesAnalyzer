@@ -1,3 +1,5 @@
+"""Route for creating a new Polygon problem and its initial task session."""
+
 import uuid
 from datetime import datetime, timezone
 
@@ -19,13 +21,14 @@ async def route_create_problem(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Create a problem on Polygon and seed a TaskSession with default settings."""
     polygon_id = await create_problem(name=body.name, user_id=user_id, db=db)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     session = TaskSession(
         id=str(uuid.uuid4()),
         user_id=user_id,
-        model="anthropic/claude-opus-4.7",
+        model="anthropic/claude-opus-4.8",
         system_prompt="",
         history=[],
         stage=PipelineStage.STATEMENT,

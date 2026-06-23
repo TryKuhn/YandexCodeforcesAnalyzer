@@ -1,3 +1,4 @@
+"""Save a problem statement for a given language via the Polygon API."""
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,11 @@ async def save_statement(
     tutorial: Optional[str] = None,
     encoding: str = "utf-8",
 ):
+    """Save a problem statement for one language via Polygon's
+    ``problem.saveStatement``.
+
+    Optional fields (``scoring``, ``interaction``, ``notes``, ``tutorial``)
+    are only sent to Polygon when truthy."""
     user = await get_user(user_id, db)
     params: dict = {
         "problemId": str(problem_id),

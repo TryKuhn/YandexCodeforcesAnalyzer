@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 
 class PlagiarismReport(Base):
+    """A plagiarism-detection run over a contest's submissions."""
     __tablename__ = "plagiarism_reports"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -21,7 +22,7 @@ class PlagiarismReport(Base):
 
     status: Mapped[str] = mapped_column(
         default="processing"
-    )  # "processing", "completed", "failed"
+    )
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     threshold: Mapped[float] = mapped_column()

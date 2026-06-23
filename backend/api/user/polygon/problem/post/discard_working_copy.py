@@ -4,6 +4,7 @@ from api.user.polygon.client import get_user, polygon_call
 
 
 async def discard_working_copy(problem_id: int, user_id: int, db: AsyncSession):
+    """Discard the problem's working copy via problem.discardWorkingCopy."""
     user = await get_user(user_id, db)
     return await polygon_call(
         "problem.discardWorkingCopy", {"problemId": str(problem_id)}, user

@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends
+"""Routes for problem source files: resources, solutions, checker, validator, and scripts."""
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.crypt import get_current_user
+from api.user.polygon.get_response import PolygonAPIError
 from api.pydantic_schemas.user.polygon_task import (
     SaveFileRequest,
     SaveSolutionRequest,
@@ -32,6 +35,7 @@ async def route_get_files(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return the problem's files merged with its solutions list."""
     files_data = await get_files(problem_id=polygon_id, user_id=user_id, db=db)
     solutions = await get_solutions(problem_id=polygon_id, user_id=user_id, db=db)
     result = {}
@@ -49,9 +53,13 @@ async def route_view_file(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    content = await view_file(
-        problem_id=polygon_id, file_type=type, name=name, user_id=user_id, db=db
-    )
+    """Return a file's content; map a Polygon API error to a 404."""
+    try:
+        content = await view_file(
+            problem_id=polygon_id, file_type=type, name=name, user_id=user_id, db=db
+        )
+    except PolygonAPIError as e:
+        raise HTTPException(status_code=404, detail=f"Polygon: {e.message}")
     return {"content": content}
 
 
@@ -62,6 +70,7 @@ async def route_save_file(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Save a problem file (source/resource) on Polygon."""
     await save_file(
         problem_id=polygon_id,
         file_type=body.type,
@@ -82,7 +91,11 @@ async def route_view_solution(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    content = await view_solution(problem_id=polygon_id, name=name, user_id=user_id, db=db)
+    """Return a solution's content; map a Polygon API error to a 404."""
+    try:
+        content = await view_solution(problem_id=polygon_id, name=name, user_id=user_id, db=db)
+    except PolygonAPIError as e:
+        raise HTTPException(status_code=404, detail=f"Polygon: {e.message}")
     return {"content": content}
 
 
@@ -93,6 +106,7 @@ async def route_save_solution(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Save a solution with its tag on Polygon."""
     await save_solution(
         problem_id=polygon_id,
         name=body.name,
@@ -111,6 +125,7 @@ async def route_get_checker(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return the problem's current checker."""
     checker = await get_checker(problem_id=polygon_id, user_id=user_id, db=db)
     return {"checker": checker}
 
@@ -122,6 +137,7 @@ async def route_set_checker(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Upload and set the problem's checker on Polygon."""
     await set_checker(
         problem_id=polygon_id,
         name=body.name,
@@ -138,6 +154,7 @@ async def route_get_validator(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return the problem's current validator."""
     validator = await get_validator(problem_id=polygon_id, user_id=user_id, db=db)
     return {"validator": validator}
 
@@ -149,6 +166,7 @@ async def route_set_validator(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Upload and set the problem's validator on Polygon."""
     await set_validator(
         problem_id=polygon_id,
         name=body.name,
@@ -166,6 +184,7 @@ async def route_get_script(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return the generator script for a testset."""
     content = await get_script(problem_id=polygon_id, testset=testset, user_id=user_id, db=db)
     return {"content": content}
 
@@ -178,6 +197,7 @@ async def route_save_script(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Save the generator script for a testset on Polygon."""
     await save_script(
         problem_id=polygon_id, testset=testset, source=body.source, user_id=user_id, db=db
     )

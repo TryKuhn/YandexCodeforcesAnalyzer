@@ -2,8 +2,10 @@ from api.user.polygon.auth.login import link_polygon
 from api.user.polygon.auth.logout import unlink_polygon
 from api.user.polygon.base_polygon import polygon_router
 from api.user.polygon.problems import problems_router
+from api.user.polygon.archive import archive_router
 
 polygon_router.include_router(problems_router)
+polygon_router.include_router(archive_router)
 from api.user.polygon.client import get_user, polygon_call, polygon_call_binary
 from api.user.polygon.create_signature import create_signature
 from api.user.polygon.get_response import PolygonAPIError, get_response

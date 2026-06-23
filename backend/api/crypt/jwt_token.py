@@ -1,3 +1,4 @@
+"""JWT creation/verification and FastAPI bearer-auth dependencies."""
 from datetime import datetime, timedelta
 
 import jwt
@@ -8,6 +9,7 @@ from settings import settings
 
 
 def create_token(data: dict, created_at: datetime, expires_delta: int):
+    """Encode a signed JWT from ``data`` with an ``exp`` ``expires_delta`` minutes after ``created_at``."""
     to_encode = data.copy()
 
     expire = created_at + timedelta(minutes=expires_delta)
@@ -21,6 +23,10 @@ def create_token(data: dict, created_at: datetime, expires_delta: int):
 
 
 def verify_token(token: str):
+    """Decode and validate a JWT, returning its payload.
+
+    Raises HTTP 401 for expired or otherwise invalid tokens.
+    """
     try:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
@@ -40,6 +46,10 @@ security = HTTPBearer()
 
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """FastAPI dependency that returns the ``user_id`` from a bearer token.
+
+    Raises HTTP 401 when the token is invalid or lacks a user id.
+    """
     token = credentials.credentials
 
     payload = verify_token(token)
@@ -55,6 +65,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
 
 def get_current_payload(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """FastAPI dependency that returns the full decoded JWT payload."""
     token = credentials.credentials
 
     payload = verify_token(token)

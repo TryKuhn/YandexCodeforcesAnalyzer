@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 
 class PlagiarismReport(Base):
+    """Legacy plagiarism-report model (dead; superseded by models.plagiarism)."""
     __tablename__ = "plagiarism_reports"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

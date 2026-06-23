@@ -1,7 +1,7 @@
 // pages/tasks/TasksList.tsx
 
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     LayoutList, Plus, Loader2, Puzzle, ChevronRight,
     Clock, X, AlertCircle, Search,
@@ -71,12 +71,22 @@ function readPerPage(): number {
 
 export const TasksList = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const initialPage = Math.max(1, Number(searchParams.get('page')) || 1);
 
     const [problems, setProblems] = useState<PolygonProblem[]>([]);
     const [total, setTotal] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
-    const [page, setPage] = useState(1);
+    const [page, setPage] = useState(initialPage);
     const [perPage, setPerPage] = useState<number>(readPerPage);
+
+    const syncPageToUrl = (p: number) => {
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            if (p <= 1) next.delete('page'); else next.set('page', String(p));
+            return next;
+        }, { replace: true });
+    };
 
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -120,9 +130,9 @@ export const TasksList = () => {
         }
     };
 
-    // Initial load with Polygon refresh
+    // Initial load with Polygon refresh, honouring the page from the URL
     useEffect(() => {
-        fetchProblems(1, perPage, '', true);
+        fetchProblems(initialPage, perPage, '', true);
     }, []);
 
     // Re-fetch when debounced search changes (after initial mount)
@@ -130,6 +140,7 @@ export const TasksList = () => {
     useEffect(() => {
         if (isFirstRender.current) { isFirstRender.current = false; return; }
         setPage(1);
+        syncPageToUrl(1);
         fetchProblems(1, perPage, debouncedSearch, false);
     }, [debouncedSearch]);
 
@@ -147,6 +158,7 @@ export const TasksList = () => {
 
     const handlePageChange = (newPage: number) => {
         setPage(newPage);
+        syncPageToUrl(newPage);
         fetchProblems(newPage, perPage, debouncedSearch, false);
     };
 
@@ -154,6 +166,7 @@ export const TasksList = () => {
         setPerPage(newPerPage);
         try { localStorage.setItem(PER_PAGE_KEY, String(newPerPage)); } catch { /* ignore */ }
         setPage(1);
+        syncPageToUrl(1);
         fetchProblems(1, newPerPage, debouncedSearch, false);
     };
 

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 
 class TaskResult(Base):
+    """A participant's result (score, verdict, attempts) on one contest task."""
     __tablename__ = "task_results"
 
     id: Mapped[int] = mapped_column(primary_key=True)

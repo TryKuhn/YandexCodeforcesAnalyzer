@@ -18,6 +18,10 @@ from settings import settings
 
 
 async def get_user(user_id: int, db: AsyncSession) -> User:
+    """Fetch the user and ensure Polygon credentials are configured.
+
+    Raises 401 if the user is missing or has no Polygon API key.
+    """
     result = await db.execute(select(User).filter_by(id=user_id))
     user = result.scalars().first()
     if not user or not user.polygon_api_key:
@@ -34,7 +38,6 @@ async def polygon_call(method_name: str, params: dict, user: User):
     Values in `params` should be strings or bytes. Bytes values (file content)
     are excluded from signature computation but included in the POST body.
     """
-    # Separate text params (for signature) from binary params (file content)
     text_params: dict[str, str] = {}
     binary_params: dict[str, bytes] = {}
     for k, v in params.items():
@@ -52,7 +55,6 @@ async def polygon_call(method_name: str, params: dict, user: User):
     sig = create_signature(method_name, full_params, user.polygon_api_secret)
     full_params["apiSig"] = sig
 
-    # Merge binary params back for the actual request
     request_data: dict = {**full_params, **binary_params}
 
     url = URL(settings.POLYGON_HOST) / method_name

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 
 class Submission(Base):
+    """A participant's submission to a contest task, with source and verdict."""
     __tablename__ = "submissions"
 
     id: Mapped[str] = mapped_column(primary_key=True)

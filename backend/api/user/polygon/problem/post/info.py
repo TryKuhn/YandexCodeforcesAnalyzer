@@ -16,6 +16,11 @@ async def update_info(
     time_limit: Optional[int] = None,
     memory_limit: Optional[int] = None,
 ):
+    """Update problem metadata via problem.updateInfo, sending only provided fields.
+
+    Booleans are serialized as ``"true"``/``"false"`` and numeric limits as strings,
+    matching Polygon's expected parameter format.
+    """
     user = await get_user(user_id, db)
     params: dict = {"problemId": str(problem_id)}
 

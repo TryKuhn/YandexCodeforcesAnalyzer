@@ -10,6 +10,10 @@ if TYPE_CHECKING:
 
 
 class PolygonStatement(Base):
+    """A per-language statement (legend, input, output, etc.) for a problem.
+
+    lang holds a Polygon language name such as "russian" or "english".
+    """
     __tablename__ = "polygon_statements"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -17,7 +21,7 @@ class PolygonStatement(Base):
         ForeignKey("polygon_problems.id", ondelete="CASCADE"), index=True
     )
 
-    lang: Mapped[str] = mapped_column(String(16))  # "russian", "english", etc.
+    lang: Mapped[str] = mapped_column(String(16))
     encoding: Mapped[str] = mapped_column(String(32), default="utf-8")
 
     name: Mapped[str] = mapped_column(String(512), nullable=True)

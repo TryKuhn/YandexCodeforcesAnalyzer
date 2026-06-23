@@ -12,6 +12,10 @@ async def download_package(
     db: AsyncSession,
     package_type: Optional[str] = None,
 ) -> bytes:
+    """Download a built package via problem.package and return its raw bytes.
+
+    Optionally narrows to a specific package ``type`` when provided.
+    """
     user = await get_user(user_id, db)
     params = {"problemId": str(problem_id), "packageId": str(package_id)}
     if package_type:

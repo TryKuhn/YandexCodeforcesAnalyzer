@@ -1,3 +1,5 @@
+"""Routes for toggling problem scoring settings (test groups and points)."""
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,11 +13,15 @@ router = APIRouter()
 
 
 class EnableGroupsBody(BaseModel):
+    """Request body to enable/disable test groups for a testset."""
+
     enable: bool
     testset: str = "tests"
 
 
 class EnablePointsBody(BaseModel):
+    """Request body to enable/disable per-test points."""
+
     enable: bool
 
 
@@ -26,6 +32,7 @@ async def route_enable_groups(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Enable or disable test groups for the given testset on Polygon."""
     await enable_groups(
         problem_id=polygon_id,
         test_set=body.testset,
@@ -43,6 +50,7 @@ async def route_enable_points(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Enable or disable per-test points for the problem on Polygon."""
     await enable_points(
         problem_id=polygon_id,
         enable=body.enable,

@@ -1,3 +1,5 @@
+"""Save a validator test for a Polygon problem."""
+
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +18,7 @@ async def save_validator_test(
     test_group: Optional[str] = None,
     testset: Optional[str] = None,
 ):
+    """Add or edit a validator test by index (problem.saveValidatorTest)."""
     user = await get_user(user_id, db)
     params: dict = {
         "problemId": str(problem_id),

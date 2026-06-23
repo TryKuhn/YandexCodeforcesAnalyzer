@@ -21,35 +21,34 @@ class PolygonProblem(Base):
     """Cached representation of a Polygon problem for the current user.
 
     Fetched lazily: the list is populated from problems.list and individual
-    problem details are loaded on demand when the user opens a problem.
+    problem details (input/output files, limits, etc.) are loaded on demand
+    when the user opens a problem. time_limit is in milliseconds and
+    memory_limit is in MB.
     """
     __tablename__ = "polygon_problems"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
-    # Polygon-side identifiers
     polygon_id: Mapped[int] = mapped_column(index=True)
     owner: Mapped[str] = mapped_column(String(255))
     name: Mapped[str] = mapped_column(String(512))
 
     deleted: Mapped[bool] = mapped_column(default=False)
     favourite: Mapped[bool] = mapped_column(default=False)
-    access_type: Mapped[str] = mapped_column(String(16), nullable=True)  # READ/WRITE/OWNER
+    access_type: Mapped[str] = mapped_column(String(16), nullable=True)
     revision: Mapped[int] = mapped_column(nullable=True)
     working_copy_revision: Mapped[int] = mapped_column(nullable=True)
     latest_package: Mapped[int] = mapped_column(nullable=True)
     modified: Mapped[bool] = mapped_column(default=False)
 
-    # Problem info (loaded when user opens a problem)
     input_file: Mapped[str] = mapped_column(String(255), nullable=True)
     output_file: Mapped[str] = mapped_column(String(255), nullable=True)
     interactive: Mapped[bool] = mapped_column(default=False)
     well_formed: Mapped[bool] = mapped_column(default=False)
-    time_limit: Mapped[int] = mapped_column(nullable=True)   # milliseconds
-    memory_limit: Mapped[int] = mapped_column(nullable=True)  # MB
+    time_limit: Mapped[int] = mapped_column(nullable=True)
+    memory_limit: Mapped[int] = mapped_column(nullable=True)
 
-    # Timestamps for lazy-refresh tracking
     list_fetched_at: Mapped[datetime] = mapped_column(nullable=True)
     info_fetched_at: Mapped[datetime] = mapped_column(nullable=True)
 

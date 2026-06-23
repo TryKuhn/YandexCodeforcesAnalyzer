@@ -7,6 +7,7 @@ import {ThemeInitializer} from "./components/ThemeInitializer.tsx";
 import {MainLayout} from "./components/layout/MainLayout.tsx";
 import {AuthInitializer} from "./components/AuthInitializer.tsx";
 import {Profile} from "./pages/Profile.tsx";
+import {ChangePassword} from "./pages/ChangePassword.tsx";
 import {YandexCallback} from "./pages/YandexCallback.tsx";
 import {CodeforcesCallback} from "./pages/CodeforcesCallback.tsx";
 import {LoadContestPage} from "./pages/LoadContestPage.tsx";
@@ -21,6 +22,9 @@ import {AITasksList} from "./pages/AITasksList.tsx";
 import {AITaskSession} from "./pages/AITaskSession.tsx";
 import {TasksList} from "./pages/tasks/TasksList.tsx";
 import {TaskPage} from "./pages/tasks/TaskPage.tsx";
+import {FileEditorPage} from "./pages/tasks/FileEditorPage.tsx";
+import {TestViewPage} from "./pages/tasks/TestViewPage.tsx";
+import {ArchiveImportPage} from "./pages/ArchiveImportPage.tsx";
 import {ImportSubmissions} from "./pages/ImportSubmissions.tsx";
 import {SubmissionSource} from "./pages/SubmissionSource.tsx";
 import {PlagiarismReport} from "./pages/PlagiarismReport.tsx";
@@ -28,6 +32,7 @@ import {PlagiarismComparison} from "./pages/PlagiarismComparation.tsx";
 import {PlagiarismSetup} from "./pages/PlagiarismSetup.tsx";
 import {DashboardHome} from "./pages/DashboardHome.tsx";
 import {ContestVisualAnalytics} from "./pages/ContestVisualAnalytics.tsx";
+import {Docs} from "./pages/Docs.tsx";
 
 function App() {
     const {isAuthenticated} = useAuthStore();
@@ -61,10 +66,16 @@ function App() {
                     <Route path="ai-tasks/:sessionId" element={<AITaskSession/>}/>
                     <Route path="tasks" element={<TasksList/>}/>
                     <Route path="tasks/:polygonId" element={<TaskPage/>}/>
+                    <Route path="tasks/:polygonId/files/:section/:name" element={<FileEditorPage/>}/>
+                    <Route path="tasks/:polygonId/tests/:index/:kind" element={<TestViewPage/>}/>
+                    <Route path="archive-import" element={<ArchiveImportPage/>}/>
                     <Route path="profile" element={<Profile/>}/>
+                    <Route path="change-password" element={<ChangePassword/>}/>
                     <Route path="yandex/callback" element={<YandexCallback/>}/>
                     <Route path="codeforces/callback" element={<CodeforcesCallback/>}/>
                 </Route>
+
+                <Route path="/docs" element={<Docs/>}/>
 
                 <Route path="*" element={<NotFound/>}/>
             </Routes>

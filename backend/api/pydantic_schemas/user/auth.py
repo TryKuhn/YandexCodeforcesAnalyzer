@@ -1,9 +1,15 @@
+"""Auth request/response schemas and shared password validation."""
 import re
 
 from pydantic import BaseModel, EmailStr, field_validator
 
 
 def _validate_password_rules(value: str) -> str:
+    """Enforce password policy and return the value, raising on violations.
+
+    Requires 8-30 ASCII-only characters with no spaces and at least one
+    lowercase letter, uppercase letter, digit, and special symbol.
+    """
     if " " in value:
         raise ValueError("Password must not contain spaces")
 
@@ -41,6 +47,8 @@ def _validate_password_rules(value: str) -> str:
 
 
 class UserRegister(BaseModel):
+    """Registration payload: login, password, and email."""
+
     login: str
     password: str
     email: EmailStr
@@ -48,6 +56,7 @@ class UserRegister(BaseModel):
     @field_validator("login")
     @classmethod
     def validate_login(cls, value: str):
+        """Require a 5-30 character alphanumeric (plus underscore) login."""
         if len(value) < 5:
             raise ValueError("Login length must contain at least 5 characters")
         if len(value) > 30:
@@ -62,33 +71,46 @@ class UserRegister(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str):
+        """Apply the shared password policy to the registration password."""
         return _validate_password_rules(value)
 
 
 class UserLogin(BaseModel):
+    """Login payload: login and password."""
+
     login: str
     password: str
 
 
 class Token(BaseModel):
+    """Issued auth token pair and its type."""
+
     access_token: str
     refresh_token: str
     token_type: str
 
 
 class RefreshRequest(BaseModel):
+    """Request carrying a refresh token to rotate."""
+
     refresh_token: str
 
 
 class LogoutRequest(BaseModel):
+    """Request carrying the refresh token identifying the session(s) to revoke."""
+
     refresh_token: str
 
 
 class Authorization(BaseModel):
+    """Bearer authorization header value wrapper."""
+
     Bearer: str
 
 
 class ChangePassword(BaseModel):
+    """Change-password payload: old password plus new/confirmation."""
+
     old_password: str
     new_password: str
     confirm_password: str
@@ -96,4 +118,5 @@ class ChangePassword(BaseModel):
     @field_validator("new_password")
     @classmethod
     def validate_new_password(cls, value: str):
+        """Apply the shared password policy to the new password."""
         return _validate_password_rules(value)

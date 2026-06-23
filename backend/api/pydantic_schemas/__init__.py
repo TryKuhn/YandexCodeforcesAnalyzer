@@ -1,3 +1,4 @@
+"""Re-exports of the user-facing request/response schemas."""
 from api.pydantic_schemas.user.auth import (Authorization, ChangePassword,
                                             LogoutRequest, RefreshRequest,
                                             Token, UserLogin, UserRegister)

@@ -1,3 +1,5 @@
+"""Routes for viewing and setting a problem's tags."""
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +18,7 @@ async def route_get_tags(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return the problem's tags from Polygon."""
     tags = await view_tags(problem_id=polygon_id, user_id=user_id, db=db)
     return {"tags": tags}
 
@@ -27,6 +30,7 @@ async def route_set_tags(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Set the problem's tags on Polygon (sent as a comma-separated string)."""
     await set_tags(
         problem_id=polygon_id,
         tags=",".join(body.tags),

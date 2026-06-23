@@ -1,7 +1,7 @@
 // pages/tasks/TaskPage.tsx
 
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, AlertCircle, FileText, Folder, TestTube, Package } from 'lucide-react';
 import { api } from '../../api/instance';
 import { ProblemHeader } from './components/ProblemHeader';
@@ -31,6 +31,7 @@ interface PolygonProblem {
 interface SessionData {
     session_id: string;
     model: string;
+    problem_type?: string;
     chat_log: ChatMessage[];
     problem_settings?: Record<string, unknown>;
     stage?: string;
@@ -55,19 +56,93 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.6';
 
+// Chat panel resize bounds
+const CHAT_MIN_W = 280;
+const CHAT_DEFAULT_W = 320;
+const CHAT_WIDTH_KEY = 'taskChatPanelWidth';
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export const TaskPage = () => {
     const { polygonId: polygonIdStr } = useParams<{ polygonId: string }>();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const polygonId = Number(polygonIdStr);
+
+    const initialTab = TABS.some(t => t.id === searchParams.get('tab'))
+        ? (searchParams.get('tab') as TabId)
+        : 'statement';
+
+    // Persist the active tab in the URL so a page reload stays on it.
+    const changeTab = (tab: TabId) => {
+        setActiveTab(tab);
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', tab);
+            return next;
+        }, { replace: true });
+    };
 
     const [problem, setProblem] = useState<PolygonProblem | null>(null);
     const [session, setSession] = useState<SessionData | null>(null);
-    const [activeTab, setActiveTab] = useState<TabId>('statement');
+    const [activeTab, setActiveTab] = useState<TabId>(initialTab);
+
+    // Resizable chat panel width (persisted)
+    const [chatWidth, setChatWidth] = useState(() => {
+        const saved = Number(localStorage.getItem(CHAT_WIDTH_KEY));
+        return saved >= CHAT_MIN_W ? saved : CHAT_DEFAULT_W;
+    });
+
+    const startChatResize = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const maxW = Math.floor(window.innerWidth * 0.7);
+        const onMove = (ev: MouseEvent) => {
+            setChatWidth(Math.min(Math.max(window.innerWidth - ev.clientX, CHAT_MIN_W), maxW));
+        };
+        const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            setChatWidth(w => { localStorage.setItem(CHAT_WIDTH_KEY, String(w)); return w; });
+        };
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    };
     const [chatModel, setChatModel] = useState(DEFAULT_MODEL);
+    const [problemType, setProblemType] = useState('regular');
+    const [savingType, setSavingType] = useState(false);
+    const [reloadKey, setReloadKey] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    const handleModelChange = async (newModel: string) => {
+        setChatModel(newModel);
+        if (!session?.session_id) return;
+        try {
+            await api.patch(`/ai/session/${session.session_id}/settings`, { model: newModel });
+        } catch {
+            // keep local selection even if persistence fails
+        }
+    };
+
+    const handleProblemTypeChange = async (newType: string) => {
+        if (!session?.session_id || newType === problemType) return;
+        const prev = problemType;
+        setProblemType(newType);
+        setSavingType(true);
+        try {
+            await api.patch(`/ai/session/${session.session_id}/problem-type`, {
+                problem_type: newType,
+            });
+        } catch {
+            setProblemType(prev);
+        } finally {
+            setSavingType(false);
+        }
+    };
 
     useEffect(() => {
         if (!polygonId) return;
@@ -87,6 +162,14 @@ export const TaskPage = () => {
                 const s: SessionData = sessionRes.value.data;
                 setSession(s);
                 if (s.model) setChatModel(s.model);
+                if (s.problem_type) setProblemType(s.problem_type);
+                // Auto-pull the current Polygon state into the AI session in the
+                // background, then refresh the tabs once it lands.
+                if (s.session_id) {
+                    api.post(`/ai/session/${s.session_id}/sync-from-polygon`)
+                        .then(() => setReloadKey(k => k + 1))
+                        .catch(() => { /* non-fatal */ });
+                }
             }
 
             if (problemRes.status === 'fulfilled') {
@@ -134,7 +217,9 @@ export const TaskPage = () => {
             <ProblemHeader
                 polygonId={polygonId}
                 name={problem?.name ?? ''}
-                interactive={problem?.interactive ?? false}
+                problemType={problemType}
+                onProblemTypeChange={handleProblemTypeChange}
+                savingType={savingType}
                 onBack={() => navigate('/tasks')}
             />
 
@@ -147,7 +232,7 @@ export const TaskPage = () => {
                         {TABS.map(tab => (
                             <button
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
+                                onClick={() => changeTab(tab.id)}
                                 className={`flex items-center gap-1.5 px-4 py-3 text-xs font-bold whitespace-nowrap
                                     border-b-2 transition-all
                                     ${activeTab === tab.id
@@ -161,36 +246,57 @@ export const TaskPage = () => {
                         ))}
                     </div>
 
-                    {/* Tab content */}
+                    {/* Tab content. reloadKey bumps remount tabs after an AI edit. */}
                     <div className="flex-1 overflow-y-auto">
                         {activeTab === 'statement' && (
                             <StatementTab
+                                key={`statement-${reloadKey}`}
                                 polygonId={polygonId}
                                 sessionId={session?.session_id ?? null}
-                                interactive={problem?.interactive ?? false}
-                                enableGroups={problem?.enable_groups ?? false}
+                                interactive={problemType === 'interactive'}
+                                enableGroups={Boolean((session?.problem_settings as any)?.enable_groups)}
+                                enablePoints={Boolean((session?.problem_settings as any)?.enable_points)}
                             />
                         )}
                         {activeTab === 'files' && (
-                            <FilesTab polygonId={polygonId} />
+                            <FilesTab
+                                key={`files-${reloadKey}`}
+                                polygonId={polygonId}
+                                sessionId={session?.session_id ?? null}
+                            />
                         )}
                         {activeTab === 'tests' && (
-                            <TestsTab polygonId={polygonId} />
+                            <TestsTab key={`tests-${reloadKey}`} polygonId={polygonId} />
                         )}
                         {activeTab === 'packages' && (
-                            <PackagesTab polygonId={polygonId} />
+                            <PackagesTab
+                                key={`packages-${reloadKey}`}
+                                polygonId={polygonId}
+                                sessionId={session?.session_id ?? null}
+                            />
                         )}
                     </div>
                 </div>
 
-                {/* Right: chat panel */}
-                <ChatPanel
-                    sessionId={session?.session_id ?? null}
-                    model={chatModel}
-                    onModelChange={setChatModel}
-                    polygonId={polygonId}
-                    initialMessages={session?.chat_log ?? []}
+                {/* Resize handle */}
+                <div
+                    onMouseDown={startChatResize}
+                    title="Потяните, чтобы изменить ширину чата"
+                    className="w-1.5 shrink-0 cursor-col-resize bg-transparent
+                               hover:bg-blue-400/60 active:bg-blue-500 transition-colors -ml-1.5 z-10"
                 />
+
+                {/* Right: chat panel */}
+                <div style={{ width: chatWidth }} className="shrink-0 flex min-h-0">
+                    <ChatPanel
+                        sessionId={session?.session_id ?? null}
+                        model={chatModel}
+                        onModelChange={handleModelChange}
+                        polygonId={polygonId}
+                        initialMessages={session?.chat_log ?? []}
+                        onModified={() => setReloadKey(k => k + 1)}
+                    />
+                </div>
             </div>
         </div>
     );

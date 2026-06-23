@@ -1,3 +1,5 @@
+"""Save a checker test for a Polygon problem."""
+
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +18,7 @@ async def save_checker_test(
     db: AsyncSession,
     check_existing: Optional[bool] = None,
 ):
+    """Add or edit a checker test by index (problem.saveCheckerTest)."""
     user = await get_user(user_id, db)
     params: dict = {
         "problemId": str(problem_id),

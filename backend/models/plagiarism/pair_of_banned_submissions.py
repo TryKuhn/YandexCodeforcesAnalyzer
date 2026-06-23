@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 
 class PairOfBannedSubmissions(Base):
+    """A pair of submissions flagged as similar by a plagiarism report."""
     __tablename__ = "pair_of_banned_submissions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

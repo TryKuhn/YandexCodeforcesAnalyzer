@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 
 class PolygonGenerator(Base):
+    """A test-generator program attached to a Polygon problem."""
     __tablename__ = "polygon_generators"
 
     id: Mapped[int] = mapped_column(primary_key=True)

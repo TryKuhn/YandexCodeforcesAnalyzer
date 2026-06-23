@@ -1,3 +1,4 @@
+"""Aggregates all ORM models and re-exports them for convenient importing."""
 from models.base import Base
 from models.contest.contest import Contest
 from models.contest.contest_participant import ContestParticipant

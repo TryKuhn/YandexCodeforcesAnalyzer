@@ -1,3 +1,5 @@
+"""Routes for fetching and updating the AI task session attached to a problem."""
+
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -15,15 +17,19 @@ router = APIRouter()
 
 
 class UpdateSessionRequest(BaseModel):
+    """Request body for updating a session's model and/or system prompt."""
+
     model: Optional[str] = None
     system_prompt: Optional[str] = None
 
 
 def _session_to_dict(session: TaskSession) -> dict:
+    """Serialize a TaskSession into its API response dict."""
     return {
         "session_id": session.id,
         "model": session.model,
         "system_prompt": session.system_prompt,
+        "problem_type": session.problem_type,
         "stage": session.stage,
         "progress": session.progress,
         "chat_log": session.chat_log,
@@ -40,6 +46,7 @@ async def route_get_session(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return the problem's session, lazily creating one with defaults if absent."""
     result = await db.execute(
         select(TaskSession).where(
             TaskSession.polygon_problem_id == polygon_id,
@@ -53,7 +60,7 @@ async def route_get_session(
         session = TaskSession(
             id=str(uuid.uuid4()),
             user_id=user_id,
-            model="anthropic/claude-opus-4.7",
+            model="anthropic/claude-opus-4.8",
             system_prompt="",
             history=[],
             stage=PipelineStage.STATEMENT,
@@ -87,6 +94,7 @@ async def route_update_session_settings(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Update the session's model/system prompt, creating one with defaults if absent."""
     result = await db.execute(
         select(TaskSession).where(
             TaskSession.polygon_problem_id == polygon_id,
@@ -100,7 +108,7 @@ async def route_update_session_settings(
         session = TaskSession(
             id=str(uuid.uuid4()),
             user_id=user_id,
-            model=body.model or "anthropic/claude-opus-4.7",
+            model=body.model or "anthropic/claude-opus-4.8",
             system_prompt=body.system_prompt or "",
             history=[],
             stage=PipelineStage.STATEMENT,

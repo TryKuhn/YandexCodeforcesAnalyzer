@@ -1,3 +1,4 @@
+"""Link a user's Polygon API credentials after probing them for validity."""
 import logging
 from time import time
 
@@ -25,6 +26,11 @@ async def link_polygon(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Validate and store the user's Polygon API credentials.
+
+    Probes Polygon's ``problems.list`` with a freshly signed request to verify
+    the supplied key/secret before persisting them on the user. Returns 400 on
+    invalid credentials and 502 if Polygon cannot be reached."""
     _r = await db.execute(select(User).filter_by(id=user_id))
     user = _r.scalars().first()
 

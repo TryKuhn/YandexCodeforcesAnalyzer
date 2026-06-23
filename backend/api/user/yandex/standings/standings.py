@@ -1,3 +1,4 @@
+"""Endpoint for fetching and persisting Yandex contest standings."""
 import httpx
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
@@ -19,6 +20,12 @@ async def yandex_standings(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Fetch a Yandex contest's standings and merge them into the DB.
+
+    Requires a linked Yandex token; a 401 from Yandex auto-unlinks the stored
+    token. Fetches contest metadata and the paged standings, formats them, and
+    upserts the resulting contest/tasks/rows.
+    """
     method_name = f"contests/{standings.contest_id}"
 
     user = await db.execute(select(User).filter_by(id=user_id))

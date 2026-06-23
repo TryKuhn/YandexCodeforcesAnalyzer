@@ -15,7 +15,11 @@ async def update_info(
     time_limit: Optional[int] = None,
     memory_limit: Optional[int] = None,
 ):
-    """Update problem.updateInfo. Parameter names kept for compatibility with upload_orchestrator."""
+    """Update problem metadata via problem.updateInfo, sending only provided fields.
+
+    Parameter names are kept for compatibility with upload_orchestrator. Booleans
+    are serialized as ``"true"``/``"false"`` and numeric limits as strings.
+    """
     user = await get_user(user_id, db)
     params: dict = {"problemId": str(problem_id)}
 

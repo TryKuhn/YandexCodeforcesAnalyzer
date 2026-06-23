@@ -1,3 +1,4 @@
+"""HTTP middleware that logs each request's method, path, status, and timing."""
 import logging
 import time
 
@@ -8,7 +9,10 @@ logger = logging.getLogger("app.http")
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
+    """Logs every request (except /api/health) with status and elapsed time."""
+
     async def dispatch(self, request: Request, call_next):
+        """Log the request/response and attach an X-Process-Time response header."""
         path = request.url.path
         if path == "/api/health":
             return await call_next(request)

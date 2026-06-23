@@ -1,3 +1,5 @@
+"""Save or update a test of a Polygon problem testset."""
+
 from typing import Optional, Union
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +11,7 @@ async def save_test(
     problem_id: int,
     testset: str,
     test_index: int,
-    test_input: Union[bytes, str],
+    test_input: Optional[Union[bytes, str]],
     user_id: int,
     db: AsyncSession,
     check_existing: Optional[bool] = None,
@@ -21,7 +23,13 @@ async def save_test(
     test_output_for_statements: Optional[str] = None,
     verify_input_output_for_statements: Optional[bool] = None,
 ):
-    """Save a test. test_input can be bytes (binary) or str."""
+    """Save / update a test. ``test_input`` can be bytes or str; pass ``None`` to
+    update only metadata (points/group/…) of an EXISTING test by index — Polygon
+    treats ``testInput`` as optional, so a script-generated test keeps its input.
+
+    ``testInput`` is sent as bytes in the request body and is excluded from the
+    Polygon API signature.
+    """
     if isinstance(test_input, str):
         test_input = test_input.encode("utf-8")
 
@@ -30,8 +38,9 @@ async def save_test(
         "problemId": str(problem_id),
         "testset": testset,
         "testIndex": str(test_index),
-        "testInput": test_input,  # bytes — excluded from signature, sent in body
     }
+    if test_input is not None:
+        params["testInput"] = test_input
 
     if check_existing is not None:
         params["checkExisting"] = "true" if check_existing else "false"

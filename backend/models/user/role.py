@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 
 class Role(Base):
+    """An access role (e.g. User, Admin) assignable to users."""
     __tablename__ = "roles"
 
     id: Mapped[int] = mapped_column(primary_key=True)

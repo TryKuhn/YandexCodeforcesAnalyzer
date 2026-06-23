@@ -14,6 +14,8 @@ from settings import settings
 
 
 class BuildPackageResponse(BaseModel):
+    """Response payload for a package-build request."""
+
     detail: str
 
 
@@ -22,6 +24,12 @@ async def build_package(
         user_id: int,
         db: AsyncSession
 ):
+    """Trigger a full, verified package build via problem.buildPackage.
+
+    Builds the request signature manually (rather than via the shared client)
+    and sends ``full=true``/``verify=true``. Raises HTTP 401 when the user has no
+    Polygon API key configured.
+    """
     method_name = "problem.buildPackage"
 
     user = await db.execute(select(User).filter_by(id=user_id))

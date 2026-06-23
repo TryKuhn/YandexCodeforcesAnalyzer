@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 
 class PolygonChecker(Base):
+    """The checker program attached to a Polygon problem."""
     __tablename__ = "polygon_checkers"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -19,7 +20,7 @@ class PolygonChecker(Base):
 
     name: Mapped[str] = mapped_column(String(255))
     content: Mapped[str] = mapped_column(Text)
-    source_type: Mapped[str] = mapped_column(String(64), nullable=True)  # e.g. "cpp.g++17"
+    source_type: Mapped[str] = mapped_column(String(64), nullable=True)
 
     uploaded: Mapped[bool] = mapped_column(default=False)
 

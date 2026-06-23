@@ -3,13 +3,23 @@
 import { useState, useEffect, useRef } from 'react';
 import {
     Loader2, Package, CheckCircle, XCircle, AlertCircle,
-    Play, Download
+    Play, Download, Wrench, Sparkles
 } from 'lucide-react';
 import { api } from '../../../api/instance';
 
 interface Props {
     polygonId: number;
+    sessionId?: string | null;
 }
+
+interface AiBuildStatus {
+    status: string;          // building | uploading | done | waiting_manual_fix | failed
+    current_step?: string;
+    error?: string;
+}
+
+// Terminal AI build statuses where polling stops.
+const TERMINAL = new Set(['done', 'failed', 'waiting_manual_fix']);
 
 interface PolygonPackage {
     id: number;
@@ -60,13 +70,15 @@ const formatTime = (seconds: number) => {
     });
 };
 
-export const PackagesTab = ({ polygonId }: Props) => {
+export const PackagesTab = ({ polygonId, sessionId }: Props) => {
     const [packages, setPackages] = useState<PolygonPackage[]>([]);
     const [loading, setLoading] = useState(true);
     const [building, setBuilding] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [buildSuccess, setBuildSuccess] = useState(false);
+    const [aiBuild, setAiBuild] = useState<AiBuildStatus | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const aiPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const hasPending = packages.some(p => p.state === 'PENDING' || p.state === 'RUNNING');
 
@@ -90,8 +102,51 @@ export const PackagesTab = ({ polygonId }: Props) => {
 
     useEffect(() => {
         load();
-        return () => { if (pollRef.current) clearInterval(pollRef.current); };
+        return () => {
+            if (pollRef.current) clearInterval(pollRef.current);
+            if (aiPollRef.current) clearInterval(aiPollRef.current);
+        };
     }, [polygonId]);
+
+    const pollAiProgress = () => {
+        if (aiPollRef.current || !sessionId) return;
+        aiPollRef.current = setInterval(async () => {
+            try {
+                const res = await api.get(`/ai/upload-progress/${sessionId}`);
+                const s: AiBuildStatus = {
+                    status: res.data.status,
+                    current_step: res.data.current_step,
+                    error: res.data.error,
+                };
+                setAiBuild(s);
+                if (TERMINAL.has(s.status)) {
+                    if (aiPollRef.current) { clearInterval(aiPollRef.current); aiPollRef.current = null; }
+                    setBuilding(false);
+                    load(true);
+                }
+            } catch {
+                // keep polling; transient error
+            }
+        }, 4000);
+    };
+
+    // Resume an AI build/repair already running in the background (started from
+    // chat, or still going after a page reload) so its status stays visible.
+    useEffect(() => {
+        if (!sessionId) return;
+        (async () => {
+            try {
+                const res = await api.get(`/ai/upload-progress/${sessionId}`);
+                const st: string = res.data?.status || 'idle';
+                if (st === 'idle') return;
+                setAiBuild({ status: st, current_step: res.data.current_step, error: res.data.error });
+                if (!TERMINAL.has(st)) {
+                    setBuilding(true);
+                    pollAiProgress();
+                }
+            } catch { /* ignore */ }
+        })();
+    }, [sessionId]);
 
     useEffect(() => {
         if (hasPending && !pollRef.current) {
@@ -102,21 +157,29 @@ export const PackagesTab = ({ polygonId }: Props) => {
         }
     }, [hasPending]);
 
+    // Build with AI auto-repair when a session exists; otherwise a plain Polygon build.
     const handleBuild = async () => {
         setBuilding(true);
         setError(null);
         setBuildSuccess(false);
+        setAiBuild(null);
         try {
-            await api.post(`/polygon/problems/${polygonId}/packages/build`);
-            setBuildSuccess(true);
-            setTimeout(() => setBuildSuccess(false), 3000);
+            if (sessionId) {
+                await api.post('/ai/build-with-repair', { session_id: sessionId });
+                setAiBuild({ status: 'building', current_step: 'Запуск сборки...' });
+                pollAiProgress();
+            } else {
+                await api.post(`/polygon/problems/${polygonId}/packages/build`);
+                setBuildSuccess(true);
+                setTimeout(() => setBuildSuccess(false), 3000);
+                setBuilding(false);
+            }
             await load();
             if (!pollRef.current) {
                 pollRef.current = setInterval(() => load(true), 5000);
             }
         } catch (e: any) {
             setError(e?.response?.data?.detail || 'Ошибка запуска сборки');
-        } finally {
             setBuilding(false);
         }
     };
@@ -148,14 +211,47 @@ export const PackagesTab = ({ polygonId }: Props) => {
                 <button
                     onClick={handleBuild}
                     disabled={building}
+                    title={sessionId ? 'При ошибке ИИ автоматически чинит файлы (до 3 попыток)' : undefined}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold
                                bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50
                                shadow-lg shadow-blue-500/20"
                 >
-                    {building ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
-                    Собрать пакет
+                    {building ? <Loader2 size={13} className="animate-spin" />
+                        : sessionId ? <Sparkles size={13} /> : <Play size={13} />}
+                    {sessionId ? 'Собрать (с ИИ-починкой)' : 'Собрать пакет'}
                 </button>
             </div>
+
+            {/* AI build / auto-repair status */}
+            {aiBuild && (
+                <div className={`flex items-start gap-2 p-3 rounded-xl text-sm border
+                    ${aiBuild.status === 'done'
+                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400'
+                        : aiBuild.status === 'waiting_manual_fix' || aiBuild.status === 'failed'
+                            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400'
+                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400'
+                    }`}>
+                    {aiBuild.status === 'done'
+                        ? <CheckCircle size={16} className="shrink-0 mt-0.5" />
+                        : aiBuild.status === 'waiting_manual_fix' || aiBuild.status === 'failed'
+                            ? <Wrench size={16} className="shrink-0 mt-0.5" />
+                            : <Loader2 size={16} className="animate-spin shrink-0 mt-0.5" />}
+                    <div className="min-w-0">
+                        <p className="font-bold">
+                            {aiBuild.status === 'done' ? 'Пакет собран'
+                                : aiBuild.status === 'waiting_manual_fix' ? 'Не удалось собрать автоматически'
+                                : aiBuild.status === 'failed' ? 'Ошибка сборки'
+                                : 'Сборка и авто-починка...'}
+                        </p>
+                        {aiBuild.current_step && (
+                            <p className="text-xs opacity-80 mt-0.5 break-words">{aiBuild.current_step}</p>
+                        )}
+                        {aiBuild.error && (
+                            <p className="text-xs opacity-80 mt-0.5 break-words font-mono">{aiBuild.error}</p>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {error && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm">
@@ -204,14 +300,17 @@ export const PackagesTab = ({ polygonId }: Props) => {
                                     ) : null}
                                 </div>
 
-                                <div className="flex items-center gap-4 mt-1.5 flex-wrap">
+                                <div className="mt-1.5">
                                     <span className="text-[11px] text-slate-400">
                                         {formatTime(pkg.creationTimeSeconds)}
                                     </span>
                                     {pkg.comment && (
-                                        <span className="text-[11px] text-slate-500 italic truncate max-w-xs">
+                                        <p className={`text-[11px] mt-1 whitespace-pre-wrap break-words
+                                            ${pkg.state === 'FAILED'
+                                                ? 'text-red-500 dark:text-red-400 font-mono bg-red-50 dark:bg-red-900/15 rounded-lg p-2'
+                                                : 'text-slate-500 italic'}`}>
                                             {pkg.comment}
-                                        </span>
+                                        </p>
                                     )}
                                 </div>
                             </div>

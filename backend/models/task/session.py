@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 
 class PipelineStage(str, enum.Enum):
+    """Stages of the AI problem-creation pipeline, from statement to done/failed."""
     STATEMENT = "statement"
     FILES_REVIEW = "files_review"
     UPLOADING = "uploading"
@@ -22,14 +23,35 @@ class PipelineStage(str, enum.Enum):
     FAILED = "failed"
 
 
+class ProblemType(str, enum.Enum):
+    """The kind of problem being authored, which drives generation branching.
+
+    REGULAR      — statement, tests, generator, validator, checker, solutions.
+    INTERACTIVE  — REGULAR + interactor + an "interaction" statement section.
+    OUTPUT_ONLY  — participant submits an answer archive; a checker-scorer
+                   grades it against the jury answer and awards partial points.
+    """
+    REGULAR = "regular"
+    INTERACTIVE = "interactive"
+    OUTPUT_ONLY = "output_only"
+
+
 class TaskSession(Base):
     """AI-assisted problem-creation session.
 
-    Replaces the old AISession model. Uses the same table ('ai_sessions') so
-    no data migration is required when upgrading from the old model.
+    Replaces the old AISession model and reuses the 'ai_sessions' table so no
+    data migration is required when upgrading from the old model.
 
-    `polygon_problem_id`         — Polygon API problem ID (set after problem.create).
-    `cached_polygon_problem_id`  — FK to our local PolygonProblem cache row.
+    Key fields:
+    - polygon_problem_id: Polygon API problem ID (set after problem.create).
+    - cached_polygon_problem_id: FK to the local PolygonProblem cache row.
+    - statement: {name, legend, input, output, notes, tutorial}.
+    - problem_settings: {input_file, output_file, interactive, time_limit,
+      memory_limit, tags: list[str], enable_groups, enable_points}.
+    - upload_errors: {file_key -> {file_name, error, needs_manual_fix}}.
+    - solution_meta: {file_type -> {tag: str, name: str}}.
+    - examples: [{index, input, output}].
+    - chat_log: human-readable log of [{id, role, content, timestamp, ...}].
     """
     __tablename__ = "ai_sessions"
 
@@ -40,6 +62,10 @@ class TaskSession(Base):
     system_prompt: Mapped[str] = mapped_column(Text)
     history: Mapped[list] = mapped_column(JSON, default=list)
 
+    problem_type: Mapped[str] = mapped_column(
+        String(16), default=ProblemType.REGULAR, nullable=False
+    )
+
     stage: Mapped[str] = mapped_column(
         String(32), default=PipelineStage.STATEMENT, nullable=False
     )
@@ -47,18 +73,13 @@ class TaskSession(Base):
         JSON, default=lambda: {"status": "idle"}, nullable=True
     )
 
-    # AI-generated statement: {name, legend, input, output, notes, tutorial}
     statement: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
-    # Problem settings: {input_file, output_file, interactive, time_limit, memory_limit,
-    #                    tags: list[str], enable_groups, enable_points}
     problem_settings: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
-    # Polygon IDs set after problem.create / package build
     polygon_problem_id: Mapped[Optional[int]] = mapped_column(nullable=True)
     package_id: Mapped[Optional[int]] = mapped_column(nullable=True)
 
-    # FK to our local problem cache (set once the problem exists on Polygon)
     cached_polygon_problem_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("polygon_problems.id"), nullable=True
     )
@@ -66,17 +87,13 @@ class TaskSession(Base):
         "PolygonProblem", foreign_keys=[cached_polygon_problem_id]
     )
 
-    # Upload error tracking: {file_key -> {file_name, error, needs_manual_fix}}
     upload_errors: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     ai_fix_attempts: Mapped[dict] = mapped_column(JSON, default=dict)
 
-    # Solution metadata: {file_type -> {tag: str, name: str}}
     solution_meta: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
-    # Sample/example tests: [{index, input, output}]
     examples: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
-    # Human-readable chat log: [{id, role, content, timestamp, ...}]
     chat_log: Mapped[list] = mapped_column(JSON, default=list, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column()

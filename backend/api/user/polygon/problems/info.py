@@ -1,3 +1,5 @@
+"""Routes for reading and updating a problem's general info (limits, files, interactivity)."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +20,7 @@ async def route_get_info(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return cached problem info, falling back to the Polygon API when not yet cached."""
     result = await db.execute(
         select(PolygonProblem).where(
             PolygonProblem.user_id == user_id,
@@ -36,7 +39,6 @@ async def route_get_info(
             "wellFormed": problem.well_formed,
         }
 
-    # Fall back to Polygon API (first time or not cached)
     return await get_problem_info(problem_id=polygon_id, user_id=user_id, db=db)
 
 
@@ -47,6 +49,7 @@ async def route_update_info(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Update the problem's info fields (input/output files, interactivity, limits) on Polygon."""
     await update_info(
         problem_id=polygon_id,
         user_id=user_id,

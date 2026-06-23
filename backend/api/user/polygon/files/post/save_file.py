@@ -1,3 +1,5 @@
+"""Add or edit a resource, source or aux file of a Polygon problem."""
+
 from typing import Optional, Union
 
 from sqlalchemy.ext.asyncio import AsyncSession

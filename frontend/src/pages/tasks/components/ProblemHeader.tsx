@@ -1,15 +1,23 @@
 // pages/tasks/components/ProblemHeader.tsx
 
-import { ArrowLeft, ExternalLink, Zap } from 'lucide-react';
+import { ArrowLeft, ExternalLink, ChevronDown } from 'lucide-react';
+
+const PROBLEM_TYPES = [
+    { id: 'regular',     label: 'Обычная' },
+    { id: 'interactive', label: 'Интерактивная' },
+    { id: 'output_only', label: 'Output-only' },
+];
 
 interface Props {
     polygonId: number;
     name: string;
-    interactive: boolean;
+    problemType: string;
+    onProblemTypeChange: (t: string) => void;
+    savingType?: boolean;
     onBack: () => void;
 }
 
-export const ProblemHeader = ({ polygonId, name, interactive, onBack }: Props) => {
+export const ProblemHeader = ({ polygonId, name, problemType, onProblemTypeChange, savingType, onBack }: Props) => {
     return (
         <div className="h-14 shrink-0 flex items-center gap-3 px-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
             <button
@@ -28,13 +36,25 @@ export const ProblemHeader = ({ polygonId, name, interactive, onBack }: Props) =
                 {name || `Задача #${polygonId}`}
             </span>
 
-            {interactive && (
-                <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full
-                                 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 shrink-0">
-                    <Zap size={10} />
-                    интерактивная
-                </span>
-            )}
+            {/* Problem type selector */}
+            <div className="relative shrink-0">
+                <select
+                    value={problemType}
+                    onChange={e => onProblemTypeChange(e.target.value)}
+                    disabled={savingType}
+                    className="appearance-none text-[10px] font-bold rounded-full pl-2.5 pr-6 py-1 outline-none cursor-pointer
+                               border transition-all disabled:opacity-50
+                               bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200
+                               border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+                >
+                    {PROBLEM_TYPES.map(t => (
+                        <option key={t.id} value={t.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                            {t.label}
+                        </option>
+                    ))}
+                </select>
+                <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+            </div>
 
             <div className="flex-1" />
 

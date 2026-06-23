@@ -1,3 +1,5 @@
+"""Upload and designate the validator for a Polygon problem."""
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user.polygon.client import get_user, polygon_call

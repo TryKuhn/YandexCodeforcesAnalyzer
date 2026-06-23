@@ -2,17 +2,12 @@ import {useState, useEffect} from 'react';
 import {useAuthStore} from '../store/useAuthStore';
 import {api} from '../api/instance';
 import {
-    User, Key, Shield, Monitor, CheckCircle2, AlertCircle, Loader2, Globe, Unlink, Clock
+    User, Shield, Monitor, Loader2, Globe, Unlink, Clock
 } from 'lucide-react';
-import {useNavigate} from "react-router-dom";
 
 export const Profile = () => {
-    const {user, logout} = useAuthStore();
-    const navigate = useNavigate();
+    const {user} = useAuthStore();
     const [sessions, setSessions] = useState<any[]>([]);
-    const [isChangingPass, setIsChangingPass] = useState(false);
-    const [passData, setPassPassData] = useState({old: '', new: '', confirm: ''});
-    const [status, setStatus] = useState({type: '', msg: ''});
 
     const [cfData, setCfData] = useState({key: '', secret: ''});
     const [showCfModal, setShowCfModal] = useState(false);
@@ -80,30 +75,6 @@ export const Profile = () => {
         }
     };
 
-    // const handleCFStart = async () => {
-    //     try {
-    //         const res = await api.get('/codeforces/auth_url');
-    //         const {url, code_verifier} = res.data;
-    //
-    //         sessionStorage.setItem('cf_verifier', code_verifier);
-    //
-    //         window.location.href = url;
-    //     } catch (e) {
-    //         console.error(e);
-    //     }
-    // };
-
-    // const handleCFUnlink = async () => {
-    //     try {
-    //         await api.post('/codeforces/unlink');
-    //         await useAuthStore.getState().fetchUser();
-    //         alert('Codeforces отвязан!');
-    //         window.location.reload();
-    //     } catch (e) {
-    //         alert('Ошибка отвязки');
-    //     }
-    // }
-
     const handleYandexStart = async () => {
         try {
             const res = await api.get('/yandex/auth_url');
@@ -154,47 +125,6 @@ export const Profile = () => {
 
             await fetchSessions();
             alert('Все сессии закрыты.');
-        }
-    };
-
-    const handleChangePassword = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsChangingPass(true);
-        setStatus({type: '', msg: ''});
-
-        try {
-            await api.post('/auth/change_password', {
-                old_password: passData.old,
-                new_password: passData.new,
-                confirm_password: passData.confirm
-            });
-
-            await performLogoutAll();
-            useAuthStore.getState().logout()
-
-            setStatus({type: 'success', msg: 'Пароль успешно изменен! Перенаправление...'});
-            setTimeout(() => {
-                logout();
-                navigate('/login');
-            }, 2000);
-
-            setPassPassData({old: '', new: '', confirm: ''});
-        } catch (err: any) {
-            let errorMessage = 'Произошла ошибка';
-
-            const detail = err.response?.data?.detail;
-
-            if (typeof detail === 'string') {
-                errorMessage = detail;
-            } else if (Array.isArray(detail)) {
-                errorMessage = detail[0]?.msg || 'Ошибка заполнения полей';
-            } else if (err.response?.status === 422) {
-                errorMessage = "Данные не соответствуют требованиям";
-            }
-
-            setStatus({type: 'error', msg: errorMessage});
-        } finally {
-            setIsChangingPass(false);
         }
     };
 
@@ -260,114 +190,68 @@ export const Profile = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="md:col-span-1 space-y-6">
-                    <div
-                        className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-                        <div className="flex items-center gap-2 mb-6 text-slate-900 dark:text-white font-bold">
-                            <Key size={20} className="text-blue-600"/>
-                            <span>Смена пароля</span>
+            {/* Сессии */}
+            <div className="space-y-6">
+                <div
+                    className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                    <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-2 text-slate-900 dark:text-white font-bold">
+                            <Shield size={20} className="text-blue-600"/>
+                            <span>Активные сессии</span>
                         </div>
-
-                        <form onSubmit={handleChangePassword} className="space-y-4">
-                            <input
-                                type="password" placeholder="Текущий пароль"
-                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
-                                value={passData.old} onChange={e => setPassPassData({...passData, old: e.target.value})}
-                            />
-                            <input
-                                type="password" placeholder="Новый пароль"
-                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
-                                value={passData.new} onChange={e => setPassPassData({...passData, new: e.target.value})}
-                            />
-                            <input
-                                type="password" placeholder="Повторите пароль"
-                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
-                                value={passData.confirm}
-                                onChange={e => setPassPassData({...passData, confirm: e.target.value})}
-                            />
-
-                            {status.msg && (
-                                <div
-                                    className={`text-xs p-3 rounded-lg flex items-center gap-2 ${status.type === 'success' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                                    {status.type === 'success' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
-                                    {status.msg}
-                                </div>
-                            )}
-
-                            <button
-                                disabled={isChangingPass}
-                                className="w-full bg-slate-900 dark:bg-white dark:text-slate-900 text-white py-3 rounded-xl font-bold hover:opacity-90 transition-all flex justify-center"
-                            >
-                                {isChangingPass ? <Loader2 className="animate-spin" size={20}/> : 'Обновить пароль'}
-                            </button>
-                        </form>
+                        <button
+                            onClick={handleLogoutAllManual}
+                            className="text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                            Сбросить все
+                        </button>
                     </div>
-                </div>
 
-                {/* Правая колонка: Сессии */}
-                <div className="md:col-span-2 space-y-6">
-                    <div
-                        className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-                        <div className="flex justify-between items-center mb-6">
-                            <div className="flex items-center gap-2 text-slate-900 dark:text-white font-bold">
-                                <Shield size={20} className="text-blue-600"/>
-                                <span>Активные сессии</span>
-                            </div>
-                            <button
-                                onClick={handleLogoutAllManual}
-                                className="text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                                Сбросить все
-                            </button>
-                        </div>
-
-                        <div className="space-y-4">
-                            {sessions.map((s) => {
-                                const {location, device} = formatSessionInfo(s.user_agent);
-                                const isOnline = new Date().getTime() - new Date(s.last_seen).getTime() < 300000;
-                                return (
-                                    <div key={s.id} className={`p-5 rounded-2xl border transition-all ${
-                                        s.is_current ? 'border-blue-500 bg-blue-50/30' : 'border-slate-100 dark:border-slate-800'
-                                    }`}>
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex gap-4">
-                                                <div className="relative">
-                                                    <div
-                                                        className={`p-3 rounded-xl ${s.is_current ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
-                                                        <Monitor size={24}/>
-                                                    </div>
-                                                    {isOnline && (
-                                                        <div
-                                                            className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full"></div>
-                                                    )}
+                    <div className="space-y-4">
+                        {sessions.map((s) => {
+                            const {location, device} = formatSessionInfo(s.user_agent);
+                            const isOnline = new Date().getTime() - new Date(s.last_seen).getTime() < 300000;
+                            return (
+                                <div key={s.id} className={`p-5 rounded-2xl border transition-all ${
+                                    s.is_current ? 'border-blue-500 bg-blue-50/30' : 'border-slate-100 dark:border-slate-800'
+                                }`}>
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex gap-4">
+                                            <div className="relative">
+                                                <div
+                                                    className={`p-3 rounded-xl ${s.is_current ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                                                    <Monitor size={24}/>
                                                 </div>
-                                                <div>
-                                                    <p className="font-bold dark:text-white">{location}</p>
-                                                    <p className="text-sm text-slate-500">{device}</p>
-
+                                                {isOnline && (
                                                     <div
-                                                        className="flex items-center gap-1.5 mt-2 text-[11px] font-medium">
-                                                        <Clock size={12} className="text-slate-400"/>
-                                                        <span
-                                                            className={isOnline ? "text-green-600" : "text-slate-400"}>
-                                                            {isOnline ? 'В сети' : `Активность: ${formatLastSeen(s.last_seen)}`}
-                                                         </span>
-                                                    </div>
+                                                        className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full"></div>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold dark:text-white">{location}</p>
+                                                <p className="text-sm text-slate-500">{device}</p>
+
+                                                <div
+                                                    className="flex items-center gap-1.5 mt-2 text-[11px] font-medium">
+                                                    <Clock size={12} className="text-slate-400"/>
+                                                    <span
+                                                        className={isOnline ? "text-green-600" : "text-slate-400"}>
+                                                        {isOnline ? 'В сети' : `Активность: ${formatLastSeen(s.last_seen)}`}
+                                                     </span>
                                                 </div>
                                             </div>
-
-                                            {s.is_current && (
-                                                <span
-                                                    className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-lg uppercase">
-                        Текущая
-                    </span>
-                                            )}
                                         </div>
+
+                                        {s.is_current && (
+                                            <span
+                                                className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-lg uppercase">
+                    Текущая
+                </span>
+                                        )}
                                     </div>
-                                );
-                            })}
-                        </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
@@ -379,8 +263,6 @@ export const Profile = () => {
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Legacy version Codeforces */}
-
                     <div
                         className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
                         <div className="flex justify-between items-center mb-4">
@@ -405,29 +287,6 @@ export const Profile = () => {
                             </button>
                         )}
                     </div>
-
-                    {/*<div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">*/}
-                    {/*    <div className="flex justify-between items-center mb-4">*/}
-                    {/*        <span className="font-bold dark:text-white">Codeforces</span>*/}
-                    {/*        {user?.is_codeforces_linked ? (*/}
-                    {/*            <div className="flex flex-col items-end">*/}
-                    {/*                <span className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full uppercase">Связан</span>*/}
-                    {/*                <span className="text-xs font-bold text-blue-600 mt-1">@{user.is_codeforces_linked}</span>*/}
-                    {/*            </div>*/}
-                    {/*        ) : (*/}
-                    {/*            <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-1 rounded-full uppercase">Не привязан</span>*/}
-                    {/*        )}*/}
-                    {/*    </div>*/}
-                    {/*    {user?.is_codeforces_linked ? (*/}
-                    {/*        <button onClick={handleCFUnlink} className="text-xs text-red-500 flex items-center gap-1 hover:underline">*/}
-                    {/*            <Unlink size={14}/> Отвязать*/}
-                    {/*        </button>*/}
-                    {/*    ) : (*/}
-                    {/*        <button onClick={handleCFStart} className="w-full bg-blue-600 text-white py-2 rounded-xl text-sm font-bold">*/}
-                    {/*            Войти через Codeforces*/}
-                    {/*        </button>*/}
-                    {/*    )}*/}
-                    {/*</div>*/}
 
                     <div
                         className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">

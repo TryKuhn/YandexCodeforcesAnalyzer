@@ -8,6 +8,11 @@ from models.task.problem import PolygonProblem
 
 
 async def get_problem_info(problem_id: int, user_id: int, db: AsyncSession):
+    """Fetch problem.info from Polygon and refresh the cached PolygonProblem row.
+
+    When the API returns a dict and a matching cached row exists, its limits and
+    flags are updated and ``info_fetched_at`` is stamped before committing.
+    """
     user = await get_user(user_id, db)
     info = await polygon_call("problem.info", {"problemId": str(problem_id)}, user)
 

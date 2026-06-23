@@ -1,3 +1,4 @@
+"""Endpoint for linking a user's Codeforces API credentials."""
 import logging
 from time import time
 
@@ -25,13 +26,18 @@ async def link_codeforces(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Validate and store the user's Codeforces API key/secret.
+
+    Credentials are verified by calling the authenticated ``user.friends``
+    method, which fails for invalid key/secret pairs; only valid credentials
+    are persisted.
+    """
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # user.friends requires authorization — fails with FAILED if key/secret are invalid
     method_name = "user.friends"
     params = {
         "apiKey": payload.api_key,

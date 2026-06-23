@@ -1,3 +1,4 @@
+"""Endpoint for fetching and persisting Codeforces contest submissions."""
 from time import time
 
 from aiohttp import ClientSession
@@ -24,6 +25,12 @@ async def codeforces_submissions(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Fetch a Codeforces contest's submissions and merge them into the DB.
+
+    Requires linked Codeforces credentials; signs the ``contest.status``
+    request (sources included), formats the results against the stored
+    contest, and upserts them.
+    """
     method_name = "contest.status"
 
     user = await db.execute(select(User).filter_by(id=user_id))

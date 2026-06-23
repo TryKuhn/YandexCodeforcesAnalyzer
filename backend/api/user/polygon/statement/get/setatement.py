@@ -1,3 +1,4 @@
+"""Read problem statements from the Polygon API and upsert them locally."""
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,7 +8,11 @@ from models.task.statement import PolygonStatement
 
 
 async def get_statements(problem_id: int, user_id: int, db: AsyncSession):
-    """Returns map {lang -> Statement} and upserts into PolygonStatement table."""
+    """Fetch problem statements via Polygon's ``problem.statements``.
+
+    Returns the raw ``{lang -> Statement}`` map from Polygon and upserts each
+    language's fields into the local ``PolygonStatement`` table for the cached
+    problem (when one exists)."""
     user = await get_user(user_id, db)
     result = await polygon_call(
         "problem.statements", {"problemId": str(problem_id)}, user

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 
 class PolygonValidator(Base):
+    """The input validator program attached to a Polygon problem."""
     __tablename__ = "polygon_validators"
 
     id: Mapped[int] = mapped_column(primary_key=True)

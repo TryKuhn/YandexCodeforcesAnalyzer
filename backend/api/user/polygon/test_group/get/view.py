@@ -1,3 +1,4 @@
+"""Read a single test group's settings from the Polygon API."""
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,10 @@ async def view_test_group(
     db: AsyncSession,
     group: Optional[str] = None,
 ):
+    """Fetch test group info for a testset via Polygon's ``problem.viewTestGroup``.
+
+    The optional ``group`` narrows the result to a single group; when omitted,
+    all groups in the testset are returned."""
     user = await get_user(user_id, db)
     params = {"problemId": str(problem_id), "testset": testset}
     if group:

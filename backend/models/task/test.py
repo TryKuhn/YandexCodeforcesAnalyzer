@@ -25,7 +25,6 @@ class PolygonTest(Base):
     testset: Mapped[str] = mapped_column(String(64), default="tests")
     index: Mapped[int] = mapped_column()
 
-    # For manual tests: raw input bytes stored as text (base64)
     input_b64: Mapped[str] = mapped_column(Text, nullable=True)
 
     group: Mapped[str] = mapped_column(String(128), nullable=True)

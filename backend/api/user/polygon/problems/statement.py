@@ -1,3 +1,5 @@
+"""Routes for reading, saving, and listing resources of problem statements."""
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +22,7 @@ async def route_get_statements(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Check DB cache first
+    """Return cached statements keyed by language, falling back to Polygon when uncached."""
     problem_res = await db.execute(
         select(PolygonProblem).where(
             PolygonProblem.user_id == user_id,
@@ -50,7 +52,6 @@ async def route_get_statements(
                 for s in cached
             }
 
-    # Fall back to Polygon API (first time or not cached)
     return await get_statements(problem_id=polygon_id, user_id=user_id, db=db)
 
 
@@ -61,6 +62,7 @@ async def route_save_statement(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Save a statement for the given language on Polygon."""
     await save_statement(
         problem_id=polygon_id,
         lang=body.lang,
@@ -85,4 +87,5 @@ async def route_get_statement_resources(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """List statement resource files for the problem from Polygon."""
     return await get_statement_resources(problem_id=polygon_id, user_id=user_id, db=db)

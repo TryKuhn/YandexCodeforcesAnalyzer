@@ -16,6 +16,11 @@ async def save_test_group(
     feedback_policy: Optional[str] = None,
     dependencies: Optional[list] = None,
 ):
+    """Configure a test group's points and policies via problem.saveTestGroup.
+
+    Optional points/feedback policies are sent only when provided; ``dependencies``
+    is joined into the comma-separated form Polygon expects.
+    """
     user = await get_user(user_id, db)
     params: dict = {
         "problemId": str(problem_id),

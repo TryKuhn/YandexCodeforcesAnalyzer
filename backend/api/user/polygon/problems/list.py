@@ -1,3 +1,5 @@
+"""Routes for listing cached problems with pagination, search, and statement names."""
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +17,7 @@ PER_PAGE_MAX = 100
 
 
 def _serialize(p: PolygonProblem, statement_name: str | None) -> dict:
+    """Serialize a cached PolygonProblem into the list-item response dict."""
     return {
         "polygon_id": p.polygon_id,
         "name": p.name,
@@ -46,7 +49,6 @@ async def _get_statement_names(
     )
     stmt_map: dict[int, str] = {}
     for problem_id, lang, name in rows:
-        # Prefer Russian; otherwise keep the first non-empty name found
         if problem_id not in stmt_map or lang == "russian":
             stmt_map[problem_id] = name
     return stmt_map
@@ -78,7 +80,6 @@ async def route_list_problems(
 
     if search.strip():
         term = f"%{search.strip().lower()}%"
-        # Search in technical name; statement name searched via subquery join below
         stmt_subq = (
             select(PolygonStatement.problem_id)
             .where(func.lower(PolygonStatement.name).like(term))

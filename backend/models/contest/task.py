@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 
 class Task(Base):
+    """A problem (task) belonging to a contest."""
     __tablename__ = "tasks"
 
     id: Mapped[str] = mapped_column(primary_key=True)

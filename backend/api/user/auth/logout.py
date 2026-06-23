@@ -1,3 +1,4 @@
+"""Logout endpoints: revoke a single session or all of a user's sessions."""
 import logging
 
 from fastapi import Depends, HTTPException, status
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 @auth_router.post("/logout")
 async def logout(payload: LogoutRequest, db: AsyncSession = Depends(get_db)) -> dict:
+    """Revoke the single session identified by the given refresh token."""
     refresh_hash = hash_token(payload.refresh_token)
 
     _r = await db.execute(select(RefreshToken).filter_by(refresh_hash=refresh_hash))
@@ -38,6 +40,7 @@ async def logout(payload: LogoutRequest, db: AsyncSession = Depends(get_db)) -> 
 async def logout_all(
     payload: LogoutRequest, db: AsyncSession = Depends(get_db)
 ) -> dict:
+    """Revoke every session for the user owning the given refresh token."""
     refresh_hash = hash_token(payload.refresh_token)
 
     _r = await db.execute(select(RefreshToken).filter_by(refresh_hash=refresh_hash))

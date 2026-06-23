@@ -1,11 +1,15 @@
 // pages/tasks/tabs/FilesTab.tsx
 
-import { useState, useEffect } from 'react';
-import { Loader2, RefreshCw, AlertCircle, Eye, Upload, X, FileText, Edit2, Save } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, RefreshCw, AlertCircle, Plus, X, FileText, Upload, ChevronRight, DownloadCloud } from 'lucide-react';
 import { api } from '../../../api/instance';
+import { CodeEditor } from '../../../components/CodeEditor';
+import { SOLUTION_TAGS } from '../FileEditorPage';
 
 interface Props {
     polygonId: number;
+    sessionId?: string | null;
 }
 
 interface PolygonFile {
@@ -26,15 +30,6 @@ interface FilesData {
 
 type FileSection = 'source' | 'resource' | 'aux' | 'solution';
 
-interface ViewState {
-    name: string;
-    section: FileSection;
-    content: string;
-    editing: boolean;
-    editContent: string;
-    saving: boolean;
-}
-
 const SOLUTION_TAG_BADGE: Record<string, { color: string; bg: string }> = {
     MA: { color: 'text-green-700 dark:text-green-400',  bg: 'bg-green-100 dark:bg-green-900/30' },
     OK: { color: 'text-blue-700 dark:text-blue-400',    bg: 'bg-blue-100 dark:bg-blue-900/30' },
@@ -45,6 +40,14 @@ const SOLUTION_TAG_BADGE: Record<string, { color: string; bg: string }> = {
     RJ: { color: 'text-slate-700 dark:text-slate-400',  bg: 'bg-slate-100 dark:bg-slate-800' },
 };
 
+// Role of a "source" file: plain source / checker / validator / generator
+const SOURCE_ROLES = [
+    { value: 'generic',   label: 'Обычный' },
+    { value: 'checker',   label: 'Чекер' },
+    { value: 'validator', label: 'Валидатор' },
+    { value: 'generator', label: 'Генератор' },
+];
+
 const formatSize = (bytes?: number) => {
     if (!bytes) return '';
     if (bytes < 1024) return `${bytes} B`;
@@ -52,30 +55,186 @@ const formatSize = (bytes?: number) => {
     return `${(bytes / 1048576).toFixed(1)} MB`;
 };
 
-const FILE_UPLOAD_TYPES = [
-    { value: 'resource', label: 'Ресурс' },
-    { value: 'source',   label: 'Исходный файл' },
-    { value: 'aux',      label: 'Вспомогательный' },
-];
+// ─── Per-section add form ─────────────────────────────────────────────────────
 
-export const FilesTab = ({ polygonId }: Props) => {
+interface AddFileFormProps {
+    polygonId: number;
+    section: FileSection;
+    onUploaded: () => Promise<void>;
+    onClose: () => void;
+}
+
+const AddFileForm = ({ polygonId, section, onUploaded, onClose }: AddFileFormProps) => {
+    const [name, setName] = useState('');
+    const [content, setContent] = useState('');
+    const [tag, setTag] = useState('OK');             // solutions only
+    const [sourceRole, setSourceRole] = useState('generic'); // source files only
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handlePickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            setContent(text);
+            if (!name.trim()) setName(file.name);
+        } catch {
+            setError('Не удалось прочитать файл');
+        }
+        e.target.value = '';
+    };
+
+    const handleUpload = async () => {
+        if (!name.trim()) { setError('Укажите имя файла'); return; }
+        setUploading(true);
+        setError(null);
+        try {
+            if (section === 'solution') {
+                await api.post(`/polygon/problems/${polygonId}/solutions`, {
+                    name: name.trim(),
+                    content,
+                    tag,
+                });
+            } else if (section === 'source' && sourceRole === 'checker') {
+                await api.post(`/polygon/problems/${polygonId}/checker`, {
+                    name: name.trim(),
+                    content,
+                });
+            } else if (section === 'source' && sourceRole === 'validator') {
+                await api.post(`/polygon/problems/${polygonId}/validator`, {
+                    name: name.trim(),
+                    content,
+                });
+            } else {
+                // generic source (incl. generators), resource, aux
+                await api.post(`/polygon/problems/${polygonId}/files`, {
+                    type: section,
+                    name: name.trim(),
+                    content,
+                });
+            }
+            await onUploaded();
+            onClose();
+        } catch (e: any) {
+            setError(e?.response?.data?.detail || 'Ошибка загрузки');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    return (
+        <div className="border-t border-slate-200 dark:border-slate-700 p-4 space-y-3 bg-slate-50/50 dark:bg-slate-800/20">
+            <div className="flex gap-2 flex-wrap">
+                <div className="flex-1 min-w-[160px]">
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Имя файла</label>
+                    <input
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        placeholder={section === 'solution' ? 'solution.cpp' : 'example.cpp'}
+                        className="w-full text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 outline-none dark:text-white"
+                    />
+                </div>
+
+                {section === 'solution' && (
+                    <div className="min-w-[180px]">
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Тег решения</label>
+                        <select
+                            value={tag}
+                            onChange={e => setTag(e.target.value)}
+                            className="w-full text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 outline-none dark:text-white"
+                        >
+                            {SOLUTION_TAGS.map(t => (
+                                <option key={t.value} value={t.value}>{t.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
+                {section === 'source' && (
+                    <div className="min-w-[140px]">
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Тип файла</label>
+                        <select
+                            value={sourceRole}
+                            onChange={e => setSourceRole(e.target.value)}
+                            className="w-full text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 outline-none dark:text-white"
+                        >
+                            {SOURCE_ROLES.map(r => (
+                                <option key={r.value} value={r.value}>{r.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
+                <div className="flex items-end">
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                                   bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300
+                                   hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                    >
+                        <Upload size={12} />
+                        Выбрать файл
+                    </button>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        onChange={handlePickFile}
+                        className="hidden"
+                    />
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">Содержимое</label>
+                <CodeEditor
+                    value={content}
+                    onChange={setContent}
+                    fileName={name}
+                    minHeight="140px"
+                    maxHeight="400px"
+                    placeholder="// вставьте код или выберите файл..."
+                />
+            </div>
+
+            {error && <p className="text-xs text-red-500">{error}</p>}
+
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={handleUpload}
+                    disabled={uploading || !name.trim()}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold
+                               bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50"
+                >
+                    {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                    Загрузить
+                </button>
+                <button
+                    onClick={onClose}
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-slate-500
+                               hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                >
+                    Отмена
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// ─── Files tab ────────────────────────────────────────────────────────────────
+
+export const FilesTab = ({ polygonId, sessionId }: Props) => {
+    const navigate = useNavigate();
     const [files, setFiles] = useState<FilesData>({
         resourceFiles: [], sourceFiles: [], auxFiles: [], solutions: []
     });
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
+    const [pulling, setPulling] = useState(false);
+    const [syncMsg, setSyncMsg] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-
-    const [viewState, setViewState] = useState<ViewState | null>(null);
-    const [loadingView, setLoadingView] = useState<string | null>(null);
-
-    // Upload form state
-    const [uploadType, setUploadType] = useState('resource');
-    const [uploadName, setUploadName] = useState('');
-    const [uploadContent, setUploadContent] = useState('');
-    const [uploading, setUploading] = useState(false);
-    const [uploadError, setUploadError] = useState<string | null>(null);
-    const [uploadSuccess, setUploadSuccess] = useState(false);
+    const [addingSection, setAddingSection] = useState<FileSection | null>(null);
 
     const load = async () => {
         setLoading(true);
@@ -102,81 +261,41 @@ export const FilesTab = ({ polygonId }: Props) => {
         try { await load(); } finally { setSyncing(false); }
     };
 
-    const handleView = async (name: string, section: FileSection) => {
-        setLoadingView(name);
+    // Pull statement + all files from Polygon into the AI session.
+    const handlePullToSession = async () => {
+        if (!sessionId) return;
+        setPulling(true);
+        setSyncMsg(null);
+        setError(null);
         try {
-            let content = '';
-            if (section === 'solution') {
-                const res = await api.get(`/polygon/problems/${polygonId}/solutions/${encodeURIComponent(name)}/content`);
-                content = res.data.content ?? '';
-            } else {
-                const res = await api.get(
-                    `/polygon/problems/${polygonId}/files/content`,
-                    { params: { type: section, name } }
-                );
-                content = res.data.content ?? '';
-            }
-            setViewState({ name, section, content, editing: false, editContent: content, saving: false });
-        } catch (e: any) {
-            setViewState({ name, section, content: `Ошибка: ${e?.response?.data?.detail || 'не удалось загрузить'}`, editing: false, editContent: '', saving: false });
-        } finally {
-            setLoadingView(null);
-        }
-    };
-
-    const handleSaveEdit = async () => {
-        if (!viewState) return;
-        setViewState(v => v ? { ...v, saving: true } : v);
-        try {
-            if (viewState.section === 'solution') {
-                await api.post(`/polygon/problems/${polygonId}/solutions`, {
-                    name: viewState.name,
-                    content: viewState.editContent,
-                });
-            } else {
-                await api.post(`/polygon/problems/${polygonId}/files`, {
-                    type: viewState.section,
-                    name: viewState.name,
-                    content: viewState.editContent,
-                    check_existing: false,
-                });
-            }
-            setViewState(v => v ? { ...v, content: v.editContent, editing: false, saving: false } : v);
-        } catch (e: any) {
-            setViewState(v => v ? { ...v, saving: false } : v);
-            setError(e?.response?.data?.detail || 'Ошибка сохранения');
-        }
-    };
-
-    const handleUpload = async () => {
-        if (!uploadName.trim()) { setUploadError('Укажите имя файла'); return; }
-        setUploading(true);
-        setUploadError(null);
-        try {
-            await api.post(`/polygon/problems/${polygonId}/files`, {
-                type: uploadType,
-                name: uploadName.trim(),
-                content: uploadContent,
-            });
-            setUploadName('');
-            setUploadContent('');
-            setUploadSuccess(true);
-            setTimeout(() => setUploadSuccess(false), 2000);
+            const res = await api.post(`/ai/session/${sessionId}/sync-from-polygon`);
+            setSyncMsg(`Загружено в сессию: ${res.data.files ?? 0} файлов${res.data.statement ? ' + условие' : ''}`);
             await load();
+            setTimeout(() => setSyncMsg(null), 4000);
         } catch (e: any) {
-            setUploadError(e?.response?.data?.detail || 'Ошибка загрузки');
+            setError(e?.response?.data?.detail || 'Ошибка синхронизации с Polygon');
         } finally {
-            setUploading(false);
+            setPulling(false);
         }
+    };
+
+    const openFile = (f: PolygonFile, section: FileSection) => {
+        const params = section === 'solution' && f.tag ? `?tag=${encodeURIComponent(f.tag)}` : '';
+        navigate(`/tasks/${polygonId}/files/${section}/${encodeURIComponent(f.name)}${params}`);
     };
 
     const renderFileRow = (f: PolygonFile, section: FileSection, showTag = false) => (
-        <div
+        <button
             key={f.name}
-            className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-xl transition-colors group"
+            onClick={() => openFile(f, section)}
+            title="Открыть в редакторе"
+            className="w-full flex items-center gap-3 px-3 py-2 hover:bg-blue-50/60 dark:hover:bg-blue-900/10
+                       rounded-xl transition-colors group text-left cursor-pointer"
         >
-            <FileText size={14} className="text-slate-400 shrink-0" />
-            <span className="flex-1 text-sm font-mono text-slate-700 dark:text-slate-200 truncate">{f.name}</span>
+            <FileText size={14} className="text-slate-400 group-hover:text-blue-500 shrink-0 transition-colors" />
+            <span className="flex-1 text-sm font-mono text-slate-700 dark:text-slate-200 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                {f.name}
+            </span>
             {showTag && f.tag && (() => {
                 const badge = SOLUTION_TAG_BADGE[f.tag] || SOLUTION_TAG_BADGE.RJ;
                 return (
@@ -188,37 +307,49 @@ export const FilesTab = ({ polygonId }: Props) => {
             {f.size && (
                 <span className="text-[11px] text-slate-400 shrink-0">{formatSize(f.size)}</span>
             )}
-            <button
-                onClick={() => handleView(f.name, section)}
-                disabled={loadingView === f.name}
-                className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg
-                           bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-500
-                           hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all
-                           opacity-0 group-hover:opacity-100 disabled:opacity-50 shrink-0"
-            >
-                {loadingView === f.name ? <Loader2 size={11} className="animate-spin" /> : <Eye size={11} />}
-                Открыть
-            </button>
-        </div>
+            <ChevronRight size={14} className="text-slate-300 dark:text-slate-600 group-hover:text-blue-500 shrink-0 transition-colors" />
+        </button>
     );
 
     const Section = ({
         title, items, section, showTag = false
-    }: { title: string; items: PolygonFile[]; section: FileSection; showTag?: boolean }) => (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
-            <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{title}</span>
-                <span className="text-[11px] text-slate-400">{items.length} файлов</span>
-            </div>
-            {items.length === 0 ? (
-                <div className="px-4 py-3 text-xs text-slate-400 italic">Нет файлов</div>
-            ) : (
-                <div className="py-1">
-                    {items.map(f => renderFileRow(f, section, showTag))}
+    }: { title: string; items: PolygonFile[]; section: FileSection; showTag?: boolean }) => {
+        const isAdding = addingSection === section;
+        return (
+            <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 flex items-center gap-3">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 flex-1">{title}</span>
+                    <span className="text-[11px] text-slate-400">{items.length} файлов</span>
+                    <button
+                        onClick={() => setAddingSection(isAdding ? null : section)}
+                        className={`flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg transition-all
+                            ${isAdding
+                                ? 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                                : 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40'
+                            }`}
+                    >
+                        {isAdding ? <X size={11} /> : <Plus size={11} />}
+                        {isAdding ? 'Закрыть' : 'Добавить'}
+                    </button>
                 </div>
-            )}
-        </div>
-    );
+                {items.length === 0 ? (
+                    <div className="px-4 py-3 text-xs text-slate-400 italic">Нет файлов</div>
+                ) : (
+                    <div className="py-1">
+                        {items.map(f => renderFileRow(f, section, showTag))}
+                    </div>
+                )}
+                {isAdding && (
+                    <AddFileForm
+                        polygonId={polygonId}
+                        section={section}
+                        onUploaded={load}
+                        onClose={() => setAddingSection(null)}
+                    />
+                )}
+            </div>
+        );
+    };
 
     if (loading) {
         return (
@@ -229,11 +360,26 @@ export const FilesTab = ({ polygonId }: Props) => {
     }
 
     return (
-        <>
-            <div className="p-4 lg:p-6 space-y-4 max-w-3xl mx-auto">
-                {/* Toolbar */}
-                <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 flex-1">Файлы задачи</span>
+        <div className="p-4 lg:p-6 space-y-4 max-w-3xl mx-auto">
+            {/* Toolbar */}
+            <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 flex-1">Файлы задачи</span>
+                {syncMsg && (
+                    <span className="text-xs text-green-600 dark:text-green-400 font-bold">{syncMsg}</span>
+                )}
+                {sessionId ? (
+                    <button
+                        onClick={handlePullToSession}
+                        disabled={pulling}
+                        title="Загрузить условие и все файлы с Polygon в сессию ИИ и обновить список"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold
+                                   bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50
+                                   shadow-lg shadow-blue-500/20"
+                    >
+                        {pulling ? <Loader2 size={13} className="animate-spin" /> : <DownloadCloud size={13} />}
+                        Синхронизировать с Polygon
+                    </button>
+                ) : (
                     <button
                         onClick={handleSync}
                         disabled={syncing}
@@ -244,134 +390,20 @@ export const FilesTab = ({ polygonId }: Props) => {
                         {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                         Обновить
                     </button>
-                </div>
-
-                {error && (
-                    <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm">
-                        <AlertCircle size={16} />
-                        {error}
-                    </div>
                 )}
-
-                <Section title="Решения"         items={files.solutions}     section="solution" showTag />
-                <Section title="Исходные файлы"  items={files.sourceFiles}   section="source" />
-                <Section title="Ресурсы"         items={files.resourceFiles} section="resource" />
-                <Section title="Вспомогательные" items={files.auxFiles}      section="aux" />
-
-                {/* Upload form */}
-                <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
-                    <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-2">
-                        <Upload size={13} />
-                        Загрузить файл
-                    </div>
-                    <div className="p-4 space-y-3">
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <label className="block text-[10px] font-bold text-slate-500 mb-1">Тип</label>
-                                <select
-                                    value={uploadType}
-                                    onChange={e => setUploadType(e.target.value)}
-                                    className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 outline-none dark:text-white"
-                                >
-                                    {FILE_UPLOAD_TYPES.map(t => (
-                                        <option key={t.value} value={t.value}>{t.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="flex-1">
-                                <label className="block text-[10px] font-bold text-slate-500 mb-1">Имя файла</label>
-                                <input
-                                    value={uploadName}
-                                    onChange={e => setUploadName(e.target.value)}
-                                    placeholder="example.cpp"
-                                    className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 outline-none dark:text-white"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-bold text-slate-500 mb-1">Содержимое</label>
-                            <textarea
-                                value={uploadContent}
-                                onChange={e => setUploadContent(e.target.value)}
-                                rows={5}
-                                placeholder="// код файла..."
-                                className="w-full text-xs font-mono bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 outline-none dark:text-white resize-y"
-                            />
-                        </div>
-                        {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
-                        {uploadSuccess && <p className="text-xs text-green-600 dark:text-green-400 font-bold">Файл загружен</p>}
-                        <button
-                            onClick={handleUpload}
-                            disabled={uploading || !uploadName.trim()}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold
-                                       bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50"
-                        >
-                            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-                            Загрузить
-                        </button>
-                    </div>
-                </div>
             </div>
 
-            {/* File view/edit modal */}
-            {viewState && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
-                        {/* Modal header */}
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
-                            <span className="font-bold text-sm dark:text-white font-mono">{viewState.name}</span>
-                            <div className="flex items-center gap-2">
-                                {viewState.editing ? (
-                                    <>
-                                        <button
-                                            onClick={handleSaveEdit}
-                                            disabled={viewState.saving}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50"
-                                        >
-                                            {viewState.saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                                            Сохранить
-                                        </button>
-                                        <button
-                                            onClick={() => setViewState(v => v ? { ...v, editing: false, editContent: v.content } : v)}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-                                        >
-                                            Отмена
-                                        </button>
-                                    </>
-                                ) : (
-                                    <button
-                                        onClick={() => setViewState(v => v ? { ...v, editing: true, editContent: v.content } : v)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-                                    >
-                                        <Edit2 size={12} />
-                                        Редактировать
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => setViewState(null)}
-                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-                                >
-                                    <X size={16} />
-                                </button>
-                            </div>
-                        </div>
-                        {/* Modal content */}
-                        <div className="flex-1 overflow-y-auto p-4 min-h-0">
-                            {viewState.editing ? (
-                                <textarea
-                                    value={viewState.editContent}
-                                    onChange={e => setViewState(v => v ? { ...v, editContent: e.target.value } : v)}
-                                    className="w-full h-full min-h-[400px] text-xs font-mono bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 outline-none dark:text-white resize-none focus:border-blue-500 transition-all"
-                                />
-                            ) : (
-                                <pre className="text-xs font-mono text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-words">
-                                    {viewState.content}
-                                </pre>
-                            )}
-                        </div>
-                    </div>
+            {error && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm">
+                    <AlertCircle size={16} />
+                    {error}
                 </div>
             )}
-        </>
+
+            <Section title="Решения"         items={files.solutions}     section="solution" showTag />
+            <Section title="Исходные файлы"  items={files.sourceFiles}   section="source" />
+            <Section title="Ресурсы"         items={files.resourceFiles} section="resource" />
+            <Section title="Вспомогательные" items={files.auxFiles}      section="aux" />
+        </div>
     );
 };

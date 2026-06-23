@@ -1,3 +1,5 @@
+"""List a Polygon problem's solutions and sync them into the local cache."""
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,6 +9,12 @@ from models.task.solution import PolygonSolution
 
 
 async def get_solutions(problem_id: int, user_id: int, db: AsyncSession):
+    """Return solutions (problem.solutions) and upsert their metadata locally.
+
+    For a cached problem, each returned solution's sourceType/tag is mirrored
+    into PolygonSolution rows (created with empty content and uploaded=True when
+    missing) so the local view stays in sync with Polygon.
+    """
     user = await get_user(user_id, db)
     result = await polygon_call("problem.solutions", {"problemId": str(problem_id)}, user)
 

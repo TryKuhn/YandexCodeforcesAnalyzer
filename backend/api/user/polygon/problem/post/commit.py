@@ -13,6 +13,11 @@ async def commit_changes(
     minor_changes: bool = False,
     message: Optional[str] = None,
 ):
+    """Commit working-copy changes via problem.commitChanges.
+
+    Passes ``minorChanges``/``message`` when supplied and raises HTTP 409 if
+    Polygon reports a commit conflict (``conflictOccurred``).
+    """
     user = await get_user(user_id, db)
     params: dict = {"problemId": str(problem_id)}
     if minor_changes:

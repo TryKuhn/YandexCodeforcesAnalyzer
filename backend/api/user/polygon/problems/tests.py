@@ -1,3 +1,5 @@
+"""Routes for reading test lists, test input/answer content, and saving tests."""
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +22,7 @@ async def route_get_tests(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """List tests for a testset; set no_inputs to omit test input bodies."""
     return await get_tests(
         problem_id=polygon_id,
         testset=testset,
@@ -37,6 +40,7 @@ async def route_get_test_input(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return the input content of a single test."""
     content = await get_test_input(
         problem_id=polygon_id,
         testset=testset,
@@ -55,6 +59,7 @@ async def route_get_test_answer(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return the jury answer content of a single test."""
     content = await get_test_answer(
         problem_id=polygon_id,
         testset=testset,
@@ -74,6 +79,7 @@ async def route_save_test(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Save a test's input (UTF-8 encoded) at the given index on Polygon."""
     await save_test(
         problem_id=polygon_id,
         testset=testset,

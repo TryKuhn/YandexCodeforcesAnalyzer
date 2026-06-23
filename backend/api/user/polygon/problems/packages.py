@@ -1,3 +1,5 @@
+"""Routes for listing and building Polygon problem packages."""
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -14,6 +16,8 @@ router = APIRouter()
 
 
 class BuildPackageRequest(BaseModel):
+    """Options for a package build request (full build and verification flags)."""
+
     full: Optional[bool] = False
     verify: Optional[bool] = False
 
@@ -24,6 +28,7 @@ async def route_get_packages(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """List the problem's packages from Polygon."""
     return await get_packages(problem_id=polygon_id, user_id=user_id, db=db)
 
 
@@ -34,6 +39,7 @@ async def route_build_package(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Commit pending changes, then trigger a package build on Polygon."""
     await commit_changes(
         problem_id=polygon_id,
         user_id=user_id,

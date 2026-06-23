@@ -1,3 +1,4 @@
+"""Profile endpoints: current-user info and active-session listing."""
 from fastapi import HTTPException, status
 from fastapi.params import Depends
 from sqlalchemy import select
@@ -13,6 +14,7 @@ from models import RefreshToken, User
 async def get_me(
     user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
+    """Return the current user's profile and platform-link status flags."""
     user = await db.execute(select(User).filter_by(id=user_id))
     user = user.scalars().first()
 
@@ -36,6 +38,7 @@ async def get_me(
 async def get_sessions(
     payload: dict = Depends(get_current_payload), db: AsyncSession = Depends(get_db)
 ):
+    """List the current user's active sessions, flagging the current one."""
     user_id = payload.get("user_id")
     current_sid = payload.get("sid")
 

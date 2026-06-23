@@ -7,6 +7,8 @@ logger = logging.getLogger(__name__)
 
 
 class PolygonAPIError(Exception):
+    """Raised when a Polygon API call fails or returns a non-OK status."""
+
     def __init__(
         self,
         message: str,
@@ -25,8 +27,17 @@ class PolygonAPIError(Exception):
 
 
 async def get_response(client: ClientSession, url, params):
+    """POST to a Polygon endpoint and return the parsed ``result`` payload.
+
+    Decodes the body tolerantly because file contents can carry non-UTF-8 bytes
+    (e.g. a solution saved with a broken encoding) and strict decoding would
+    raise. Raises ``PolygonAPIError`` on non-OK status or HTTP errors with an
+    unparseable body; falls back to ``{"message": ...}`` for OK responses that
+    lack a ``result`` field or are not JSON.
+    """
     async with client.post(url, data=params) as response:
-        response_text = await response.text()
+        raw = await response.read()
+        response_text = raw.decode("utf-8", errors="replace")
 
         try:
             result = json.loads(response_text)

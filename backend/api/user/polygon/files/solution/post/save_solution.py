@@ -1,3 +1,5 @@
+"""Upload or update a solution for a Polygon problem."""
+
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
