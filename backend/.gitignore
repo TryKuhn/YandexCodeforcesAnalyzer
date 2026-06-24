@@ -1,0 +1,6 @@
+# pytest-testmon coverage DB (regenerated locally / cached in CI)
+.testmondata
+.testmondata*
+
+# mypy incremental cache (regenerated locally / cached in CI)
+.mypy_cache/
