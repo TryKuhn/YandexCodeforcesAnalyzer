@@ -85,7 +85,11 @@ async def _push_to_polygon(
     elif category == "script":
         await save_script(problem_id, "tests", content, user_id, db)
     elif category == "solution":
-        await save_solution(problem_id, filename, content, tag, user_id, db)
+        # Polygon auto-detects the language for .cpp but not reliably for .py
+        # (it rejects with a 'file:' error), so pass an explicit sourceType.
+        source_type = "python.3" if filename.endswith(".py") else None
+        await save_solution(problem_id, filename, content, tag, user_id, db,
+                            source_type=source_type)
     else:
         raise ValueError(f"Unknown file category '{category}' for sync")
 

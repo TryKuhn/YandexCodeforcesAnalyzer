@@ -1,4 +1,6 @@
 """Unit tests for routes.chat.chat.unified_chat (LLM intent dispatch)."""
+import asyncio
+
 import pytest
 from fastapi import HTTPException
 
@@ -129,25 +131,23 @@ async def test_chat_modify_edit_file(db, user, task_session, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_chat_regenerate_action(db, user, task_session, monkeypatch):
+async def test_chat_regenerate_runs_in_background(db, user, task_session, monkeypatch):
     _stub_intent(monkeypatch, "regenerate")
 
-    called = {"regen": False}
+    bg = {}
 
-    async def fake_regen(db_, session, message):
-        called["regen"] = True
-        return {
-            "response": "regenerated", "updated_files": ["checker", "solution_cpp"],
-            "statement": None, "technical_data": {}, "synced": False, "build": False,
-        }
+    async def fake_bg(session_id, action, file_key, message, context_dump):
+        bg.update(session_id=session_id, action=action, message=message)
 
-    monkeypatch.setattr(mod.modify_executor, "regenerate", fake_regen)
+    monkeypatch.setattr(mod, "_run_generation_bg", fake_bg)
 
     req = ChatRequest(session_id=task_session.id, message="regenerate everything")
     res = await unified_chat(req, user_id=user.id, db=db)
-    assert called["regen"] is True
+    await asyncio.sleep(0)  # let the scheduled background task run
     assert res.action == "modify"
-    assert res.updated_files == ["checker", "solution_cpp"]
+    assert res.pending is True
+    assert bg == {"session_id": task_session.id, "action": "regenerate",
+                  "message": "regenerate everything"}
 
 
 @pytest.mark.asyncio
@@ -174,22 +174,22 @@ async def test_chat_build_action_no_polygon_id_errors(db, user, task_session, mo
 
 
 @pytest.mark.asyncio
-async def test_chat_modify_with_build_flag_kicks_off(db, user, task_session, monkeypatch):
+async def test_chat_edit_task_runs_in_background(db, user, task_session, monkeypatch):
     _stub_intent(monkeypatch, "edit_task")
 
-    async def fake_execute(db_, session, message, resolved):
-        return {
-            "response": "rebuilt task", "updated_files": ["checker"],
-            "statement": None, "technical_data": {}, "synced": True, "build": True,
-        }
+    bg = {}
 
-    monkeypatch.setattr(mod.modify_executor, "execute", fake_execute)
+    async def fake_bg(session_id, action, file_key, message, context_dump):
+        bg.update(action=action)
+
+    monkeypatch.setattr(mod, "_run_generation_bg", fake_bg)
 
     req = ChatRequest(session_id=task_session.id, message="rework the whole task")
     res = await unified_chat(req, user_id=user.id, db=db)
+    await asyncio.sleep(0)
     assert res.action == "modify"
-    # build kicked off because result["build"] and polygon_problem_id set
-    assert "сборку" in res.response
+    assert res.pending is True
+    assert bg.get("action") == "edit_task"
 
 
 @pytest.mark.asyncio

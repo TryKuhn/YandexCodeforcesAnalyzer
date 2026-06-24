@@ -204,6 +204,10 @@ class ChatResponse(BaseModel):
     technical_data: Optional[Dict[str, Any]] = None
     build_triggered: bool = False
     is_error: bool = False
+    # True when a heavy generation was offloaded to a background task: the
+    # assistant reply is NOT in this response — the client polls the session
+    # chat_log for it (and watches /ai/upload-progress for live stages).
+    pending: bool = False
 
 
 class UploadProgressResponse(BaseModel):

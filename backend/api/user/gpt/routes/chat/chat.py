@@ -27,7 +27,8 @@ from api.user.gpt.services.chat.file_context import ensure_files_loaded
 from api.user.gpt.services.sessions import (append_chat_log, chat_message,
                                             get_session_or_404)
 from api.user.polygon.get_response import PolygonAPIError
-from app.database import get_db
+from app.database import Session, get_db
+from models.task.session import TaskSession
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,49 @@ def _resolved_for(action: str, file_key: str | None,
         if file_key:
             return ResolvedContext(scope="file", file_key=file_key, candidates=[file_key])
     return ResolvedContext(scope="task", candidates=available_files)
+
+
+# Actions that (re)generate a whole pack — minutes of model calls. These run in
+# the background so the HTTP request returns immediately; the client polls the
+# session chat_log for the assistant reply and /ai/upload-progress for stages.
+_HEAVY_ACTIONS = {"regenerate", "edit_task"}
+
+
+async def _run_generation_bg(
+    session_id: str, action: str, file_key: str | None,
+    message: str, context_dump: dict,
+) -> None:
+    """Background worker for a heavy generation: run the executor with its OWN DB
+    session and persist the assistant reply to chat_log (the client polls for it).
+    """
+    async with Session() as db:
+        session = await db.get(TaskSession, session_id)
+        if session is None:
+            return
+        updated_files: list[str] = []
+        is_error = False
+        try:
+            if action == "regenerate":
+                result = await modify_executor.regenerate(db, session, message)
+            else:
+                files = list((await get_all_file_contents(db, session.id)).keys())
+                resolved = _resolved_for(action, file_key, files)
+                result = await modify_executor.execute(db, session, message, resolved)
+            response_text = result["response"]
+            updated_files = result["updated_files"]
+            if result.get("build") and session.polygon_problem_id:
+                asyncio.create_task(run_build_with_repair(session.id))
+                response_text += ("\n\n🔨 Запустил сборку пакета с авто-починкой — "
+                                  "прогресс на вкладке «Пакеты».")
+        except Exception as e:
+            logger.exception(f"[{session_id}] background generation failed: {e}")
+            is_error = True
+            response_text = f"❌ Ошибка: {_error_text(e)}"
+        await append_chat_log(db, session_id, [
+            chat_message("assistant", response_text, action="modify",
+                         context=context_dump, updated_files=updated_files,
+                         is_error=is_error),
+        ])
 
 
 @gpt_router.post("/chat", response_model=ChatResponse)
@@ -118,6 +162,20 @@ async def unified_chat(
         ])
         return ChatResponse(action="answer", response=text, is_error=err)
 
+    # Heavy (re)generation → run in the background and return immediately. The
+    # user message is already persisted; the worker appends the assistant reply
+    # to chat_log when done, and the client polls for it.
+    if action in _HEAVY_ACTIONS:
+        asyncio.create_task(_run_generation_bg(
+            session.id, action, file_key, request.message,
+            request.context.model_dump(),
+        ))
+        return ChatResponse(
+            action="modify", pending=True,
+            response="🔄 Генерирую — это может занять до пары минут. Прогресс "
+                     "показан ниже, результат появится в чате автоматически.",
+        )
+
     updated_files: list[str] = []
     statement = None
     technical_data = None
@@ -146,13 +204,12 @@ async def unified_chat(
                 problem_type=session.problem_type,
             )
         else:
-            if action == "regenerate":
-                result = await modify_executor.regenerate(db, session, request.message)
-            else:
-                resolved = _resolved_for(action, file_key, available_files)
-                result = await modify_executor.execute(
-                    db, session, request.message, resolved
-                )
+            # Light edits only (edit_statement / edit_file / edit_test); the
+            # pack-(re)generating actions are handled in the background above.
+            resolved = _resolved_for(action, file_key, available_files)
+            result = await modify_executor.execute(
+                db, session, request.message, resolved
+            )
             response_text = result["response"]
             updated_files = result["updated_files"]
             statement = result["statement"]
