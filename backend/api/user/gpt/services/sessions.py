@@ -27,8 +27,13 @@ def now_utc() -> datetime:
 
 
 def now_iso() -> str:
-    """ISO-8601 string of the current naive UTC time."""
-    return now_utc().isoformat()
+    """ISO-8601 string of the current UTC time, with an explicit 'Z' suffix.
+
+    The 'Z' matters: a designator-less ISO string (e.g. ``2026-06-24T09:53:00``)
+    is parsed by JS ``new Date()`` as *local* time, which shifts every displayed
+    chat timestamp by the viewer's UTC offset. The 'Z' marks it as UTC.
+    """
+    return now_utc().isoformat() + "Z"
 
 
 def new_id() -> str:

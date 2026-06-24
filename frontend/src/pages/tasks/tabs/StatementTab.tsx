@@ -102,9 +102,14 @@ function processInline(s: string): string {
     s = replaceCmd(s, 'textbf', c => '**' + processInline(c) + '**');
     s = replaceCmd(s, 'textit', c => '*' + processInline(c) + '*');
     s = replaceCmd(s, 'emph', c => '*' + processInline(c) + '*');
-    s = replaceCmd(s, 'scriptsize', c => processInline(c));
+    s = replaceCmd(s, 'sout', c => '~~' + processInline(c) + '~~');
+    s = replaceCmd(s, 'textsc', c => processInline(c));
     s = replaceCmd(s, 'textsf', c => processInline(c));
     s = replaceCmd(s, 'underline', c => processInline(c));
+    // Size switches — drop the sizing, keep the content.
+    for (const sz of ['tiny', 'scriptsize', 'small', 'normalsize', 'large', 'Large', 'LARGE', 'huge', 'Huge']) {
+        s = replaceCmd(s, sz, c => processInline(c));
+    }
     return s;
 }
 
@@ -126,6 +131,26 @@ function tabularToMarkdown(body: string): string {
 function renderLatex(src: string): string {
     let s = src;
 
+    // Protect code from every other rewrite below (dashes, quotes, math, inline
+    // commands would all corrupt source code). Stash blocks/inline code as
+    // placeholders now and restore them as Markdown code at the very end.
+    // Polygon's code environment is lstlisting; verbatim is also handled since
+    // models sometimes emit it (and it must not leak raw into the preview).
+    const codeStash: string[] = [];
+    const stashCode = (code: string, inline: boolean): string => {
+        // @@-sentinel: survives indent-strip and every text rewrite below
+        // (no <<, ---, $, backslash or brace chars); restored last.
+        const token = `@@CODE${codeStash.length}@@`;
+        codeStash.push(inline
+            ? '`' + code.replace(/\n/g, ' ') + '`'
+            : '\n\n```\n' + code.replace(/^\n+|\s+$/g, '') + '\n```\n\n');
+        return token;
+    };
+    s = s.replace(/\\begin\{(?:verbatim|lstlisting)\}([\s\S]*?)\\end\{(?:verbatim|lstlisting)\}/g,
+        (_m, body) => stashCode(body, false));
+    // \verb<delim>...<delim> and \verb*<delim>...<delim> (any delimiter char)
+    s = s.replace(/\\verb\*?([^a-zA-Z0-9\s])([\s\S]*?)\1/g, (_m, _d, body) => stashCode(body, true));
+
     // Guillemets and dashes first (before tables, whose separators use --- )
     s = s.replace(/<</g, '«').replace(/>>/g, '»');
     s = s.replace(/---/g, '—').replace(/(?<!-)--(?!-)/g, '–');
@@ -136,6 +161,10 @@ function renderLatex(src: string): string {
     // Tabular → Markdown table
     s = s.replace(/\\begin\{tabular\}([\s\S]*?)\\end\{tabular\}/g,
         (_m, body) => tabularToMarkdown(body));
+
+    // Links: \href{url}{text} → [text](url); \url{url} → bare link
+    s = s.replace(/\\href\s*\{([^}]*)\}\s*\{([^}]*)\}/g, (_m, url, text) => `[${text}](${url})`);
+    s = s.replace(/\\url\s*\{([^}]*)\}/g, (_m, url) => `<${url}>`);
 
     // Images → italic placeholder (resource files aren't served inline)
     s = s.replace(/\\includegraphics(?:\[[^\]]*\])?\{([^}]*)\}/g,
@@ -164,6 +193,10 @@ function renderLatex(src: string): string {
 
     // Strip leading indentation so aligned LaTeX isn't seen as a code block
     s = s.split('\n').map(l => l.replace(/^[ \t]+/, '')).join('\n');
+
+    // Restore stashed code (verbatim/lstlisting/\verb) as Markdown code, after
+    // all rewriting so its contents were never altered.
+    s = s.replace(/@@CODE(\d+)@@/g, (_m, i) => codeStash[Number(i)] ?? '');
 
     return s;
 }

@@ -55,8 +55,22 @@ jobs:
       - name: Run ruff
         run: ruff check .
 
-#      - name: Run mypy
-#        run: mypy . --ignore-missing-imports --explicit-package-bases
+      # mypy needs the whole module graph (can't lint single files correctly),
+      # but it is incremental: cache .mypy_cache so only changed modules + their
+      # dependents are re-analysed. Primary key always misses (run_id) so each
+      # run saves a fresh cache; restore-keys pulls the most recent prior one
+      # (incl. main's, which a PR inherits). Cold cache => full ~40s check;
+      # warm => ~7-10s. Whole-graph correctness is preserved either way.
+      - name: Restore mypy cache
+        uses: actions/cache@v4
+        with:
+          path: ./backend/.mypy_cache
+          key: mypy-${{ runner.os }}-py3.11-${{ github.run_id }}
+          restore-keys: |
+            mypy-${{ runner.os }}-py3.11-
+
+      - name: Run mypy
+        run: mypy . --ignore-missing-imports --explicit-package-bases
 
   backend-test:
     needs: changes
@@ -108,40 +122,14 @@ jobs:
           cache: pip
           cache-dependency-path: ./backend/requirements.txt
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-          cmake \
-          clang-17 \
-          llvm-17 \
-          llvm-17-dev \
-          libclang-17-dev \
-          libboost-dev \
-          pybind11-dev \
-          build-essential \
-          libpq-dev
-
+      # NOTE: the plagiarism_cpp C++ extension is NOT built here — the test
+      # suite mocks it (see backend/conftest.py), so clang/llvm/cmake/boost and
+      # the cmake build are unnecessary. psycopg2-binary needs no libpq-dev and
+      # every other dep ships manylinux wheels, so no system packages are needed.
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pybind11
-
-      - name: Build plagiarism extension
-        run: |
-          mkdir -p /tmp/plag-build
-          cmake -S ./plagiarism -B /tmp/plag-build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang-17 \
-            -DCMAKE_CXX_COMPILER=clang++-17 \
-            -DClang_DIR=/usr/lib/llvm-17/lib/cmake/clang \
-            -DLLVM_DIR=/usr/lib/llvm-17/lib/cmake/llvm \
-            -Dpybind11_DIR="$(python -m pybind11 --cmakedir)"
-          cmake --build /tmp/plag-build --target plagiarism_cpp -j"$(nproc)"
-
-          SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
-          find /tmp/plag-build -name "plagiarism_cpp*.so" -exec cp {} "$SITE_PACKAGES" \;
 
       - name: Run migrations
         run: alembic upgrade head

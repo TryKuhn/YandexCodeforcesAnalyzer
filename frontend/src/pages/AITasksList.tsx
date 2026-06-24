@@ -8,6 +8,7 @@ import {
     AlertCircle, Clock, ChevronRight, Download, X
 } from 'lucide-react';
 import { api } from '../api/instance';
+import { parseServerDate } from '../utils/date';
 import { useAISettings } from '../components/layout/MainLayout';
 
 interface SessionSummary {
@@ -156,7 +157,7 @@ export const AITasksList = () => {
 
     const formatDate = (dateStr: string | null) => {
         if (!dateStr) return '';
-        const date = new Date(dateStr);
+        const date = parseServerDate(dateStr);
         const now = new Date();
         const diff = now.getTime() - date.getTime();
 
