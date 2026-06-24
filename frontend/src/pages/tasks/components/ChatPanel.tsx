@@ -8,6 +8,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { api } from '../../../api/instance';
+import { parseServerDate } from '../../../utils/date';
 
 // Normalise LaTeX math delimiters so KaTeX (which expects $…$ / $$…$$) renders
 // the \(…\) and \[…\] forms the models often emit.
@@ -74,7 +75,7 @@ type ContextValue = 'task' | 'statement' | `file:${string}`;
 
 const formatTime = (ts: string) => {
     try {
-        return new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        return parseServerDate(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     } catch {
         return '';
     }
