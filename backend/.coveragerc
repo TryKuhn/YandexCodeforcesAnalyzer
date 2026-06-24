@@ -1,0 +1,18 @@
+[run]
+branch = False
+omit =
+    */__pycache__/*
+    alembic/*
+    tests/*
+    conftest.py
+    */site-packages/*
+    ; Dead module: duplicate __tablename__ collides with the active
+    ; models/plagiarism/plagiarism_report.py, so it can never be imported.
+    models/submissions/plagiarism_report.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    if TYPE_CHECKING:
