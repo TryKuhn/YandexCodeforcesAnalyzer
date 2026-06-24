@@ -85,6 +85,11 @@ async def unified_chat(
     session = await get_session_or_404(db, request.session_id, user_id)
     await ensure_files_loaded(db, session)
 
+    # Conversation so far (BEFORE this turn) — fed to the answer model as
+    # history. The chat flow persists turns to chat_log, so that — not the
+    # rarely-populated session.history column — is the real transcript.
+    prior_log = list(session.chat_log or [])
+
     await append_chat_log(db, session.id, [
         chat_message("user", request.message, context=request.context.model_dump()),
     ])
@@ -92,7 +97,8 @@ async def unified_chat(
     available_files = list((await get_all_file_contents(db, session.id)).keys())
 
     intent = await intent_router.classify_action(
-        request.message, _context_hint(request.context), available_files
+        request.message, _context_hint(request.context), available_files,
+        main_model=session.model,
     )
     action = intent["action"]
     file_key = intent["file_key"]
@@ -125,12 +131,17 @@ async def unified_chat(
         if action == "answer":
             resolved = await context_resolver.resolve(db, session, request.context)
             files = await get_all_file_contents(db, session.id)
+            history = [
+                {"role": m["role"], "content": m["content"]}
+                for m in prior_log
+                if m.get("role") in ("user", "assistant") and m.get("content")
+            ]
             response_text = await answer_executor.execute(
                 message=request.message,
                 statement=session.statement or {},
                 files=files,
                 model=session.model,
-                history=list(session.history or []),
+                history=history,
                 resolved=resolved,
                 problem_type=session.problem_type,
             )

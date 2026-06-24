@@ -34,7 +34,7 @@ def _no_background(monkeypatch):
 
 
 def _stub_intent(monkeypatch, action, file_key=None):
-    async def fake_classify(message, hint, available_files):
+    async def fake_classify(message, hint, available_files, main_model=None):
         return {"action": action, "file_key": file_key}
 
     monkeypatch.setattr(mod.intent_router, "classify_action", fake_classify)
@@ -64,6 +64,40 @@ async def test_chat_answer_action(db, user, task_session, monkeypatch):
     s = await get_session_or_404(db, task_session.id)
     roles = [m["role"] for m in s.chat_log]
     assert roles == ["user", "assistant"]
+
+
+@pytest.mark.asyncio
+async def test_chat_answer_gets_history_from_chat_log(db, user, task_session, monkeypatch):
+    """Regression: the answer model must see prior turns. They live in chat_log,
+    not session.history, so history must be derived from chat_log."""
+    task_session.chat_log = [
+        {"role": "user", "content": "сделай задачу про qsort", "id": "1"},
+        {"role": "assistant", "content": "вот разбор задачи", "id": "2", "action": "answer"},
+    ]
+    await db.commit()
+    _stub_intent(monkeypatch, "answer")
+
+    async def fake_resolve(db_, session, ctx):
+        return object()
+
+    captured = {}
+
+    async def fake_answer(**kwargs):
+        captured.update(kwargs)
+        return "ok"
+
+    monkeypatch.setattr(mod.context_resolver, "resolve", fake_resolve)
+    monkeypatch.setattr(mod.answer_executor, "execute", fake_answer)
+
+    req = ChatRequest(session_id=task_session.id, message="да всё верно")
+    await unified_chat(req, user_id=user.id, db=db)
+
+    # The two prior turns are forwarded as clean {role, content} dicts; the
+    # current message is NOT in history (the executor adds it itself).
+    assert captured["history"] == [
+        {"role": "user", "content": "сделай задачу про qsort"},
+        {"role": "assistant", "content": "вот разбор задачи"},
+    ]
 
 
 @pytest.mark.asyncio
