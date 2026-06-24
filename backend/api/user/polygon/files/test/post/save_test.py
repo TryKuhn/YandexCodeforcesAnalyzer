@@ -27,11 +27,13 @@ async def save_test(
     update only metadata (points/group/…) of an EXISTING test by index — Polygon
     treats ``testInput`` as optional, so a script-generated test keeps its input.
 
-    ``testInput`` is sent as bytes in the request body and is excluded from the
-    Polygon API signature.
+    ``testInput`` is sent as a TEXT param (like ``source``/``file`` in
+    saveScript/saveSolution) so it is INCLUDED in the API signature. Sending it
+    as bytes would make ``polygon_call`` treat it as an excluded binary param,
+    and Polygon then rejects the request with 'apiKey: Incorrect signature'.
     """
-    if isinstance(test_input, str):
-        test_input = test_input.encode("utf-8")
+    if isinstance(test_input, bytes):
+        test_input = test_input.decode("utf-8", errors="replace")
 
     user = await get_user(user_id, db)
     params: dict = {

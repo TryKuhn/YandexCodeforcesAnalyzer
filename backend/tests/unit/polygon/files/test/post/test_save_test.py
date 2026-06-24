@@ -20,20 +20,22 @@ def _patch(monkeypatch, user, ret={"ok": True}):
     return cap
 
 
-async def test_save_test_str_input_encoded(monkeypatch, db, user):
+async def test_save_test_str_input_kept_as_str(monkeypatch, db, user):
+    # testInput must be a str (text param) so polygon_call includes it in the
+    # API signature; sending bytes would exclude it → 'Incorrect signature'.
     cap = _patch(monkeypatch, user)
     await save_test(5, "tests", 3, "5 6 7", user.id, db)
     assert cap["method"] == "problem.saveTest"
     assert cap["params"]["problemId"] == "5"
     assert cap["params"]["testset"] == "tests"
     assert cap["params"]["testIndex"] == "3"
-    assert cap["params"]["testInput"] == b"5 6 7"
+    assert cap["params"]["testInput"] == "5 6 7"
 
 
-async def test_save_test_bytes_passthrough(monkeypatch, db, user):
+async def test_save_test_bytes_decoded_to_str(monkeypatch, db, user):
     cap = _patch(monkeypatch, user)
-    await save_test(5, "tests", 3, b"\x00\x01", user.id, db)
-    assert cap["params"]["testInput"] == b"\x00\x01"
+    await save_test(5, "tests", 3, b"5 6 7", user.id, db)
+    assert cap["params"]["testInput"] == "5 6 7"
 
 
 async def test_save_test_none_input_omitted(monkeypatch, db, user):

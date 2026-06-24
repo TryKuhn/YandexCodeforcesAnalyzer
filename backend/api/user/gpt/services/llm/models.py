@@ -30,6 +30,12 @@ ROUTER_MODEL: str = "anthropic/claude-haiku-4.5"
 """Fixed cheap, fast model for the intent router. Never user-selectable: it only
 decides 'modify' vs 'answer' and must stay inexpensive regardless of the main agent."""
 
+SCAFFOLD_MODEL: str = "anthropic/claude-haiku-4.5"
+"""Fast model for internal scaffolding that is NOT a user-facing artifact — the
+test plan and the subtask plan. Using a cheap/fast model here cuts the slow
+sequential model round-trips out of the critical path without touching the
+quality of the actual files (which still use the user's chosen main model)."""
+
 
 def normalize_model(model: str | None) -> str:
     """Return a valid main-agent model id, falling back to the default.

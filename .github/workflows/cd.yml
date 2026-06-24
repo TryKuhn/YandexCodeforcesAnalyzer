@@ -166,9 +166,13 @@ jobs:
           echo "Current container status:"
           docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
 
-          # Wait for start_period to pass before polling health status
-          echo "Waiting 125s for containers to initialise (start_period=120s)..."
-          sleep 125
+          # Brief settle, then start polling health. Docker reports "healthy"
+          # as soon as a check passes (start_period doesn't delay success — it
+          # only suppresses early failures), and the poll loop below treats
+          # "starting" as "keep waiting", so we don't need to block the full
+          # start_period up front.
+          echo "Waiting 30s before polling health..."
+          sleep 30
 
           BACKEND_CID=$($DC -f docker-compose.prod.yml ps -q backend)
           if [ -z "$BACKEND_CID" ]; then

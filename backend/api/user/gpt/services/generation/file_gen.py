@@ -12,6 +12,7 @@ from typing import Dict
 from api.user.gpt.services.files.file_registry import applicable_types, get_spec
 from api.user.gpt.services.generation import test_plan_gen
 from api.user.gpt.services.llm.client import llm, strip_code_fences
+from api.user.gpt.services.llm.models import SCAFFOLD_MODEL
 from api.user.gpt.services.prompts import (checker, generator, interactor,
                                            jury_answer, scorer, script,
                                            solution, validator)
@@ -19,7 +20,7 @@ from api.user.gpt.services.prompts.solution import build_system_prompt as _sol_p
 from api.user.gpt.services.prompts import problem_type as problem_type_guide
 from api.user.gpt.services.prompts.base import ASCII_CODE_RULE
 
-_PACK_CONCURRENCY = 4
+_PACK_CONCURRENCY = 8
 
 
 def _system_prompt(file_type: str, interactive: bool = False, problem_type=None) -> str:
@@ -149,37 +150,57 @@ async def generate_pack(
 ) -> Dict[str, str]:
     """Generate every file applicable to the problem type.
 
-    Everything except the script is generated concurrently; the script is then
-    generated last with the generator's code in context so its parameter names
-    match exactly (otherwise testlib fails with 'unused key'). When ``subtasks``
-    is given, the script is told to emit tests grouped by subtask.
+    Files are generated as concurrently as the data dependencies allow:
+      - the test plan and every plan-independent file (validator, checker,
+        solutions, …) start together;
+      - the generator starts once the plan is ready;
+      - the script starts once the generator is ready (it needs the generator's
+        param names so testlib doesn't fail with 'unused key').
+    So the only sequential critical path is plan → generator → script, with
+    every other file overlapping it instead of running in separate waves.
+    When ``subtasks`` is given, the script emits tests grouped by subtask.
     """
     interactive = str(problem_type) == "interactive" or getattr(problem_type, "value", None) == "interactive"
     types = applicable_types(problem_type)
-    non_script = [ft for ft in types if ft != "script"]
-
-    plan = await test_plan_gen.generate(statement, model)
-    plan_text = test_plan_gen.format_plan(plan)
-    script_plan_text = plan_text + _grouping_note(subtasks)
 
     sem = asyncio.Semaphore(_PACK_CONCURRENCY)
 
-    async def _one(ft: str) -> tuple[str, str]:
-        """Generate one non-script file under the concurrency semaphore."""
+    async def _one(ft: str, plan_text: str | None = None) -> tuple[str, str]:
+        """Generate one file under the concurrency semaphore."""
         async with sem:
-            pt = plan_text if ft == "generator" else None
             return ft, await generate(ft, statement, model, interactive,
-                                      plan_text=pt, problem_type=problem_type)
+                                      plan_text=plan_text, problem_type=problem_type)
 
-    results = await asyncio.gather(*[_one(ft) for ft in non_script])
-    pack = {ft: code for ft, code in results if code}
+    # Plan + every file that doesn't depend on it start immediately, together.
+    # The plan is internal scaffolding → cheap/fast model, not the main one.
+    plan_task = asyncio.create_task(test_plan_gen.generate(statement, SCAFFOLD_MODEL))
+    indep_tasks = [
+        asyncio.create_task(_one(ft))
+        for ft in types if ft not in ("script", "generator")
+    ]
 
+    plan_text = test_plan_gen.format_plan(await plan_task)
+
+    # generator needs the plan; script needs the generator (+ plan).
+    _, generator_code = await _one("generator", plan_text)
+    pack: Dict[str, str] = {"generator": generator_code} if generator_code else {}
+
+    script_task = None
     if "script" in types:
-        script_code = await generate(
+        script_task = asyncio.create_task(generate(
             "script", statement, model, interactive,
-            generator_code=pack.get("generator", ""), plan_text=script_plan_text,
+            generator_code=generator_code or "",
+            plan_text=plan_text + _grouping_note(subtasks),
             problem_type=problem_type,
-        )
+        ))
+
+    for t in indep_tasks:
+        ft, code = await t
+        if code:
+            pack[ft] = code
+
+    if script_task is not None:
+        script_code = await script_task
         if script_code:
             pack["script"] = script_code
     return pack

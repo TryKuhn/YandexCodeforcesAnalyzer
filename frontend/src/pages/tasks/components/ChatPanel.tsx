@@ -208,6 +208,12 @@ export const ChatPanel = ({ sessionId, model, onModelChange, polygonId, initialM
                 context: buildContext(),
             });
             const data = res.data;
+            // Heavy generation runs in the background: the reply isn't here yet.
+            // Switch to polling — the resume loop picks it up from the chat_log.
+            if (data.pending) {
+                setResuming(true);
+                return;
+            }
             const assistantMsg: ChatMessage = {
                 id: crypto.randomUUID(),
                 role: 'assistant',

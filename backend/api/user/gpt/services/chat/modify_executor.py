@@ -22,6 +22,7 @@ from api.user.gpt.services.generation import (file_gen, samples_gen, statement_g
                                               subtask_plan_gen,
                                               subtask_solutions_gen)
 from api.user.gpt.services.llm.client import llm, strip_code_fences
+from api.user.gpt.services.llm.models import SCAFFOLD_MODEL
 from api.user.gpt.services.prompts import problem_type as problem_type_guide
 from api.user.gpt.services.prompts import task_modify
 from api.user.gpt.services.sessions import is_interactive, now_utc, update_session
@@ -231,19 +232,23 @@ async def _gen_progress(db: AsyncSession, session_id: str, step: str, idx: int) 
     }})
 
 
-async def _prepare_samples(db: AsyncSession, session: TaskSession, stmt: dict) -> None:
+async def _prepare_samples(db: AsyncSession, session: TaskSession, stmt: dict) -> bool:
     """Generate 1-3 manual samples, store them, and push them as sample tests.
 
     Done before the generator so the participant has concrete examples; with
-    groups enabled they go to group 0 (no points).
+    groups enabled they go to group 0 (no points). Returns True only when the
+    samples were both generated AND uploaded to Polygon — a Polygon upload
+    failure is logged and reported (not raised), so it no longer silently
+    leaves the problem with no sample tests.
     """
     try:
         examples = await samples_gen.generate(stmt, session.model, count=3)
     except Exception as e:
         logger.warning(f"[{session.id}] sample generation failed: {e}")
-        return
+        return False
     if not examples:
-        return
+        logger.warning(f"[{session.id}] sample generation returned no examples")
+        return False
     indexed = [
         {"index": i + 1, "input": ex["input"], "output": ex["output"]}
         for i, ex in enumerate(examples)
@@ -253,11 +258,16 @@ async def _prepare_samples(db: AsyncSession, session: TaskSession, stmt: dict) -
     session.updated_at = now_utc()
     await db.commit()
 
-    problem_id = await file_sync.ensure_problem(db, session)
-    await samples_sync.upload_examples(
-        db, problem_id, session.user_id, indexed,
-        group="0" if _groups_enabled(session) else None,
-    )
+    try:
+        problem_id = await file_sync.ensure_problem(db, session)
+        await samples_sync.upload_examples(
+            db, problem_id, session.user_id, indexed,
+            group="0" if _groups_enabled(session) else None,
+        )
+    except Exception as e:
+        logger.warning(f"[{session.id}] sample upload to Polygon failed: {e}")
+        return False
+    return True
 
 
 async def _prepare_subtasks(db: AsyncSession, session: TaskSession, stmt: dict) -> dict:
@@ -265,7 +275,8 @@ async def _prepare_subtasks(db: AsyncSession, session: TaskSession, stmt: dict) 
     if session.problem_type == ProblemType.OUTPUT_ONLY or not _groups_enabled(session):
         return stmt
     await _gen_progress(db, session.id, "Планирую подзадачи и баллы…", 2)
-    subtasks = await subtask_plan_gen.generate(stmt, session.model)
+    # Subtask plan is internal scaffolding → cheap/fast model, not the main one.
+    subtasks = await subtask_plan_gen.generate(stmt, SCAFFOLD_MODEL)
     if not subtasks:
         return stmt
 
@@ -311,9 +322,23 @@ async def _generate_from_scratch(db: AsyncSession, session: TaskSession,
     files_part = (f" и файлы: {', '.join(_label(k) for k in pack_result['updated_files'])}"
                   if pack_result["updated_files"] else "")
     verb = "Пересоздал" if redo else "Создал"
+    response = (f"✅ {verb} задачу «{stmt.get('name', '')}»: условие{files_part}. "
+                f"Синхронизировано с Polygon.")
+
+    # Surface what did NOT make it to Polygon instead of silently dropping it
+    # (the per-file Polygon error is in the backend logs at WARNING).
+    warns: list[str] = []
+    if pack_result.get("failed"):
+        warns.append("⚠️ Не синхронизировались с Polygon (перегенерируйте по "
+                     f"отдельности): {', '.join(_label(k) for k in pack_result['failed'])}.")
+    if not pack_result.get("samples_ok"):
+        warns.append("⚠️ Примеры (семплы) не созданы — без них и без скрипта тесты "
+                     "не сгенерируются. Попробуйте ещё раз или проверьте логи.")
+    if warns:
+        response += "\n" + "\n".join(warns)
+
     return {
-        "response": f"✅ {verb} задачу «{stmt.get('name', '')}»: условие{files_part}. "
-                    f"Синхронизировано с Polygon.",
+        "response": response,
         "updated_files": ["statement"] + pack_result["updated_files"],
         "statement": stmt,
         "technical_data": pack_result["technical_data"],
@@ -333,9 +358,10 @@ async def _generate_pack(db: AsyncSession, session: TaskSession,
     """
     stmt = statement if statement is not None else (session.statement or {})
 
+    samples_ok = bool(session.examples)
     if not session.examples:
         await _gen_progress(db, session.id, "Генерирую примеры (семплы)…", 3)
-        await _prepare_samples(db, session, stmt)
+        samples_ok = await _prepare_samples(db, session, stmt)
 
     settings = session.problem_settings or {}
     subtasks = settings.get("subtasks") if _groups_enabled(session) else None
@@ -383,4 +409,6 @@ async def _generate_pack(db: AsyncSession, session: TaskSession,
         "technical_data": pack,
         "synced": bool(updated_files),
         "build": bool(updated_files),
+        "failed": failed,
+        "samples_ok": samples_ok,
     }
