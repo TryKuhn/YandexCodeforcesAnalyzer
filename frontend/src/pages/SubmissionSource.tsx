@@ -95,7 +95,7 @@ export const SubmissionSource = () => {
             </div>
 
             <div className="bg-slate-950 rounded-3xl border border-slate-800 overflow-hidden shadow-2xl">
-                <div className="bg-slate-900 px-6 py-3 border-b border-slate-800 flex justify-between items-center">
+                <div className="bg-slate-900 px-4 sm:px-6 py-3 border-b border-slate-800 flex justify-between items-center gap-2">
                     <span className="text-xs font-mono text-slate-500 uppercase">source_code.{sub.language.includes('C++') ? 'cpp' : 'py'}</span>
                     <div className="flex gap-1.5">
                         <div className="w-2.5 h-2.5 rounded-full bg-red-500/20"></div>
@@ -103,8 +103,8 @@ export const SubmissionSource = () => {
                         <div className="w-2.5 h-2.5 rounded-full bg-green-500/20"></div>
                     </div>
                 </div>
-                <div className="p-8 overflow-x-auto">
-                    <pre className="font-mono text-sm text-slate-300 leading-relaxed selection:bg-blue-500/30">
+                <div className="p-4 sm:p-8 overflow-x-auto">
+                    <pre className="font-mono text-xs sm:text-sm text-slate-300 leading-relaxed selection:bg-blue-500/30">
                         <code>{sub.source}</code>
                     </pre>
                 </div>

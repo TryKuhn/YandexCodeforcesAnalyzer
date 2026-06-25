@@ -86,6 +86,8 @@ export const TaskPage = () => {
     const [problem, setProblem] = useState<PolygonProblem | null>(null);
     const [session, setSession] = useState<SessionData | null>(null);
     const [activeTab, setActiveTab] = useState<TabId>(initialTab);
+    // Mobile: editor and chat can't fit side by side — show one at a time.
+    const [mobileView, setMobileView] = useState<'content' | 'chat'>('content');
 
     // Resizable chat panel width (persisted)
     const [chatWidth, setChatWidth] = useState(() => {
@@ -223,10 +225,28 @@ export const TaskPage = () => {
                 onBack={() => navigate('/tasks')}
             />
 
+            {/* Mobile editor/chat switch (desktop shows both side by side) */}
+            <div className="md:hidden shrink-0 flex border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                {([['content', 'Редактор'], ['chat', 'AI Чат']] as const).map(([id, label]) => (
+                    <button
+                        key={id}
+                        onClick={() => setMobileView(id)}
+                        className={`flex-1 py-2.5 text-xs font-bold transition-colors border-b-2
+                            ${mobileView === id
+                                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                                : 'border-transparent text-slate-500 dark:text-slate-400'}`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
             {/* Body */}
             <div className="flex flex-1 min-h-0 overflow-hidden">
                 {/* Left: tabs + content */}
-                <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
+                <div className={`${mobileView === 'content' ? 'flex' : 'hidden'} md:flex
+                    flex-1 min-w-0 flex-col overflow-hidden bg-white dark:bg-slate-900
+                    md:border-r border-slate-200 dark:border-slate-800`}>
                     {/* Tab bar */}
                     <div className="shrink-0 flex border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-x-auto">
                         {TABS.map(tab => (
@@ -278,16 +298,20 @@ export const TaskPage = () => {
                     </div>
                 </div>
 
-                {/* Resize handle */}
+                {/* Resize handle (desktop only) */}
                 <div
                     onMouseDown={startChatResize}
                     title="Потяните, чтобы изменить ширину чата"
-                    className="w-1.5 shrink-0 cursor-col-resize bg-transparent
+                    className="hidden md:block w-1.5 shrink-0 cursor-col-resize bg-transparent
                                hover:bg-blue-400/60 active:bg-blue-500 transition-colors -ml-1.5 z-10"
                 />
 
-                {/* Right: chat panel */}
-                <div style={{ width: chatWidth }} className="shrink-0 flex min-h-0">
+                {/* Right: chat panel. Full-width on mobile, resizable on desktop. */}
+                <div
+                    style={{ width: chatWidth }}
+                    className={`${mobileView === 'chat' ? 'flex' : 'hidden'} md:flex
+                                shrink-0 min-h-0 max-md:!w-full`}
+                >
                     <ChatPanel
                         sessionId={session?.session_id ?? null}
                         model={chatModel}

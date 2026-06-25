@@ -111,10 +111,10 @@ export const ContestsPage = () => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {contests.map((contest) => (
-                        <div key={contest.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col group relative">
+                        <div key={contest.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 flex flex-col group relative">
                             <button
                                 onClick={() => handleDelete(contest.id, contest.name)}
-                                className="absolute top-4 right-4 p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                className="absolute top-4 right-4 p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                             >
                                 <Trash2 size={18} />
                             </button>

@@ -52,7 +52,7 @@ export const CodeEditor = ({
     const lang = detectLanguage(fileName);
 
     return (
-        <div className={`border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden text-[13px] ${className}`}>
+        <div className={`border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden text-[13px] w-full max-w-full min-w-0 [&_.cm-scroller]:overflow-x-auto ${className}`}>
             <CodeMirror
                 value={value}
                 onChange={onChange}

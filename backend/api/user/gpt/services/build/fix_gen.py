@@ -2,7 +2,7 @@
 import json
 from typing import Dict, List
 
-from api.user.gpt.services.llm.client import llm
+from api.user.gpt.services.llm.client import llm, strip_code_fences
 from api.user.gpt.services.prompts.fix import build_system_prompt
 
 
@@ -35,4 +35,6 @@ async def fix(
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
-    return (await llm.ask_text(model, messages)).strip()
+    # Strip any markdown fences the model adds — a leaked ``` becomes a stray
+    # backtick in the source and breaks compilation (e.g. C++ 'unknown char 0x60').
+    return strip_code_fences(await llm.ask_text(model, messages))

@@ -200,9 +200,9 @@ export const TasksList = () => {
                     </div>
                     <button
                         onClick={() => { setShowCreate(true); setNewName(''); setCreateError(null); }}
-                        className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700
+                        className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700
                                    hover:from-blue-700 hover:to-blue-800 text-white
-                                   px-5 py-3 rounded-2xl font-bold text-sm
+                                   w-full sm:w-auto px-5 py-3 rounded-2xl font-bold text-sm
                                    transition-all shadow-lg shadow-blue-500/20
                                    hover:shadow-xl active:scale-95 shrink-0"
                     >
@@ -314,10 +314,10 @@ export const TasksList = () => {
                                         onClick={() => navigate(`/tasks/${problem.polygon_id}`)}
                                         className="group bg-white dark:bg-slate-900 rounded-2xl
                                                    border border-slate-200 dark:border-slate-800
-                                                   p-5 cursor-pointer transition-all
+                                                   cursor-pointer transition-all
                                                    hover:border-blue-300 dark:hover:border-blue-700
                                                    hover:shadow-lg hover:shadow-blue-500/5
-                                                   active:scale-[0.99]"
+                                                   active:scale-[0.99] p-4 sm:p-5"
                                     >
                                         <div className="flex items-center justify-between gap-4">
                                             <div className="flex-1 min-w-0">

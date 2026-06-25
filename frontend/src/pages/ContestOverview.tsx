@@ -7,14 +7,14 @@ import {
 import { api } from '../api/instance';
 
 const StatCard = ({ title, value, icon: Icon, color }: any) => (
-    <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-        <div className="flex justify-between items-start mb-4">
+    <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+        <div className="flex justify-between items-start mb-3 sm:mb-4">
             <div className={`p-3 rounded-xl ${color}`}>
                 <Icon size={20} className="text-white" />
             </div>
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">{title}</p>
-        <h3 className="text-2xl font-bold mt-1 dark:text-white">{value}</h3>
+        <h3 className="text-xl sm:text-2xl font-bold mt-1 dark:text-white">{value}</h3>
     </div>
 );
 
@@ -46,7 +46,7 @@ export const ContestOverview = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-1 space-y-6">
-                    <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800">
+                    <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800">
                         <h3 className="font-bold dark:text-white mb-6">Информация</h3>
                         <div className="space-y-4">
                             <div className="flex items-center justify-between text-sm">
@@ -71,18 +71,18 @@ export const ContestOverview = () => {
                         <button
                             key={card.path}
                             onClick={() => navigate(card.path)}
-                            className="w-full flex items-center justify-between p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5 transition-all group"
+                            className="w-full flex items-center justify-between gap-3 p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5 transition-all group"
                         >
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl text-slate-400 group-hover:text-blue-600 transition-colors">
+                            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl text-slate-400 group-hover:text-blue-600 transition-colors shrink-0">
                                     <card.icon size={24} />
                                 </div>
-                                <div className="text-left">
+                                <div className="text-left min-w-0">
                                     <p className="font-bold dark:text-white">{card.label}</p>
                                     <p className="text-xs text-slate-500">{card.desc}</p>
                                 </div>
                             </div>
-                            <ArrowRight size={20} className="text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                            <ArrowRight size={20} className="shrink-0 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
                         </button>
                     ))}
                 </div>

@@ -4,7 +4,7 @@ const GITHUB_URL = 'https://github.com/TryKuhn/YandexCodeforcesAnalyzer';
 
 export const SiteFooter = () => (
     <footer className="w-full shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 text-xs">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
             <p className="text-slate-400 dark:text-slate-500">
                 © {new Date().getFullYear()} TaskForge.
             </p>

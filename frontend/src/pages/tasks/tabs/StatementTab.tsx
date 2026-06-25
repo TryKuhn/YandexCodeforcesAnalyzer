@@ -617,7 +617,7 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
                         />
                     </div>
 
-                    <div className="p-4 grid grid-cols-2 gap-3">
+                    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label className="block text-[10px] font-bold text-slate-500 mb-1">Входной файл</label>
                             <input

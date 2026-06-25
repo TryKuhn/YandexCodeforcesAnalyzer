@@ -58,7 +58,7 @@ export const LoadContestPage = () => {
                         <CloudDownload size={28} />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold dark:text-white">Загрузка данных</h1>
+                        <h1 className="text-xl sm:text-2xl font-bold dark:text-white">Загрузка данных</h1>
                         <p className="text-slate-500 text-sm">Импорт таблиц из внешних систем.</p>
                     </div>
                 </div>

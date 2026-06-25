@@ -17,26 +17,11 @@ class ProblemSettings(BaseModel):
     enable_points: Optional[bool] = False
 
 
-class AddCustomSolutionRequest(BaseModel):
-    """Request to add a named custom solution (with tag) to a session."""
-
-    session_id: str
-    tag: str
-    name: str
-
-
 class UpdateProblemSettingsRequest(BaseModel):
     """Request to update a session's problem settings."""
 
     session_id: Optional[str] = None
     settings: ProblemSettings
-
-
-class GenerateSamplesRequest(BaseModel):
-    """Request to generate ``count`` sample tests for a session."""
-
-    session_id: str
-    count: Optional[int] = 3
 
 
 class SuggestTagsRequest(BaseModel):
@@ -116,13 +101,6 @@ class RefineRequest(BaseModel):
     problem_settings: Optional[Dict] = None
 
 
-class ApproveStatementRequest(BaseModel):
-    """Request to approve a session's statement, with optional settings."""
-
-    session_id: str
-    problem_settings: Optional[Dict] = None
-
-
 class GenerateFilesResponse(BaseModel):
     """Generated technical files payload plus session/stage."""
 
@@ -143,14 +121,6 @@ class ApproveFilesRequest(BaseModel):
     """Request to approve a session's generated files."""
 
     session_id: str
-
-
-class ManualFixRequest(BaseModel):
-    """Request to manually replace a generated file's content."""
-
-    session_id: str
-    file_key: str
-    new_content: str
 
 
 class PostBuildRefineRequest(BaseModel):

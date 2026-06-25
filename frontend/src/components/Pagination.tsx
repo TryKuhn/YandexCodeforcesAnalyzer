@@ -38,7 +38,7 @@ export const Pagination = ({ page, totalPages, total, perPage, onPageChange, onP
     return (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
             {/* Информация и выбор размера страницы */}
-            <div className="flex items-center gap-4 text-sm text-slate-500">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-slate-500">
                 <span>
                     Показано <span className="font-bold text-slate-700 dark:text-slate-300">{from}–{to}</span> из{' '}
                     <span className="font-bold text-slate-700 dark:text-slate-300">{total}</span>
@@ -55,7 +55,7 @@ export const Pagination = ({ page, totalPages, total, perPage, onPageChange, onP
             </div>
 
             {/* Кнопки навигации */}
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center justify-center gap-1">
                 <button
                     onClick={() => onPageChange(1)}
                     disabled={page === 1}

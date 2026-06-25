@@ -18,8 +18,6 @@ import {ContestLayout} from "./components/layout/ContestLayout.tsx";
 import {ContestOverview} from "./pages/ContestOverview.tsx";
 import {ContestSubmissions} from "./pages/ContestSubmissions.tsx";
 import {ContestAnalytics} from "./pages/ContestAnalytics.tsx";
-import {AITasksList} from "./pages/AITasksList.tsx";
-import {AITaskSession} from "./pages/AITaskSession.tsx";
 import {TasksList} from "./pages/tasks/TasksList.tsx";
 import {TaskPage} from "./pages/tasks/TaskPage.tsx";
 import {FileEditorPage} from "./pages/tasks/FileEditorPage.tsx";
@@ -62,8 +60,9 @@ function App() {
                         <Route path="analytics/compare/:pairId" element={<PlagiarismComparison />} />
                     </Route>
                     <Route path="participants" element={<div>Страница участников</div>}/>
-                    <Route path="ai-tasks" element={<AITasksList/>}/>
-                    <Route path="ai-tasks/:sessionId" element={<AITaskSession/>}/>
+                    {/* Legacy AI-task flow removed — redirect old links to the new one. */}
+                    <Route path="ai-tasks" element={<Navigate to="/tasks" replace/>}/>
+                    <Route path="ai-tasks/:sessionId" element={<Navigate to="/tasks" replace/>}/>
                     <Route path="tasks" element={<TasksList/>}/>
                     <Route path="tasks/:polygonId" element={<TaskPage/>}/>
                     <Route path="tasks/:polygonId/files/:section/:name" element={<FileEditorPage/>}/>

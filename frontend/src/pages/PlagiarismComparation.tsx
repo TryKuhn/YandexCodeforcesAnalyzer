@@ -49,8 +49,8 @@ export const PlagiarismComparison = () => {
     const CodeHeader = ({user, userName, subId, banned, position, score}: any) => {
         const displayName = userName || user || 'Неизвестный';
         return (
-            <div className={`p-4 border-b dark:border-slate-800 flex items-center justify-between ${banned ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-white dark:bg-slate-900'}`}>
-                <div className="flex items-center gap-3">
+            <div className={`p-4 border-b dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 ${banned ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-white dark:bg-slate-900'}`}>
+                <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 ${banned ? 'bg-blue-200 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600'}`}>
                         {displayName[0]?.toUpperCase() || '?'}
                     </div>

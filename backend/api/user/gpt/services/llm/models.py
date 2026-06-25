@@ -17,6 +17,7 @@ class ModelInfo:
 MAIN_MODELS: list[ModelInfo] = [
     ModelInfo("anthropic/claude-opus-4.8", "Claude Opus 4.8"),
     ModelInfo("anthropic/claude-sonnet-4.6", "Claude Sonnet 4.6"),
+    ModelInfo("anthropic/claude-haiku-4.5", "Claude Haiku 4.5"),
     ModelInfo("google/gemini-3.1-pro-preview", "Gemini 3.1 Pro"),
     ModelInfo("openai/gpt-5.5-pro", "GPT-5.5 Pro"),
 ]
@@ -26,15 +27,17 @@ ALLOWED_MODEL_IDS: frozenset[str] = frozenset(m.id for m in MAIN_MODELS)
 DEFAULT_MODEL: str = "anthropic/claude-sonnet-4.6"
 """Default main agent used when none is provided or an unknown one is requested."""
 
-ROUTER_MODEL: str = "anthropic/claude-haiku-4.5"
-"""Fixed cheap, fast model for the intent router. Never user-selectable: it only
-decides 'modify' vs 'answer' and must stay inexpensive regardless of the main agent."""
+ROUTER_MODEL: str = "anthropic/claude-sonnet-4.6"
+"""Cheaper/faster model for the intent router and internal scaffolding. NOT
+haiku-4.5: that model's only OpenRouter providers (Bedrock/Anthropic-direct) are
+region-blocked on the prod account (403 'Request not allowed'), whereas
+sonnet/opus route through an allowed provider. The router additionally retries on
+the main model, but scaffolding does not — so this must be a model that works."""
 
-SCAFFOLD_MODEL: str = "anthropic/claude-haiku-4.5"
-"""Fast model for internal scaffolding that is NOT a user-facing artifact — the
-test plan and the subtask plan. Using a cheap/fast model here cuts the slow
-sequential model round-trips out of the critical path without touching the
-quality of the actual files (which still use the user's chosen main model)."""
+SCAFFOLD_MODEL: str = ROUTER_MODEL
+"""Model for internal scaffolding that is NOT a user-facing artifact — the test
+plan and the subtask plan. Cheaper/faster than the main agent so it stays off the
+slow critical path; the actual files still use the user's chosen main model."""
 
 
 def normalize_model(model: str | None) -> str:

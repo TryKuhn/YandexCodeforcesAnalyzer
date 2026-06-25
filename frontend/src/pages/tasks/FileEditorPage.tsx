@@ -139,7 +139,7 @@ export const FileEditorPage = () => {
                 </button>
 
                 <FileCode2 size={16} className="text-slate-400 shrink-0" />
-                <span className="font-bold text-sm font-mono dark:text-white truncate">{name}</span>
+                <span className="font-bold text-sm font-mono dark:text-white truncate max-w-[40vw] sm:max-w-none">{name}</span>
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
                     {SECTION_LABEL[section] ?? section}
                 </span>

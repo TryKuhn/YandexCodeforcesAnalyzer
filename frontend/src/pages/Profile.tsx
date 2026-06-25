@@ -215,9 +215,9 @@ export const Profile = () => {
                                 <div key={s.id} className={`p-5 rounded-2xl border transition-all ${
                                     s.is_current ? 'border-blue-500 bg-blue-50/30' : 'border-slate-100 dark:border-slate-800'
                                 }`}>
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex gap-4">
-                                            <div className="relative">
+                                    <div className="flex justify-between items-start gap-3">
+                                        <div className="flex gap-3 sm:gap-4 min-w-0">
+                                            <div className="relative shrink-0">
                                                 <div
                                                     className={`p-3 rounded-xl ${s.is_current ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
                                                     <Monitor size={24}/>
@@ -227,9 +227,9 @@ export const Profile = () => {
                                                         className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full"></div>
                                                 )}
                                             </div>
-                                            <div>
-                                                <p className="font-bold dark:text-white">{location}</p>
-                                                <p className="text-sm text-slate-500">{device}</p>
+                                            <div className="min-w-0">
+                                                <p className="font-bold dark:text-white break-words">{location}</p>
+                                                <p className="text-sm text-slate-500 break-words">{device}</p>
 
                                                 <div
                                                     className="flex items-center gap-1.5 mt-2 text-[11px] font-medium">
@@ -244,7 +244,7 @@ export const Profile = () => {
 
                                         {s.is_current && (
                                             <span
-                                                className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-lg uppercase">
+                                                className="shrink-0 text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-lg uppercase">
                     Текущая
                 </span>
                                         )}

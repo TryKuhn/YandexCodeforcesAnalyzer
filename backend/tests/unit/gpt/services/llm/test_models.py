@@ -31,9 +31,10 @@ def test_allowed_model_ids_matches_main_models():
 def test_default_and_router_model_constants():
     assert isinstance(m.DEFAULT_MODEL, str) and m.DEFAULT_MODEL
     assert m.DEFAULT_MODEL in m.ALLOWED_MODEL_IDS
+    # Router/scaffold use a cheaper/fast model. (Not haiku-4.5: it's region-
+    # blocked on prod; sonnet works, so they may coincide with a main model.)
     assert isinstance(m.ROUTER_MODEL, str) and m.ROUTER_MODEL
-    # router model is intentionally NOT user-selectable
-    assert m.ROUTER_MODEL not in m.ALLOWED_MODEL_IDS
+    assert isinstance(m.SCAFFOLD_MODEL, str) and m.SCAFFOLD_MODEL
 
 
 def test_normalize_model_none_returns_default():

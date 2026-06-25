@@ -9,6 +9,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { api } from '../../../api/instance';
 import { parseServerDate } from '../../../utils/date';
+import { AI_MODELS } from '../../../constants/aiModels';
 
 // Normalise LaTeX math delimiters so KaTeX (which expects $…$ / $$…$$) renders
 // the \(…\) and \[…\] forms the models often emit.
@@ -17,13 +18,6 @@ const normalizeMath = (s: string): string =>
         .replace(/\\\[/g, '$$$$').replace(/\\\]/g, '$$$$')
         .replace(/\\\(/g, '$').replace(/\\\)/g, '$');
 
-// Keep in sync with backend MAIN_MODELS (gpt/services/llm/models.py).
-const AI_MODELS = [
-    { id: 'anthropic/claude-opus-4.8',     name: 'Claude Opus 4.8' },
-    { id: 'anthropic/claude-sonnet-4.6',   name: 'Claude Sonnet 4.6' },
-    { id: 'google/gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro' },
-    { id: 'openai/gpt-5.5-pro',            name: 'GPT-5.5 Pro' },
-];
 
 // Targetable file contexts (file_type -> label). Generating a not-yet-existing
 // file is fine — the backend creates it from scratch.
@@ -259,8 +253,8 @@ export const ChatPanel = ({ sessionId, model, onModelChange, polygonId, initialM
             {/* Header */}
             <div className="shrink-0 px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
                 <Bot size={15} className="text-blue-500 shrink-0" />
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex-1">AI Агент</span>
-                <div className="relative">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex-1 min-w-0 truncate">AI Агент</span>
+                <div className="relative shrink-0">
                     <select
                         value={model}
                         onChange={e => onModelChange(e.target.value)}

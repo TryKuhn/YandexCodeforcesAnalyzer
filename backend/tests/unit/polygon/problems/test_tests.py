@@ -53,7 +53,7 @@ async def test_route_get_test_answer(monkeypatch, db, user):
 
 
 @pytest.mark.asyncio
-async def test_route_save_test_encodes_input(monkeypatch, db, user):
+async def test_route_save_test_passes_str_input(monkeypatch, db, user):
     captured = {}
 
     async def fake_save_test(**kwargs):
@@ -65,6 +65,7 @@ async def test_route_save_test_encodes_input(monkeypatch, db, user):
         polygon_id=555, testset="tests", index=2, body=body, user_id=user.id, db=db
     )
     assert result == {"ok": True}
-    assert captured["test_input"] == "привет".encode("utf-8")
+    # passed as str so saveTest includes it in the signed params (not bytes)
+    assert captured["test_input"] == "привет"
     assert captured["test_index"] == 2
     assert captured["check_existing"] is False
