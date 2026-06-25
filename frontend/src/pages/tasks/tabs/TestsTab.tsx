@@ -111,7 +111,7 @@ export const TestsTab = ({ polygonId }: Props) => {
             <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
                 <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                     <Code2 size={14} className="text-slate-400" />
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 flex-1">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 flex-1 min-w-0 truncate">
                         FreeMarker-скрипт генерации тестов
                     </span>
                     {!editingScript ? (

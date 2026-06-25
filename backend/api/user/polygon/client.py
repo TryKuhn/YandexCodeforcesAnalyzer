@@ -35,14 +35,21 @@ async def get_user(user_id: int, db: AsyncSession) -> User:
 async def polygon_call(method_name: str, params: dict, user: User):
     """Build auth params, sign, and POST to Polygon API. Returns parsed result.
 
-    Values in `params` should be strings or bytes. Bytes values (file content)
-    are excluded from signature computation but included in the POST body.
+    Polygon signs ALL request parameters, INCLUDING text content (source code,
+    test input, statement text). So a value that is *text* must go into the
+    signed ``text_params`` even when a caller passes it as ``bytes`` — otherwise
+    Polygon rejects the request with 'apiKey: Incorrect signature'. Only genuine
+    binary that is NOT valid UTF-8 (e.g. statement images) is excluded from the
+    signature and sent as a raw multipart field.
     """
     text_params: dict[str, str] = {}
     binary_params: dict[str, bytes] = {}
     for k, v in params.items():
         if isinstance(v, bytes):
-            binary_params[k] = v
+            try:
+                text_params[k] = v.decode("utf-8")  # text → must be signed
+            except UnicodeDecodeError:
+                binary_params[k] = v                 # true binary → excluded
         else:
             text_params[k] = str(v)
 

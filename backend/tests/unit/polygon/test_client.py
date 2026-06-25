@@ -151,16 +151,24 @@ async def test_polygon_call_coerces_non_str_text_params(patched_call, user):
     assert sp["flag"] == "True"
 
 
-async def test_polygon_call_separates_bytes_from_signature(patched_call, user):
-    content = b"\x00\x01binary"
-    await polygon_call("problem.saveTest", {"problemId": "5", "testInput": content}, user)
+async def test_polygon_call_signs_utf8_bytes_as_text(patched_call, user):
+    # Text passed as bytes (valid UTF-8) must be DECODED and SIGNED — Polygon
+    # signs content params, so excluding it would cause 'Incorrect signature'.
+    await polygon_call("problem.saveTest", {"problemId": "5", "testInput": b"5 6 7"}, user)
+    assert patched_call["sig_params"]["testInput"] == "5 6 7"
+    assert patched_call["data"]["testInput"] == "5 6 7"
 
-    # Bytes excluded from signature params...
-    assert "testInput" not in patched_call["sig_params"]
-    assert patched_call["sig_params"]["problemId"] == "5"
-    # ...but included verbatim in the request body.
-    assert patched_call["data"]["testInput"] == content
-    assert isinstance(patched_call["data"]["testInput"], bytes)
+
+async def test_polygon_call_excludes_non_utf8_binary_from_signature(patched_call, user):
+    # Only genuine binary (not valid UTF-8, e.g. an image) is excluded from the
+    # signature and sent as a raw multipart field.
+    content = b"\xff\xfe\x00binary"
+    await polygon_call(
+        "problem.saveStatementResource", {"problemId": "5", "file": content}, user
+    )
+    assert "file" not in patched_call["sig_params"]
+    assert patched_call["data"]["file"] == content
+    assert isinstance(patched_call["data"]["file"], bytes)
 
 
 # --------------------------------------------------------------------------

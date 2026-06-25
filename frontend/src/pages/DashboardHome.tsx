@@ -47,9 +47,9 @@ const HintBox = ({ icon: Icon, color, title, children }: any) => (
 export const DashboardHome = () => {
     return (
         <div className="space-y-10 animate-in fade-in duration-500">
-            <div className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white rounded-3xl p-8 shadow-xl shadow-violet-500/20">
+            <div className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-violet-500/20">
                 <p className="text-xs font-black uppercase tracking-widest text-violet-200 mb-2">Добро пожаловать</p>
-                <h1 className="text-3xl font-extrabold mb-3">TaskForge</h1>
+                <h1 className="text-2xl sm:text-3xl font-extrabold mb-3">TaskForge</h1>
                 <p className="text-violet-100 text-sm leading-relaxed max-w-xl">
                     Инструмент для преподавателей и организаторов олимпиад: загружайте контесты с Codeforces и Yandex,
                     просматривайте таблицу результатов, проверяйте решения на плагиат и создавайте задачи с помощью ИИ.
@@ -136,7 +136,7 @@ export const DashboardHome = () => {
                         title="Создавайте задачи с ИИ"
                         desc="В разделе AI Создание выберите модель, опишите задачу и получите готовые файлы для Polygon."
                         action={
-                            <Link to="/ai-tasks" className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-600 hover:text-violet-800 transition-colors">
+                            <Link to="/tasks" className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-600 hover:text-violet-800 transition-colors">
                                 <Sparkles size={13} /> AI Создание <ArrowRight size={12} />
                             </Link>
                         }

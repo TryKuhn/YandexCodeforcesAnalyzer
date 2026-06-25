@@ -79,12 +79,12 @@ async def route_save_test(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Save a test's input (UTF-8 encoded) at the given index on Polygon."""
+    """Save a test's input at the given index on Polygon."""
     await save_test(
         problem_id=polygon_id,
         testset=testset,
         test_index=index,
-        test_input=body.test_input.encode("utf-8"),
+        test_input=body.test_input,  # str → signed (saveTest needs it signed)
         user_id=user_id,
         db=db,
         check_existing=False,

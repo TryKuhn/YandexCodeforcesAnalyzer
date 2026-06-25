@@ -138,7 +138,7 @@ const AddFileForm = ({ polygonId, section, onUploaded, onClose }: AddFileFormPro
                 </div>
 
                 {section === 'solution' && (
-                    <div className="min-w-[180px]">
+                    <div className="w-full sm:w-auto min-w-[180px]">
                         <label className="block text-[10px] font-bold text-slate-500 mb-1">Тег решения</label>
                         <select
                             value={tag}
@@ -153,7 +153,7 @@ const AddFileForm = ({ polygonId, section, onUploaded, onClose }: AddFileFormPro
                 )}
 
                 {section === 'source' && (
-                    <div className="min-w-[140px]">
+                    <div className="w-full sm:w-auto min-w-[140px]">
                         <label className="block text-[10px] font-bold text-slate-500 mb-1">Тип файла</label>
                         <select
                             value={sourceRole}

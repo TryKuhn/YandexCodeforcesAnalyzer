@@ -186,8 +186,8 @@ export const PlagiarismReport = () => {
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex flex-wrap justify-between items-center gap-3">
-                <h1 className="text-2xl font-bold dark:text-white flex items-center gap-3">
-                    <AlertTriangle className="text-amber-500" />
+                <h1 className="text-xl sm:text-2xl font-bold dark:text-white flex items-center gap-2 sm:gap-3">
+                    <AlertTriangle className="text-amber-500 shrink-0" />
                     Подозрительные пары
                     {isLoading && <Loader2 size={18} className="animate-spin text-blue-500" />}
                 </h1>

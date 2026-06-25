@@ -190,8 +190,8 @@ export const ContestVisualAnalytics = () => {
                     {data.language_breakdown.length === 0 ? (
                         <p className="text-slate-400 text-sm text-center py-8">Нет данных</p>
                     ) : (
-                        <div className="flex items-center gap-4">
-                            <ResponsiveContainer width="55%" height={200}>
+                        <div className="flex flex-col sm:flex-row items-center gap-4">
+                            <ResponsiveContainer width="100%" height={200} className="sm:!w-[55%]">
                                 <PieChart>
                                     <Pie
                                         data={data.language_breakdown}
@@ -210,7 +210,7 @@ export const ContestVisualAnalytics = () => {
                                     <Tooltip {...tooltipStyle} formatter={(v: any, n: any) => [v, n]} />
                                 </PieChart>
                             </ResponsiveContainer>
-                            <div className="flex-1 space-y-1.5 min-w-0">
+                            <div className="w-full sm:flex-1 space-y-1.5 min-w-0">
                                 {data.language_breakdown.slice(0, 6).map((l: any, i: number) => (
                                     <div key={l.language} className="flex items-center gap-2 text-xs">
                                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: COLORS[i % COLORS.length] }} />

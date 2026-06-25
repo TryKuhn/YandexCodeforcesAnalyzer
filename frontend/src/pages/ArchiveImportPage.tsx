@@ -9,7 +9,7 @@ import {
     FileArchive, ChevronRight, Sparkles, Package,
 } from 'lucide-react';
 import { api } from '../api/instance';
-import { AI_MODELS } from '../components/layout/MainLayout';
+import { AI_MODELS } from '../constants/aiModels';
 
 const POLL_MS = 2000;
 
@@ -171,7 +171,7 @@ export const ArchiveImportPage = () => {
                             e.preventDefault();
                             handlePickFile(e.dataTransfer.files?.[0] ?? null);
                         }}
-                        className={`cursor-pointer border-2 border-dashed rounded-2xl p-8 text-center transition-all
+                        className={`cursor-pointer border-2 border-dashed rounded-2xl p-5 sm:p-8 text-center transition-all
                             ${file
                                 ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
                                 : 'border-slate-300 dark:border-slate-700 hover:border-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'
@@ -185,10 +185,10 @@ export const ArchiveImportPage = () => {
                             className="hidden"
                         />
                         {file ? (
-                            <div className="flex items-center justify-center gap-3">
-                                <FileArchive size={28} className="text-blue-500" />
-                                <div className="text-left">
-                                    <p className="font-bold text-sm dark:text-white">{file.name}</p>
+                            <div className="flex items-center justify-center gap-3 min-w-0">
+                                <FileArchive size={28} className="text-blue-500 shrink-0" />
+                                <div className="text-left min-w-0">
+                                    <p className="font-bold text-sm dark:text-white truncate">{file.name}</p>
                                     <p className="text-xs text-slate-400">
                                         {(file.size / 1048576).toFixed(1)} МБ — нажмите, чтобы выбрать другой
                                     </p>
@@ -243,7 +243,7 @@ export const ArchiveImportPage = () => {
                             <select
                                 value={aiModel}
                                 onChange={e => setAiModel(e.target.value)}
-                                className="ml-6 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700
+                                className="ml-6 max-w-[calc(100%-1.5rem)] truncate text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700
                                            rounded-lg px-2 py-1.5 outline-none dark:text-white"
                             >
                                 {AI_MODELS.map(m => (

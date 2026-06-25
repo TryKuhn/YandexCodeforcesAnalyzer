@@ -347,6 +347,40 @@ async def _generate_from_scratch(db: AsyncSession, session: TaskSession,
     }
 
 
+async def _sync_script_with_retry(
+    db: AsyncSession, session: TaskSession, script_code: str, stmt: dict,
+    max_attempts: int = 2,
+) -> tuple[bool, str]:
+    """Save the test script, regenerating it on a Polygon validation error.
+
+    Polygon rejects e.g. duplicate test commands ('Test #X coincides with #Y') at
+    save time. We feed that exact error back to the model and retry so the
+    problem actually gets a working script (and therefore generated tests).
+    Returns (synced, final_script_code).
+    """
+    code = script_code
+    for attempt in range(max_attempts):
+        try:
+            await file_sync.sync_file(db, session, "script", code)
+            return True, code
+        except Exception as e:
+            logger.warning(f"[{session.id}] script sync attempt {attempt + 1} failed: {e}")
+            if attempt + 1 >= max_attempts:
+                return False, code
+            try:
+                code = await file_gen.refine(
+                    "script", code,
+                    f"Polygon отклонил скрипт с ошибкой: {e}. Исправь так, чтобы "
+                    "КАЖДАЯ итоговая команда генерации была УНИКАЛЬНОЙ — различай "
+                    "повторяющиеся через -seed=${i} (генератор обязан читать seed).",
+                    stmt, session.model, problem_type=session.problem_type,
+                )
+            except Exception as gen_err:
+                logger.warning(f"[{session.id}] script regenerate failed: {gen_err}")
+                return False, code
+    return False, code
+
+
 async def _generate_pack(db: AsyncSession, session: TaskSession,
                          statement: dict | None = None) -> dict:
     """Generate every file applicable to the problem type and sync them.
@@ -395,7 +429,19 @@ async def _generate_pack(db: AsyncSession, session: TaskSession,
             session.updated_at = now_utc()
             await db.commit()
 
-    updated_files = await file_sync.sync_files(db, session, list(pack.items()))
+    # The script is synced separately with a retry: Polygon validates it on save
+    # (e.g. rejects duplicate test commands), so on failure we regenerate it with
+    # the exact Polygon error and try again — otherwise the problem ends up with
+    # no test script and the package build produces zero tests.
+    script_code = pack.get("script")
+    non_script = [(k, v) for k, v in pack.items() if k != "script"]
+    updated_files = await file_sync.sync_files(db, session, non_script)
+    if script_code:
+        ok, final_script = await _sync_script_with_retry(db, session, script_code, stmt)
+        pack["script"] = final_script
+        if ok:
+            updated_files.append("script")
+
     failed = [ft for ft in pack if ft not in updated_files]
     msg = (f"✅ Сгенерированы и синхронизированы файлы: "
            f"{', '.join(_label(k) for k in updated_files)}.")

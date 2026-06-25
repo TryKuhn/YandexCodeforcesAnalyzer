@@ -10,45 +10,6 @@ import { ThemeToggle } from '../ThemeToggle';
 import { SiteFooter } from '../SiteFooter';
 import { api } from "../../api/instance.ts";
 
-export const AI_MODELS = [
-    { id: 'anthropic/claude-opus-4.7',       name: 'Claude 4.7 Opus' },
-    { id: 'anthropic/claude-sonnet-4.6',     name: 'Claude Sonnet 4.6' },
-    { id: 'anthropic/claude-opus-4.6-fast',  name: 'Claude 4.6 Fast' },
-    { id: 'google/gemini-3.1-pro-preview',   name: 'Gemini 3.1 Pro' },
-    { id: 'google/gemini-3-flash-preview',   name: 'Gemini 3 Flash' },
-    { id: 'openai/gpt-5.5-pro',              name: 'GPT-5.5 Pro' },
-];
-
-const AI_SETTINGS_KEY = 'ai_tasks_settings';
-
-export interface AISettings {
-    model: string;
-    systemPrompt: string;
-}
-
-const DEFAULT_SETTINGS: AISettings = {
-    model: AI_MODELS[0].id,
-    systemPrompt: '',
-};
-
-export const useAISettings = () => {
-    const load = (): AISettings => {
-        try {
-            const raw = localStorage.getItem(AI_SETTINGS_KEY);
-            return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
-        } catch {
-            return DEFAULT_SETTINGS;
-        }
-    };
-
-    const save = (settings: AISettings) => {
-        localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(settings));
-    };
-
-    return { load, save };
-};
-
-
 const MENU_ITEMS = [
     { icon: Trophy,     label: 'Соревнования',  path: '/contests' },
     { icon: Users,      label: 'Участники',     path: '/participants' },
@@ -64,9 +25,7 @@ export const MainLayout = () => {
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement>(null);
 
-    const isAISession = /^\/ai-tasks\/.+/.test(location.pathname);
-    const isTaskPage  = /^\/tasks\/.+/.test(location.pathname);
-    const fullScreen  = isAISession || isTaskPage;
+    const fullScreen  = /^\/tasks\/.+/.test(location.pathname);
     // Focused single-purpose pages that shouldn't show the footer.
     const hideFooter  = location.pathname === '/change-password';
 
