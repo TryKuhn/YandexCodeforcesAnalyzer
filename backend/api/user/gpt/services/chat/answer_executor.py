@@ -13,18 +13,47 @@ from api.user.gpt.services.prompts import problem_type as problem_type_guide
 from api.user.gpt.services.prompts.answer import SYSTEM_PROMPT
 
 
+# Context budget: include the ACTUAL file contents so the model can answer about
+# solutions/checker/etc. The focused file gets more room; the rest are truncated.
+_FOCUS_LIMIT = 6000
+_PER_FILE_LIMIT = 2500
+_TOTAL_LIMIT = 18000
+
+
 def _build_context(statement: Dict, files: Dict, resolved: ResolvedContext) -> list[str]:
-    """Build the context blocks (statement summary + focused file or file list)."""
+    """Build the context blocks: statement summary + the CONTENT of every file
+    (focused file first and fuller), truncated to a total budget."""
     parts: list[str] = []
     if statement:
         summary = {k: v for k, v in statement.items()
-                   if k in ("name", "legend", "input", "output")}
+                   if k in ("name", "legend", "input", "output", "scoring", "interaction")}
         parts.append(f"ЗАДАЧА: {json.dumps(summary, ensure_ascii=False)}")
 
-    if resolved.scope == "file" and resolved.file_key in files:
-        parts.append(f"ФАЙЛ ({resolved.file_key}):\n```\n{files[resolved.file_key][:3000]}\n```")
-    elif files:
-        parts.append(f"Доступные файлы: {', '.join(files.keys())}")
+    if not files:
+        return parts
+
+    focus = resolved.file_key if resolved.scope == "file" else None
+    ordered = ([focus] if focus and focus in files else []) \
+        + [k for k in files if k != focus]
+
+    used = 0
+    omitted: list[str] = []
+    for key in ordered:
+        content = (files.get(key) or "").strip()
+        if not content:
+            continue
+        limit = _FOCUS_LIMIT if key == focus else _PER_FILE_LIMIT
+        snippet = content[:limit]
+        block = f"ФАЙЛ {key}:\n```\n{snippet}\n```"
+        if used + len(block) > _TOTAL_LIMIT:
+            omitted.append(key)
+            continue
+        parts.append(block)
+        used += len(block)
+
+    if omitted:
+        parts.append(f"(файлы, опущенные из-за объёма: {', '.join(omitted)} — "
+                     "спросите про них отдельно)")
     return parts
 
 

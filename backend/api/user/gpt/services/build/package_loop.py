@@ -138,11 +138,22 @@ async def build_and_poll(
         logger.error(f"[{session.id}] Build failed, offender unknown: {comment}")
         return {"status": "manual_fix", "offender": None, "error": comment}
 
-    prev_errors: list[str] = []
-    for attempt in range(1, MAX_FILE_FIX_ATTEMPTS + 1):
+    # Each offending file gets up to MAX_FILE_FIX_ATTEMPTS tries of its OWN — the
+    # count is PER FILE, not shared. When the build error moves to a different
+    # file, that new file starts its own fresh counter. A total cap guards
+    # against two files ping-ponging forever.
+    attempts: dict[str, int] = {}
+    prev_errors_by_file: dict[str, list[str]] = {}
+    max_total = MAX_FILE_FIX_ATTEMPTS * 4
+
+    while sum(attempts.values()) < max_total:
+        attempts[offender] = attempts.get(offender, 0) + 1
+        if attempts[offender] > MAX_FILE_FIX_ATTEMPTS:
+            break  # this file exhausted its own attempts
+
         await set_step(
             f"Ошибка в {offender}, ИИ исправляет "
-            f"(попытка {attempt}/{MAX_FILE_FIX_ATTEMPTS})..."
+            f"(попытка {attempts[offender]}/{MAX_FILE_FIX_ATTEMPTS})..."
         )
         contents = await get_all_file_contents(db, session.id)
         code = contents.get(offender, "")
@@ -151,6 +162,7 @@ async def build_and_poll(
             for ft in _FIX_COMPANIONS.get(offender, [])
             if contents.get(ft)
         }
+        prev_errors = prev_errors_by_file.setdefault(offender, [])
         try:
             fixed = await fix_gen.fix(
                 offender, code, comment, statement, session.model,
@@ -173,12 +185,11 @@ async def build_and_poll(
 
         prev_errors.append(comment)
         next_offender = await resolve_offending_file(comment, applicable)
-        if next_offender and next_offender != offender:
+        if next_offender:
             offender = next_offender
-            prev_errors = []
 
     logger.error(
-        f"[{session.id}] Build still failing after {MAX_FILE_FIX_ATTEMPTS} "
-        f"fix attempts on {offender}: {comment}"
+        f"[{session.id}] Build still failing after per-file fix attempts "
+        f"(last offender {offender}): {comment}"
     )
     return {"status": "manual_fix", "offender": offender, "error": comment}

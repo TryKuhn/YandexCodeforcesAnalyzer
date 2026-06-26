@@ -10,7 +10,7 @@ from models.task.session import ProblemType
 
 def test_build_context_includes_statement_and_file():
     statement = {"name": "A+B", "legend": "add", "input": "two ints",
-                 "output": "sum", "scoring": "ignored"}
+                 "output": "sum", "tutorial": "ignored"}
     files = {"checker": "int main(){ return 0; }"}
     resolved = ResolvedContext(scope="file", file_key="checker", candidates=["checker"])
 
@@ -18,19 +18,21 @@ def test_build_context_includes_statement_and_file():
     joined = "\n".join(parts)
     assert "ЗАДАЧА:" in joined
     assert "A+B" in joined and "add" in joined
-    # statement summary excludes non-whitelisted keys
+    # statement summary excludes non-whitelisted keys (tutorial)
     assert "ignored" not in joined
-    assert "ФАЙЛ (checker)" in joined
+    assert "ФАЙЛ checker" in joined
     assert "int main" in joined
 
 
-def test_build_context_lists_files_when_not_file_scope():
-    files = {"checker": "x", "validator": "y"}
+def test_build_context_includes_file_contents_in_task_scope():
+    # Task scope must include the actual file CONTENTS (not just names), so the
+    # model can answer about solutions/checker/etc.
+    files = {"checker": "checker-code", "validator": "validator-code"}
     resolved = ResolvedContext(scope="task", candidates=["checker", "validator"])
     parts = ae._build_context({}, files, resolved)
     joined = "\n".join(parts)
-    assert "Доступные файлы:" in joined
-    assert "checker" in joined and "validator" in joined
+    assert "ФАЙЛ checker" in joined and "checker-code" in joined
+    assert "ФАЙЛ validator" in joined and "validator-code" in joined
 
 
 @pytest.mark.asyncio
@@ -67,7 +69,7 @@ async def test_execute_builds_messages_and_returns_text(stub_llm, monkeypatch):
     user_msg = msgs[-1]["content"]
     assert "ВОПРОС: как работает чекер?" in user_msg
     assert "ЗАДАЧА:" in user_msg
-    assert "ФАЙЛ (checker)" in user_msg
+    assert "ФАЙЛ checker" in user_msg
 
 
 @pytest.mark.asyncio
