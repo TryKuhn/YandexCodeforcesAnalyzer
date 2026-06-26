@@ -20,8 +20,10 @@ SYSTEM_PROMPT = (
     "to ONE action. Return ONLY JSON: "
     '{"action": <one of the actions>, "file_key": <file_type or null>}\n\n'
     "Actions:\n"
-    '- "answer": the user asks a question, wants an explanation, analysis or '
-    "advice — nothing should be changed.\n"
+    '- "answer": the user asks a question, wants an explanation, analysis, advice, '
+    "OR asks you to WRITE / SHOW / TELL / LIST / PRINT something AS A CHAT REPLY "
+    '(e.g. "напиши перестановки", "покажи пример", "перечисли ответы", "выведи '
+    'формулу", "какая асимптотика") — produce it in the reply, change NO files.\n'
     '- "edit_statement": change the statement text (legend/input/output/notes), '
     "limits, scoring or interaction section.\n"
     '- "edit_file": change ONE specific source file. Set file_key to that file '
@@ -39,6 +41,12 @@ SYSTEM_PROMPT = (
     "- Only choose a file_key that appears in the available files; otherwise use "
     "null and a non-file action.\n"
     "- Off-topic messages → \"answer\".\n"
+    "- A request to WRITE/SHOW/TELL/LIST/EXPLAIN something as a chat answer is "
+    '"answer", NOT a file edit — even if it mentions a file or code. Pick an edit '
+    "action ONLY when the user clearly wants a FILE actually changed, regenerated "
+    "or rebuilt on Polygon.\n"
+    "- If the user explicitly says not to change anything (\"не меняй\", \"не "
+    "обновляй\", \"только ответь\") → \"answer\".\n"
     "- Be decisive; when genuinely unsure between asking and changing, prefer "
     '"answer".'
 )
