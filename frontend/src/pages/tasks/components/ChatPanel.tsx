@@ -95,13 +95,20 @@ export const ChatPanel = ({ sessionId, model, onModelChange, polygonId, initialM
     } | null>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    // First scroll after a (re)load jumps instantly to the end; only later, when
+    // NEW messages arrive during the session, do we animate.
+    const didInitialScroll = useRef(false);
 
     useEffect(() => {
         setMessages(initialMessages);
+        didInitialScroll.current = false;
     }, [sessionId]);
 
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        bottomRef.current?.scrollIntoView({
+            behavior: didInitialScroll.current ? 'smooth' : 'auto',
+        });
+        didInitialScroll.current = true;
     }, [messages]);
 
     // Resume an in-flight operation after a page reload. The backend persists the

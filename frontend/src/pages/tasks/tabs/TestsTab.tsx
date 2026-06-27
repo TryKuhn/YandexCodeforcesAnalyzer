@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, RefreshCw, AlertCircle, FileInput, FileOutput, Code2, Edit2, Save, X } from 'lucide-react';
+import { Loader2, RefreshCw, AlertCircle, FileInput, FileOutput, Code2, Edit2, Save, X, ChevronRight } from 'lucide-react';
 import { api } from '../../../api/instance';
 import { CodeEditor } from '../../../components/CodeEditor';
 
@@ -21,6 +21,14 @@ interface Test {
     points?: number;
 }
 
+interface TestPreview {
+    input?: string;
+    output?: string;
+    input_truncated?: boolean;
+    output_truncated?: boolean;
+    error?: string;
+}
+
 export const TestsTab = ({ polygonId }: Props) => {
     const navigate = useNavigate();
     const [tests, setTests] = useState<Test[]>([]);
@@ -33,6 +41,26 @@ export const TestsTab = ({ polygonId }: Props) => {
     const [scriptDraft, setScriptDraft] = useState<string>('');
     const [editingScript, setEditingScript] = useState(false);
     const [savingScript, setSavingScript] = useState(false);
+
+    // Inline short input/output preview (lazy-loaded on row click, truncated).
+    const [expanded, setExpanded] = useState<number | null>(null);
+    const [previews, setPreviews] = useState<Record<number, TestPreview | 'loading'>>({});
+
+    const loadPreview = async (index: number) => {
+        setPreviews(p => ({ ...p, [index]: 'loading' }));
+        try {
+            const res = await api.get(`/polygon/problems/${polygonId}/tests/tests/${index}/preview`);
+            setPreviews(p => ({ ...p, [index]: res.data }));
+        } catch {
+            setPreviews(p => ({ ...p, [index]: { error: 'Не удалось загрузить превью' } }));
+        }
+    };
+
+    const toggleTest = (index: number) => {
+        const opening = expanded !== index;
+        setExpanded(opening ? index : null);
+        if (opening && !previews[index]) loadPreview(index);
+    };
 
     const load = async (showRefreshSpinner = false) => {
         if (showRefreshSpinner) setRefreshing(true);
@@ -174,12 +202,24 @@ export const TestsTab = ({ polygonId }: Props) => {
                 </div>
             ) : (
                 <div className="space-y-2">
-                    {tests.map(test => (
+                    {tests.map(test => {
+                    const isOpen = expanded === test.index;
+                    const pv = previews[test.index];
+                    return (
                         <div
                             key={test.index}
-                            className="border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5
-                                       flex items-center gap-3 flex-wrap"
+                            className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden"
                         >
+                        <div
+                            onClick={() => toggleTest(test.index)}
+                            title="Нажмите для краткого просмотра"
+                            className="px-3 py-2.5 flex items-center gap-3 flex-wrap cursor-pointer
+                                       hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                        >
+                            <ChevronRight
+                                size={14}
+                                className={`text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                            />
                             <span className="text-xs font-bold text-slate-500 w-6 shrink-0">#{test.index}</span>
 
                             {test.manual ? (
@@ -220,17 +260,17 @@ export const TestsTab = ({ polygonId }: Props) => {
                                 </code>
                             )}
 
-                            {/* View buttons → separate page */}
+                            {/* View buttons → full content on a separate page */}
                             <div className="ml-auto flex items-center gap-1.5 shrink-0">
                                 <button
-                                    onClick={() => viewTest(test.index, 'input')}
+                                    onClick={e => { e.stopPropagation(); viewTest(test.index, 'input'); }}
                                     className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg
                                                bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-500 transition-all"
                                 >
                                     <FileInput size={11} /> Input
                                 </button>
                                 <button
-                                    onClick={() => viewTest(test.index, 'output')}
+                                    onClick={e => { e.stopPropagation(); viewTest(test.index, 'output'); }}
                                     title="Polygon вычисляет ответ на лету (~30 сек)"
                                     className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg
                                                bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-500 transition-all"
@@ -239,9 +279,61 @@ export const TestsTab = ({ polygonId }: Props) => {
                                 </button>
                             </div>
                         </div>
-                    ))}
+
+                        {/* Inline short preview (truncated) */}
+                        {isOpen && (
+                            <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-3 py-2.5 space-y-2.5">
+                                {!pv || pv === 'loading' ? (
+                                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                                        <Loader2 size={13} className="animate-spin" /> Загрузка превью…
+                                    </div>
+                                ) : pv.error ? (
+                                    <span className="text-xs text-red-500">{pv.error}</span>
+                                ) : (
+                                    <>
+                                        <PreviewBlock
+                                            label="Input" text={pv.input ?? ''} truncated={pv.input_truncated}
+                                            onFull={() => viewTest(test.index, 'input')}
+                                        />
+                                        <PreviewBlock
+                                            label="Output" text={pv.output ?? ''} truncated={pv.output_truncated}
+                                            onFull={() => viewTest(test.index, 'output')}
+                                        />
+                                    </>
+                                )}
+                            </div>
+                        )}
+                        </div>
+                    );
+                    })}
                 </div>
             )}
         </div>
     );
 };
+
+// ── Inline truncated preview block ─────────────────────────────────────────────
+const PreviewBlock = ({ label, text, truncated, onFull }: {
+    label: string; text: string; truncated?: boolean; onFull: () => void;
+}) => (
+    <div>
+        <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{label}</span>
+            <button
+                onClick={onFull}
+                className="text-[10px] font-bold text-blue-500 hover:text-blue-700 transition-colors"
+            >
+                полностью →
+            </button>
+        </div>
+        {text.trim() ? (
+            <pre className="text-[11px] font-mono text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900
+                            border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-2
+                            overflow-x-auto whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                {text}{truncated ? '\n…' : ''}
+            </pre>
+        ) : (
+            <span className="text-[11px] italic text-slate-400">(пусто)</span>
+        )}
+    </div>
+);
