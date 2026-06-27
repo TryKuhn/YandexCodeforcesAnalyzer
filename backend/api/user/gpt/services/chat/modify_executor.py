@@ -110,10 +110,10 @@ async def _modify_statement(db: AsyncSession, session: TaskSession, message: str
             updated_files = await file_sync.sync_files(db, session, regenerated)
 
     if updated_files:
-        msg = (f"✏️ Обновил условие и зависимые файлы: "
+        msg = (f"Обновил условие и зависимые файлы: "
                f"{', '.join(_label(k) for k in updated_files)}.")
     else:
-        msg = "✏️ Обновил условие задачи."
+        msg = "Обновил условие задачи."
     return {
         "response": msg,
         "updated_files": updated_files,
@@ -146,7 +146,7 @@ async def _modify_file(db: AsyncSession, session: TaskSession, message: str,
 
     await file_sync.sync_file(db, session, file_key, new_code)
     return {
-        "response": f"✅ {_label(file_key)} {verb} и синхронизирован с Polygon.",
+        "response": f"{_label(file_key)} {verb} и синхронизирован с Polygon.",
         "updated_files": [file_key],
         "statement": None,
         "technical_data": {file_key: new_code},
@@ -186,7 +186,7 @@ async def _modify_task(db: AsyncSession, session: TaskSession, message: str) -> 
             json_mode=True,
         )
     except Exception:
-        return {"response": "🤔 Не понял запрос как изменение файлов. Уточните, что "
+        return {"response": "Не понял запрос как изменение файлов. Уточните, что "
                             "изменить, или выберите конкретный файл в контексте чата.",
                 "updated_files": [], "statement": None, "technical_data": None,
                 "synced": False}
@@ -196,13 +196,13 @@ async def _modify_task(db: AsyncSession, session: TaskSession, message: str) -> 
         if isinstance(v, str) and v.strip() and (k in files or k in _VALID_FILE_TYPES)
     }
     if not changed:
-        return {"response": "🤔 Не нашёл, что изменить. Уточните запрос.",
+        return {"response": "Не нашёл, что изменить. Уточните запрос.",
                 "updated_files": [], "statement": None, "technical_data": None,
                 "synced": False}
 
     updated_files = await file_sync.sync_files(db, session, list(changed.items()))
     return {
-        "response": f"✅ Обновлено и синхронизировано: "
+        "response": f"Обновлено и синхронизировано: "
                     f"{', '.join(_label(k) for k in updated_files)}.",
         "updated_files": updated_files,
         "statement": None,
@@ -322,17 +322,17 @@ async def _generate_from_scratch(db: AsyncSession, session: TaskSession,
     files_part = (f" и файлы: {', '.join(_label(k) for k in pack_result['updated_files'])}"
                   if pack_result["updated_files"] else "")
     verb = "Пересоздал" if redo else "Создал"
-    response = (f"✅ {verb} задачу «{stmt.get('name', '')}»: условие{files_part}. "
+    response = (f"{verb} задачу «{stmt.get('name', '')}»: условие{files_part}. "
                 f"Синхронизировано с Polygon.")
 
     # Surface what did NOT make it to Polygon instead of silently dropping it
     # (the per-file Polygon error is in the backend logs at WARNING).
     warns: list[str] = []
     if pack_result.get("failed"):
-        warns.append("⚠️ Не синхронизировались с Polygon (перегенерируйте по "
+        warns.append("Не синхронизировались с Polygon (перегенерируйте по "
                      f"отдельности): {', '.join(_label(k) for k in pack_result['failed'])}.")
     if not pack_result.get("samples_ok"):
-        warns.append("⚠️ Примеры (семплы) не созданы — без них и без скрипта тесты "
+        warns.append("Примеры (семплы) не созданы — без них и без скрипта тесты "
                      "не сгенерируются. Попробуйте ещё раз или проверьте логи.")
     if warns:
         response += "\n" + "\n".join(warns)
@@ -408,7 +408,7 @@ async def _generate_pack(db: AsyncSession, session: TaskSession,
         session.problem_type, stmt, session.model, subtasks=subtasks,
     )
     if not pack:
-        return {"response": "🤔 Не удалось сгенерировать файлы.", "updated_files": [],
+        return {"response": "Не удалось сгенерировать файлы.", "updated_files": [],
                 "statement": None, "technical_data": None, "synced": False}
 
     if subtasks:
@@ -443,10 +443,10 @@ async def _generate_pack(db: AsyncSession, session: TaskSession,
             updated_files.append("script")
 
     failed = [ft for ft in pack if ft not in updated_files]
-    msg = (f"✅ Сгенерированы и синхронизированы файлы: "
+    msg = (f"Сгенерированы и синхронизированы файлы: "
            f"{', '.join(_label(k) for k in updated_files)}.")
     if failed:
-        msg += (f"\n⚠️ Не удалось синхронизировать: {', '.join(_label(k) for k in failed)} "
+        msg += (f"\nНе удалось синхронизировать: {', '.join(_label(k) for k in failed)} "
                 f"— попробуйте перегенерировать их по отдельности.")
     return {
         "response": msg,

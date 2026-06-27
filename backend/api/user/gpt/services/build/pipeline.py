@@ -209,7 +209,7 @@ async def _apply_build_result(db: AsyncSession, session_id: str, problem_id: int
              "package_id": result.get("package_id")},
         )
         group_map = result.get("group_map") or {}
-        msg = f"✅ Задача успешно собрана на Polygon. ID: {problem_id}."
+        msg = f"Задача успешно собрана на Polygon. ID: {problem_id}."
         if group_map:
             lines = [
                 f"  • Группа {g}: тесты {_format_range(idx)}"
@@ -232,6 +232,6 @@ async def _apply_build_result(db: AsyncSession, session_id: str, problem_id: int
         {"progress": progress, "stage": PipelineStage.FIXING_ERRORS,
          "upload_errors": upload_errors},
     )
-    msg = (f"❌ Не удалось собрать пакет после автоматических попыток. "
+    msg = (f"Не удалось собрать пакет после автоматических попыток. "
            f"Ошибка: {error}")
     await append_chat_log(db, session_id, [chat_message("system", msg)])
