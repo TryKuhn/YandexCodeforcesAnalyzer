@@ -54,6 +54,22 @@ async def test_upload_examples_skips_empty_input(db, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_upload_examples_dedups_identical_inputs(db, monkeypatch):
+    # Polygon rejects duplicate manual tests ("Test coincides with #..."), so
+    # identical inputs (incl. whitespace-different) must be dropped + re-indexed.
+    calls = _patch_save_test(monkeypatch)
+    examples = [
+        {"input": "1 2", "output": "3"},
+        {"input": "1  2", "output": "3"},   # same up to whitespace -> dropped
+        {"input": "4 5", "output": "9"},
+    ]
+    saved = await sm.upload_examples(db, 555, 7, examples)
+    assert saved == 2
+    assert [c["test_index"] for c in calls] == [1, 2]
+    assert [c["test_input"] for c in calls] == ["1 2", "4 5"]
+
+
+@pytest.mark.asyncio
 async def test_upload_examples_resilient_to_failure(db, monkeypatch):
     calls = _patch_save_test(monkeypatch, fail_indices={1})
     examples = [{"input": "a"}, {"input": "b"}]
