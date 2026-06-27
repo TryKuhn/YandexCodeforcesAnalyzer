@@ -51,6 +51,33 @@ async def route_get_test_input(
     return {"content": content}
 
 
+@router.get("/{polygon_id}/tests/{testset}/{index}/preview")
+async def route_get_test_preview(
+    polygon_id: int,
+    testset: str,
+    index: int,
+    limit: int = 400,
+    user_id: int = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Short input/output preview for a quick inline peek (truncated to ``limit``
+    chars each) — so the UI doesn't load/render the full test for a glance."""
+    inp = await get_test_input(
+        problem_id=polygon_id, testset=testset, test_index=index,
+        user_id=user_id, db=db,
+    )
+    out = await get_test_answer(
+        problem_id=polygon_id, testset=testset, test_index=index,
+        user_id=user_id, db=db,
+    )
+    return {
+        "input": inp[:limit],
+        "output": out[:limit],
+        "input_truncated": len(inp) > limit,
+        "output_truncated": len(out) > limit,
+    }
+
+
 @router.get("/{polygon_id}/tests/{testset}/{index}/answer")
 async def route_get_test_answer(
     polygon_id: int,
