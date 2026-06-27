@@ -100,12 +100,12 @@ async def _run_generation_bg(
             updated_files = result["updated_files"]
             if result.get("build") and session.polygon_problem_id:
                 asyncio.create_task(run_build_with_repair(session.id))
-                response_text += ("\n\n🔨 Запустил сборку пакета с авто-починкой — "
+                response_text += ("\n\nЗапустил сборку пакета с авто-починкой — "
                                   "прогресс на вкладке «Пакеты».")
         except Exception as e:
             logger.exception(f"[{session_id}] background generation failed: {e}")
             is_error = True
-            response_text = f"❌ Ошибка: {_error_text(e)}"
+            response_text = f"Ошибка: {_error_text(e)}"
         await append_chat_log(db, session_id, [
             chat_message("assistant", response_text, action="modify",
                          context=context_dump, updated_files=updated_files,
@@ -151,10 +151,10 @@ async def unified_chat(
 
     if action == "build":
         if not session.polygon_problem_id:
-            text, err = "❌ Задача ещё не создана в Polygon.", True
+            text, err = "Задача ещё не создана в Polygon.", True
         else:
             asyncio.create_task(run_build_with_repair(session.id))
-            text, err = ("🔨 Запустил сборку пакета с авто-починкой. "
+            text, err = ("Запустил сборку пакета с авто-починкой. "
                          "Прогресс — на вкладке «Пакеты».", False)
         await append_chat_log(db, session.id, [
             chat_message("assistant", text, action="answer",
@@ -172,7 +172,7 @@ async def unified_chat(
         ))
         return ChatResponse(
             action="modify", pending=True,
-            response="🔄 Генерирую — это может занять до пары минут. Прогресс "
+            response="Генерирую — это может занять до пары минут. Прогресс "
                      "показан ниже, результат появится в чате автоматически.",
         )
 
@@ -217,12 +217,12 @@ async def unified_chat(
             synced = result["synced"]
             if result.get("build") and session.polygon_problem_id:
                 asyncio.create_task(run_build_with_repair(session.id))
-                response_text += ("\n\n🔨 Запустил сборку пакета с авто-починкой — "
+                response_text += ("\n\nЗапустил сборку пакета с авто-починкой — "
                                   "прогресс на вкладке «Пакеты».")
     except Exception as e:
         logger.exception(f"[{session.id}] chat executor failed: {e}")
         is_error = True
-        response_text = f"❌ Ошибка: {_error_text(e)}"
+        response_text = f"Ошибка: {_error_text(e)}"
 
     await append_chat_log(db, session.id, [
         chat_message("assistant", response_text, action=resp_action,
