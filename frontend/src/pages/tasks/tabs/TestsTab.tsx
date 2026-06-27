@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, RefreshCw, AlertCircle, FileInput, FileOutput, Code2, Edit2, Save, X, ChevronRight } from 'lucide-react';
+import { Loader2, RefreshCw, AlertCircle, Code2, Edit2, Save, X, ChevronRight } from 'lucide-react';
 import { api } from '../../../api/instance';
 import { CodeEditor } from '../../../components/CodeEditor';
 
@@ -260,24 +260,6 @@ export const TestsTab = ({ polygonId }: Props) => {
                                 </code>
                             )}
 
-                            {/* View buttons → full content on a separate page */}
-                            <div className="ml-auto flex items-center gap-1.5 shrink-0">
-                                <button
-                                    onClick={e => { e.stopPropagation(); viewTest(test.index, 'input'); }}
-                                    className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg
-                                               bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-500 transition-all"
-                                >
-                                    <FileInput size={11} /> Input
-                                </button>
-                                <button
-                                    onClick={e => { e.stopPropagation(); viewTest(test.index, 'output'); }}
-                                    title="Polygon вычисляет ответ на лету (~30 сек)"
-                                    className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg
-                                               bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-500 transition-all"
-                                >
-                                    <FileOutput size={11} /> Output
-                                </button>
-                            </div>
                         </div>
 
                         {/* Inline short preview (truncated) */}
@@ -323,7 +305,7 @@ const PreviewBlock = ({ label, text, truncated, onFull }: {
                 onClick={onFull}
                 className="text-[10px] font-bold text-blue-500 hover:text-blue-700 transition-colors"
             >
-                полностью →
+                полностью
             </button>
         </div>
         {text.trim() ? (
