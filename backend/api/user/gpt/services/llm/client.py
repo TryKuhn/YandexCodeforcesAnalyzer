@@ -4,6 +4,7 @@ This is the single low-level entry point for every AI call in the task
 pipeline. Higher layers (generation/, chat/, build/) build messages and call
 ``ask`` / ``ask_text``; they never talk to httpx directly.
 """
+import asyncio
 import json
 import logging
 import re
@@ -17,6 +18,13 @@ from settings import settings
 logger = logging.getLogger(__name__)
 
 _CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\r?\n?|```\s*$", re.MULTILINE)
+
+# OpenRouter / upstream providers occasionally return transient gateway errors
+# (502/503/504) or drop the connection — retry those a few times with backoff so
+# a blip doesn't kill a long generation/auto-repair run. 4xx (e.g. a 403 region
+# block) is deterministic and is NOT retried.
+_RETRY_STATUSES = {502, 503, 504}
+_MAX_RETRIES = 3
 
 
 def strip_code_fences(code: str) -> str:
@@ -51,46 +59,57 @@ class LLMClient:
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        for attempt in range(_MAX_RETRIES):
+            last = attempt == _MAX_RETRIES - 1
             try:
-                response = await client.post(
-                    self.url, headers=self.headers, json=payload
-                )
-                if response.status_code != 200:
-                    logger.error(
-                        f"AI API Error: {response.status_code} - {response.text}"
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    response = await client.post(
+                        self.url, headers=self.headers, json=payload
                     )
-                    raise HTTPException(
-                        status_code=500, detail=f"AI Service error: {response.text}"
-                    )
-
-                result = response.json()
-                content = result["choices"][0]["message"]["content"]
-
-                if not json_mode:
-                    return {"text": content}
-
-                content = content.strip()
-                content = re.sub(
-                    r"^```(?:json)?\n?|```$", "", content, flags=re.MULTILINE
-                ).strip()
-                try:
-                    return json.loads(content)
-                except json.JSONDecodeError:
-                    match = re.search(r"\{.*\}", content, re.DOTALL)
-                    if match:
-                        return json.loads(match.group())
-                    raise
-            except HTTPException:
-                raise
             except (httpx.ConnectError, httpx.TimeoutException) as e:
-                logger.error(f"AI Service network error: {e}")
-                raise HTTPException(
-                    status_code=503, detail="AI service unavailable: network error"
-                )
+                logger.warning(f"AI network error ({e!r}), attempt {attempt + 1}/{_MAX_RETRIES}")
+                if last:
+                    raise HTTPException(
+                        status_code=503, detail="AI service unavailable: network error"
+                    )
+                await asyncio.sleep(1.5 * (attempt + 1))
+                continue
             except Exception as e:
                 logger.error(f"AI Service Exception: {e}")
                 raise HTTPException(status_code=500, detail=f"AI service error: {e}")
+
+            if response.status_code != 200:
+                logger.error(f"AI API Error: {response.status_code} - {response.text[:300]}")
+                if response.status_code in _RETRY_STATUSES and not last:
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                    continue
+                raise HTTPException(
+                    status_code=500, detail=f"AI Service error: {response.text[:500]}"
+                )
+
+            try:
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+            except Exception as e:
+                logger.error(f"AI Service bad response: {e}")
+                raise HTTPException(status_code=500, detail=f"AI service error: {e}")
+
+            if not json_mode:
+                return {"text": content}
+
+            content = content.strip()
+            content = re.sub(
+                r"^```(?:json)?\n?|```$", "", content, flags=re.MULTILINE
+            ).strip()
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                match = re.search(r"\{.*\}", content, re.DOTALL)
+                if match:
+                    return json.loads(match.group())
+                raise HTTPException(status_code=500, detail="AI returned non-JSON output")
+
+        raise HTTPException(status_code=503, detail="AI service unavailable")  # unreachable
 
     async def ask_text(self, model: str, messages: List[Dict]) -> str:
         """Convenience wrapper for non-JSON calls returning the raw text."""

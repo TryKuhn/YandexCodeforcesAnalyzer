@@ -43,8 +43,15 @@ async def get_response(client: ClientSession, url, params):
             result = json.loads(response_text)
         except json.JSONDecodeError:
             if response.status != 200:
+                # Gateway error pages are HTML — don't dump them; give a short,
+                # clear message (the full body is kept in raw_response for logs).
+                if "<html" in response_text[:500].lower():
+                    msg = (f"HTTP {response.status}: сервер Polygon временно "
+                           "недоступен (ошибка шлюза)")
+                else:
+                    msg = f"HTTP {response.status}: {response_text[:300]}"
                 raise PolygonAPIError(
-                    f"HTTP {response.status}: {response_text[:300]}",
+                    msg,
                     http_status=response.status,
                     raw_response=response_text,
                 )

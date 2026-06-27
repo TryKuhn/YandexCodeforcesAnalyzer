@@ -21,18 +21,30 @@ async def upload_examples(
     *,
     group: str | None = None,
 ) -> int:
-    """Save examples as manual sample tests (indices 1..N). Returns count saved."""
-    saved = 0
-    for i, ex in enumerate(examples, start=1):
-        inp = (ex or {}).get("input", "")
-        if not str(inp).strip():
+    """Save examples as manual sample tests (indices 1..N). Returns count saved.
+
+    Duplicate / empty inputs are dropped first: Polygon rejects two identical
+    manual tests ('Test coincides with test #...'), so the unique examples are
+    re-indexed sequentially before upload.
+    """
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for ex in examples:
+        inp = str((ex or {}).get("input", ""))
+        key = " ".join(inp.split())  # normalise whitespace for comparison
+        if not key or key in seen:
             continue
+        seen.add(key)
+        unique.append(ex)
+
+    saved = 0
+    for i, ex in enumerate(unique, start=1):
         try:
             await save_test(
                 problem_id=problem_id,
                 testset="tests",
                 test_index=i,
-                test_input=inp,
+                test_input=ex.get("input", ""),
                 test_use_in_statements=True,
                 test_group=group,
                 user_id=user_id,
