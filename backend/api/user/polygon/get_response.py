@@ -58,6 +58,20 @@ async def get_response(client: ClientSession, url, params):
             else:
                 return {"message": response_text}
 
+        # Only a dict carrying "status" is the Polygon {status, result} envelope.
+        # Plain-text endpoints (problem.testInput / problem.testAnswer) return the
+        # body directly, and json.loads may turn it into a bare scalar/list
+        # (e.g. an answer of "190" → int, "true" → bool) — that's NOT an envelope,
+        # so treat it as the raw message instead of indexing ["status"].
+        if not isinstance(result, dict) or "status" not in result:
+            if response.status != 200:
+                raise PolygonAPIError(
+                    f"HTTP {response.status}: {response_text[:300]}",
+                    http_status=response.status,
+                    raw_response=response_text,
+                )
+            return {"message": response_text}
+
         if result["status"] == "OK":
             try:
                 return result["result"]

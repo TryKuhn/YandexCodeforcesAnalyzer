@@ -69,7 +69,16 @@ type ContextValue = 'task' | 'statement' | `file:${string}`;
 
 const formatTime = (ts: string) => {
     try {
-        return parseServerDate(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        const d = parseServerDate(ts);
+        const now = new Date();
+        const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        // Same day → just the time; other days → prepend the date (with the year
+        // only when it differs) so different days are distinguishable.
+        if (d.toDateString() === now.toDateString()) return time;
+        const date = d.toLocaleDateString('ru-RU', d.getFullYear() === now.getFullYear()
+            ? { day: '2-digit', month: '2-digit' }
+            : { day: '2-digit', month: '2-digit', year: 'numeric' });
+        return `${date} ${time}`;
     } catch {
         return '';
     }

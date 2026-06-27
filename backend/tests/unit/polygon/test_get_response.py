@@ -128,6 +128,28 @@ async def test_invalid_utf8_is_decoded_tolerantly():
     assert "message" in result
 
 
+async def test_plaintext_json_scalar_returned_as_message():
+    # problem.testAnswer/testInput return PLAIN TEXT; an answer of "190" parses
+    # via json.loads as the int 190 — it must NOT be treated as a {status,...}
+    # envelope (that was the 'int' object is not subscriptable crash).
+    client = _client("190", 200)
+    result = await get_response(client, "http://x/problem.testAnswer", {})
+    assert result == {"message": "190"}
+
+
+async def test_plaintext_json_list_returned_as_message():
+    client = _client("[1, 2, 3]", 200)
+    result = await get_response(client, "http://x/problem.testAnswer", {})
+    assert result == {"message": "[1, 2, 3]"}
+
+
+async def test_json_dict_without_status_returned_as_message():
+    payload = json.dumps({"foo": 1})  # a dict but not the Polygon envelope
+    client = _client(payload, 200)
+    result = await get_response(client, "http://x/m", {})
+    assert result == {"message": payload}
+
+
 # --- PolygonAPIError class ------------------------------------------------
 
 def test_polygon_error_defaults():
