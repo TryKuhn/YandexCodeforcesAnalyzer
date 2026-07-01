@@ -38,7 +38,7 @@ def _stateful_get_packages(states):
 async def test_poll_ready(monkeypatch):
     monkeypatch.setattr(pl, "get_packages",
                         _stateful_get_packages(["PENDING", "READY"]))
-    state, comment, pid = await pl._poll(1, 2, None, pl._noop)
+    state, comment, pid = await pl._poll(1, 2, None, pl._noop, set())
     assert state == "READY" and pid == 42
 
 
@@ -46,7 +46,7 @@ async def test_poll_ready(monkeypatch):
 async def test_poll_failed(monkeypatch):
     monkeypatch.setattr(pl, "get_packages",
                         _stateful_get_packages(["PENDING", "FAILED"]))
-    state, comment, pid = await pl._poll(1, 2, None, pl._noop)
+    state, comment, pid = await pl._poll(1, 2, None, pl._noop, set())
     assert state == "FAILED" and comment == "FAILED-comment" and pid == 42
 
 
@@ -54,16 +54,31 @@ async def test_poll_failed(monkeypatch):
 async def test_poll_timeout_on_persistent_pending(monkeypatch):
     monkeypatch.setattr(pl, "get_packages",
                         _stateful_get_packages(["PENDING"]))
-    state, comment, pid = await pl._poll(1, 2, None, pl._noop)
+    state, comment, pid = await pl._poll(1, 2, None, pl._noop, set())
     assert state == "TIMEOUT" and pid is None
 
 
 @pytest.mark.asyncio
 async def test_poll_skips_empty_package_list(monkeypatch):
-    # None → empty list (continue), then READY.
     monkeypatch.setattr(pl, "get_packages",
                         _stateful_get_packages([None, "READY"]))
-    state, _, pid = await pl._poll(1, 2, None, pl._noop)
+    state, _, pid = await pl._poll(1, 2, None, pl._noop, set())
+    assert state == "READY" and pid == 42
+
+
+@pytest.mark.asyncio
+async def test_poll_ignores_preexisting_stale_package(monkeypatch):
+    """A pre-existing FAILED package (id in before_ids) must be ignored; the poll
+    reports the NEW build's package only. Guards the packages[-1] regression."""
+    stale = {"state": "FAILED", "comment": "OLD stale error", "id": 7}
+    fresh_states = iter(["RUNNING", "READY"])
+
+    async def fake(problem_id, user_id, db):
+        nxt = next(fresh_states, "READY")
+        return [stale, {"state": nxt, "comment": f"{nxt}-comment", "id": 42}]
+
+    monkeypatch.setattr(pl, "get_packages", fake)
+    state, comment, pid = await pl._poll(1, 2, None, pl._noop, {7})
     assert state == "READY" and pid == 42
 
 
@@ -83,7 +98,7 @@ async def test_build_once_commits_builds_and_polls(monkeypatch):
     monkeypatch.setattr(pl, "commit_changes", fake_commit)
     monkeypatch.setattr(pl, "build_package", fake_build_package)
     monkeypatch.setattr(pl, "get_packages",
-                        _stateful_get_packages(["READY"]))
+                        _stateful_get_packages([None, "READY"]))
 
     state, _, pid = await pl._build_once(1, 2, None, pl._noop)
     assert state == "READY" and pid == 42
