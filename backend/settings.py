@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     OPENAI_HOST: str = "https://openrouter.ai/api/v1"
     OPENAI_API_KEY: str
 
+    # Hard cap on output tokens per LLM call. OpenRouter runs a pre-flight
+    # affordability check on (prompt + max_tokens); with no cap it reserves the
+    # model's full max output (e.g. 65536 for gpt-5.5-pro) and rejects the
+    # request with 402 when the account balance can't cover that reservation.
+    # Keep this comfortably below the balance headroom; raise it after topping
+    # up OpenRouter credits if generations get truncated.
+    LLM_MAX_TOKENS: int = 8000
+
     POSTGRES_DB: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str

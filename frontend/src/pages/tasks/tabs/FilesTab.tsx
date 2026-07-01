@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, RefreshCw, AlertCircle, Plus, X, FileText, Upload, ChevronRight, DownloadCloud } from 'lucide-react';
+import { Loader2, RefreshCw, AlertCircle, Plus, X, FileText, Upload, ChevronRight, DownloadCloud, Sparkles } from 'lucide-react';
 import { api } from '../../../api/instance';
 import { CodeEditor } from '../../../components/CodeEditor';
 import { SOLUTION_TAGS } from '../FileEditorPage';
@@ -60,18 +60,41 @@ const formatSize = (bytes?: number) => {
 interface AddFileFormProps {
     polygonId: number;
     section: FileSection;
+    sessionId?: string | null;
     onUploaded: () => Promise<void>;
     onClose: () => void;
 }
 
-const AddFileForm = ({ polygonId, section, onUploaded, onClose }: AddFileFormProps) => {
+const AddFileForm = ({ polygonId, section, sessionId, onUploaded, onClose }: AddFileFormProps) => {
     const [name, setName] = useState('');
     const [content, setContent] = useState('');
     const [tag, setTag] = useState('OK');             // solutions only
     const [sourceRole, setSourceRole] = useState('generic'); // source files only
+    const [instruction, setInstruction] = useState(''); // AI hint, solutions only
+    const [generating, setGenerating] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // AI-generate solution code from the chosen tag/name (+ optional hint).
+    const canGenerate = section === 'solution' && !!sessionId;
+    const handleGenerate = async () => {
+        setGenerating(true);
+        setError(null);
+        try {
+            const res = await api.post('/ai/generate-solution-code', {
+                session_id: sessionId,
+                tag,
+                name: name.trim() || 'solution.cpp',
+                instruction: instruction.trim() || undefined,
+            });
+            if (res.data?.code) setContent(res.data.code);
+        } catch (e: any) {
+            setError(e?.response?.data?.detail || 'Не удалось сгенерировать решение');
+        } finally {
+            setGenerating(false);
+        }
+    };
 
     const handlePickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -114,6 +137,13 @@ const AddFileForm = ({ polygonId, section, onUploaded, onClose }: AddFileFormPro
                     name: name.trim(),
                     content,
                 });
+            }
+            // Pull the just-uploaded file into the AI session so it's part of
+            // the chat/generation context (best-effort — never blocks the add).
+            if (sessionId) {
+                try {
+                    await api.post(`/ai/session/${sessionId}/sync-from-polygon`);
+                } catch { /* non-fatal: file is on Polygon regardless */ }
             }
             await onUploaded();
             onClose();
@@ -186,6 +216,32 @@ const AddFileForm = ({ polygonId, section, onUploaded, onClose }: AddFileFormPro
                 </div>
             </div>
 
+            {canGenerate && (
+                <div className="flex gap-2 items-end flex-wrap">
+                    <div className="flex-1 min-w-[200px]">
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                            Что должно делать решение (для ИИ, необязательно)
+                        </label>
+                        <input
+                            value={instruction}
+                            onChange={e => setInstruction(e.target.value)}
+                            placeholder="напр. решение перебором O(n²) на C++"
+                            className="w-full text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 outline-none dark:text-white"
+                        />
+                    </div>
+                    <button
+                        onClick={handleGenerate}
+                        disabled={generating}
+                        title="Сгенерировать код решения по выбранному тегу с помощью ИИ"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                                   bg-purple-600 hover:bg-purple-700 text-white transition-all disabled:opacity-50"
+                    >
+                        {generating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                        Сгенерировать с ИИ
+                    </button>
+                </div>
+            )}
+
             <div>
                 <label className="block text-[10px] font-bold text-slate-500 mb-1">Содержимое</label>
                 <CodeEditor
@@ -194,7 +250,7 @@ const AddFileForm = ({ polygonId, section, onUploaded, onClose }: AddFileFormPro
                     fileName={name}
                     minHeight="140px"
                     maxHeight="400px"
-                    placeholder="// вставьте код или выберите файл..."
+                    placeholder="// вставьте код, выберите файл или сгенерируйте с ИИ..."
                 />
             </div>
 
@@ -343,6 +399,7 @@ export const FilesTab = ({ polygonId, sessionId }: Props) => {
                     <AddFileForm
                         polygonId={polygonId}
                         section={section}
+                        sessionId={sessionId}
                         onUploaded={load}
                         onClose={() => setAddingSection(null)}
                     />
