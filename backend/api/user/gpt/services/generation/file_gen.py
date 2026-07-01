@@ -11,6 +11,7 @@ from typing import Dict
 
 from api.user.gpt.services.files.file_registry import applicable_types, get_spec
 from api.user.gpt.services.generation import test_plan_gen
+from api.user.gpt.services.generation.solution_skip import parse_skip
 from api.user.gpt.services.llm.client import llm, strip_code_fences
 from api.user.gpt.services.llm.models import SCAFFOLD_MODEL
 from api.user.gpt.services.prompts import (checker, generator, interactor,
@@ -115,6 +116,13 @@ async def refine(
     return strip_code_fences(await llm.ask_text(model, messages))
 
 
+def _is_incorrect_solution(file_type: str) -> bool:
+    """True for solution slots whose tag is a deliberate non-OK verdict."""
+    spec = get_spec(file_type)
+    return bool(spec and spec.category == "solution"
+                and spec.tag in {"WA", "TL", "ML", "RE", "RJ"})
+
+
 def _grouping_note(subtasks: list[dict] | None) -> str:
     """Instruction appended to the test plan when the problem has subtasks.
 
@@ -147,8 +155,14 @@ def _grouping_note(subtasks: list[dict] | None) -> str:
 async def generate_pack(
     problem_type: str, statement: Dict, model: str,
     subtasks: list[dict] | None = None,
-) -> Dict[str, str]:
+) -> tuple[Dict[str, str], Dict[str, str]]:
     """Generate every file applicable to the problem type.
+
+    Returns ``(pack, skipped)`` where ``pack`` maps file_type -> code and
+    ``skipped`` maps an intentionally-omitted incorrect-solution file_type ->
+    the reason (the model declined because it couldn't guarantee the tagged
+    verdict). Skipped solutions are NOT uploaded — better a missing WA/TL/ML/RE
+    solution than one that fails Polygon's tag verification.
 
     Files are generated as concurrently as the data dependencies allow:
       - the test plan and every plan-independent file (validator, checker,
@@ -184,6 +198,7 @@ async def generate_pack(
     # generator needs the plan; script needs the generator (+ plan).
     _, generator_code = await _one("generator", plan_text)
     pack: Dict[str, str] = {"generator": generator_code} if generator_code else {}
+    skipped: Dict[str, str] = {}
 
     script_task = None
     if "script" in types:
@@ -196,11 +211,17 @@ async def generate_pack(
 
     for t in indep_tasks:
         ft, code = await t
-        if code:
-            pack[ft] = code
+        if not code:
+            continue
+        if _is_incorrect_solution(ft):
+            reason = parse_skip(code)
+            if reason is not None:
+                skipped[ft] = reason
+                continue
+        pack[ft] = code
 
     if script_task is not None:
         script_code = await script_task
         if script_code:
             pack["script"] = script_code
-    return pack
+    return pack, skipped

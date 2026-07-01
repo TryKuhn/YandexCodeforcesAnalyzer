@@ -404,7 +404,7 @@ async def _generate_pack(db: AsyncSession, session: TaskSession,
         db, session.id,
         "Генерирую файлы (валидатор, генератор, чекер, решения)…", 4,
     )
-    pack = await file_gen.generate_pack(
+    pack, skipped = await file_gen.generate_pack(
         session.problem_type, stmt, session.model, subtasks=subtasks,
     )
     if not pack:
@@ -413,12 +413,13 @@ async def _generate_pack(db: AsyncSession, session: TaskSession,
 
     if subtasks:
         try:
-            partials = await subtask_solutions_gen.generate(
+            partials, sub_skipped = await subtask_solutions_gen.generate(
                 stmt, session.model, subtasks, problem_type=session.problem_type,
             )
         except Exception as e:
             logger.warning(f"[{session.id}] subtask solutions failed: {e}")
-            partials = []
+            partials, sub_skipped = [], {}
+        skipped = {**skipped, **sub_skipped}
         if partials:
             meta = dict(session.solution_meta or {})
             for p in partials:
@@ -448,6 +449,10 @@ async def _generate_pack(db: AsyncSession, session: TaskSession,
     if failed:
         msg += (f"\nНе удалось синхронизировать: {', '.join(_label(k) for k in failed)} "
                 f"— попробуйте перегенерировать их по отдельности.")
+    if skipped:
+        lines = "\n".join(f"  • {_label(k)}: {reason}" for k, reason in skipped.items())
+        msg += ("\n\nНе добавил некоторые решения — для них не удалось гарантировать "
+                f"нужный вердикт настоящим алгоритмом:\n{lines}")
     return {
         "response": msg,
         "updated_files": updated_files,

@@ -15,6 +15,7 @@ from api.user.gpt.services.ai_file_helpers import get_all_file_contents
 from api.user.gpt.services.build import fix_gen
 from api.user.gpt.services.build.error_parser import resolve_offending_file
 from api.user.gpt.services.build.scoring_groups import assign_tests_to_groups
+from api.user.gpt.services.generation.solution_skip import parse_skip
 from api.user.gpt.services.files.file_registry import applicable_types
 from api.user.gpt.services.sync.file_sync import sync_file
 from api.user.polygon.problem.get.packages import get_packages
@@ -188,6 +189,18 @@ async def build_and_poll(
         except Exception as e:
             logger.warning(f"[{session.id}] fix_gen failed for {offender}: {e}")
             return {"status": "manual_fix", "offender": offender, "error": comment}
+
+        # The fixer may decline an incorrect solution it cannot make earn its tag
+        # (returns a SKIP marker). Uploading that text would break compilation, and
+        # Polygon has no API to delete the solution — so escalate with a clear,
+        # actionable message instead of syncing garbage or looping.
+        skip_reason = parse_skip(fixed)
+        if skip_reason is not None:
+            logger.info(f"[{session.id}] fixer declined {offender}: {skip_reason}")
+            return {"status": "manual_fix", "offender": offender,
+                    "error": (f"Не удалось сделать решение «{offender}» с гарантированным "
+                              f"вердиктом его тега ({skip_reason}). Удалите это решение "
+                              f"или смените его тег в Polygon вручную.")}
 
         await sync_file(db, session, offender, fixed)
         state, comment, package_id = await _build_once(

@@ -16,8 +16,8 @@ def _sub(group, partial_tag=None, **extra):
 @pytest.mark.asyncio
 async def test_generate_skips_when_fewer_than_two_subtasks(stub_llm):
     stub_llm(ask_text="code")
-    assert await ssg.generate({}, "m", []) == []
-    assert await ssg.generate({}, "m", [_sub("1", "TL")]) == []
+    assert await ssg.generate({}, "m", []) == ([], {})
+    assert await ssg.generate({}, "m", [_sub("1", "TL")]) == ([], {})
 
 
 @pytest.mark.asyncio
@@ -25,14 +25,15 @@ async def test_generate_returns_empty_when_no_partial_tags(stub_llm):
     stub_llm(ask_text="code")
     # Last subtask is dropped (full problem); remaining have no partial_tag.
     subs = [_sub("1"), _sub("2"), _sub("3")]
-    assert await ssg.generate({}, "m", subs) == []
+    assert await ssg.generate({}, "m", subs) == ([], {})
 
 
 @pytest.mark.asyncio
 async def test_generate_builds_items_for_non_final_tagged(stub_llm):
     stub_llm(ask_text="solution code")
     subs = [_sub("1", "TL"), _sub("2", "WA"), _sub("3", "MA")]
-    out = await ssg.generate({"name": "x"}, "m", subs)
+    out, skipped = await ssg.generate({"name": "x"}, "m", subs)
+    assert skipped == {}
     # Only subtasks 1 and 2 (last subtask is excluded).
     assert len(out) == 2
     by_group = {r["group"]: r for r in out}
@@ -56,7 +57,7 @@ async def test_generate_filters_out_empty_code(monkeypatch):
 
     monkeypatch.setattr(llm, "ask_text", fake_ask_text)
     subs = [_sub("1", "TL"), _sub("2", "WA"), _sub("3", "MA")]
-    out = await ssg.generate({}, "m", subs)
+    out, _ = await ssg.generate({}, "m", subs)
     groups = {r["group"] for r in out}
     assert groups == {"2"}
 
@@ -65,7 +66,7 @@ async def test_generate_filters_out_empty_code(monkeypatch):
 async def test_generate_strips_code_fences(stub_llm):
     stub_llm(ask_text="```cpp\nint main(){}\n```")
     subs = [_sub("1", "TL"), _sub("2", "MA")]
-    out = await ssg.generate({}, "m", subs)
+    out, _ = await ssg.generate({}, "m", subs)
     assert out[0]["code"] == "int main(){}"
 
 
@@ -74,5 +75,16 @@ async def test_generate_only_targets_subtasks_with_partial_tag(stub_llm):
     stub_llm(ask_text="code")
     # group 1 has no partial_tag, group 2 does; group 3 is final.
     subs = [_sub("1"), _sub("2", "WA"), _sub("3", "MA")]
-    out = await ssg.generate({}, "m", subs)
+    out, _ = await ssg.generate({}, "m", subs)
     assert [r["group"] for r in out] == ["2"]
+
+
+@pytest.mark.asyncio
+async def test_generate_skips_when_model_declines(stub_llm):
+    # The model returns a SKIP marker → that subtask's partial is omitted and its
+    # reason is reported in the skipped map, not created as a bogus file.
+    stub_llm(ask_text="SKIP: нельзя гарантировать TL честным алгоритмом")
+    subs = [_sub("1", "TL"), _sub("2", "MA")]
+    out, skipped = await ssg.generate({}, "m", subs)
+    assert out == []
+    assert "подзадача 1 (TL)" in skipped

@@ -49,6 +49,32 @@ class Settings(BaseSettings):
     # up OpenRouter credits if generations get truncated.
     LLM_MAX_TOKENS: int = 8000
 
+    # OpenRouter provider routing (https://openrouter.ai/docs/provider-routing).
+    # Some models are served only by a provider that geo-blocks the account's
+    # region (e.g. gpt-5.5-pro via OpenAI-direct → HTTP 403 in a blocked region).
+    # These let OpenRouter prefer/skip providers so such a model can route to an
+    # allowed one. Comma-separated provider names; empty = OpenRouter's default.
+    OPENROUTER_PROVIDER_ORDER: str = ""   # preferred first, e.g. "Azure,OpenAI"
+    OPENROUTER_PROVIDER_IGNORE: str = ""  # skip these, e.g. "OpenAI"
+    OPENROUTER_ALLOW_FALLBACKS: bool = True
+
+    @property
+    def openrouter_provider(self) -> dict:
+        """Build the OpenRouter ``provider`` payload block from the settings.
+
+        Returns ``{}`` when nothing is configured, so the payload stays clean.
+        """
+        order = [p.strip() for p in self.OPENROUTER_PROVIDER_ORDER.split(",") if p.strip()]
+        ignore = [p.strip() for p in self.OPENROUTER_PROVIDER_IGNORE.split(",") if p.strip()]
+        block: dict = {}
+        if order:
+            block["order"] = order
+        if ignore:
+            block["ignore"] = ignore
+        if block:
+            block["allow_fallbacks"] = self.OPENROUTER_ALLOW_FALLBACKS
+        return block
+
     POSTGRES_DB: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str

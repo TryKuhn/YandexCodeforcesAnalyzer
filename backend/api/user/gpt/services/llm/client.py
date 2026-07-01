@@ -32,6 +32,38 @@ def strip_code_fences(code: str) -> str:
     return _CODE_FENCE_RE.sub("", code).strip()
 
 
+def _friendly_error(status: int, text: str) -> str:
+    """Turn a raw OpenRouter error body into a short, human-readable RU message.
+
+    OpenRouter dumps a nested JSON blob (``error.message``, ``error.metadata.raw``)
+    that is noisy and confusing in the chat. We surface the common, actionable
+    cases explicitly and fall back to the upstream message otherwise.
+    """
+    message = text
+    try:
+        body = json.loads(text)
+        err = body.get("error", body) if isinstance(body, dict) else {}
+        message = err.get("message") or message
+        raw = (err.get("metadata") or {}).get("raw")
+        if raw:
+            try:
+                message = json.loads(raw).get("error", {}).get("message") or message
+            except (json.JSONDecodeError, AttributeError, TypeError):
+                message = raw if isinstance(raw, str) else message
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        pass
+
+    low = (message or "").lower()
+    if status == 402 or "credit" in low or "afford" in low:
+        return ("Недостаточно средств на балансе OpenRouter для этого запроса. "
+                "Пополните баланс или выберите другую модель.")
+    if status == 403 and ("country" in low or "region" in low or "territory" in low):
+        return ("Эта модель недоступна в вашем регионе через OpenRouter "
+                "(провайдер блокирует запросы из этого региона). "
+                "Выберите другую модель.")
+    return message[:400] if message else f"Ошибка LLM (HTTP {status})"
+
+
 class LLMClient:
     """Stateless client; safe to instantiate per request or reuse as a module global."""
 
@@ -61,6 +93,11 @@ class LLMClient:
         # affordability check and returns 402 when the balance can't cover it.
         if settings.LLM_MAX_TOKENS:
             payload["max_tokens"] = settings.LLM_MAX_TOKENS
+        # Provider routing lets a region-blocked model (e.g. gpt-5.5-pro via
+        # OpenAI-direct) route to an allowed provider; empty when unconfigured.
+        provider = settings.openrouter_provider
+        if provider:
+            payload["provider"] = provider
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
 
@@ -89,7 +126,8 @@ class LLMClient:
                     await asyncio.sleep(1.5 * (attempt + 1))
                     continue
                 raise HTTPException(
-                    status_code=500, detail=f"AI Service error: {response.text[:500]}"
+                    status_code=502,
+                    detail=_friendly_error(response.status_code, response.text),
                 )
 
             try:
