@@ -21,15 +21,27 @@ _CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\r?\n?|```\s*$", re.MULTILINE)
 
 # OpenRouter / upstream providers occasionally return transient gateway errors
 # (502/503/504) or drop the connection — retry those a few times with backoff so
-# a blip doesn't kill a long generation/auto-repair run. 4xx (e.g. a 403 region
-# block) is deterministic and is NOT retried.
+# a blip doesn't kill a long generation/auto-repair run.
 _RETRY_STATUSES = {502, 503, 504}
-_MAX_RETRIES = 3
+# A 403 "Request not allowed" / region block is NOT deterministic on OpenRouter:
+# a model (e.g. claude-haiku-4.5) may have several providers, only SOME of which
+# geo-block the account's region. Each request is routed independently, so a
+# retry can land on an allowed provider. Retrying such a 403 makes an
+# intermittently-blocked model usable (crucial for heavy multi-call generation,
+# where one blocked call would otherwise abort the whole task).
+_MAX_RETRIES = 4
 
 
 def strip_code_fences(code: str) -> str:
     """Remove leading/trailing markdown code fences from a code string."""
     return _CODE_FENCE_RE.sub("", code).strip()
+
+
+def _looks_like_provider_block(text: str) -> bool:
+    """True when a 403 body looks like a provider/region block (not a hard auth error)."""
+    low = (text or "").lower()
+    return any(k in low for k in
+               ("not allowed", "region", "country", "territory", "unsupported_country"))
 
 
 def _friendly_error(status: int, text: str) -> str:
@@ -57,10 +69,10 @@ def _friendly_error(status: int, text: str) -> str:
     if status == 402 or "credit" in low or "afford" in low:
         return ("Недостаточно средств на балансе OpenRouter для этого запроса. "
                 "Пополните баланс или выберите другую модель.")
-    if status == 403 and ("country" in low or "region" in low or "territory" in low):
-        return ("Эта модель недоступна в вашем регионе через OpenRouter "
-                "(провайдер блокирует запросы из этого региона). "
-                "Выберите другую модель.")
+    if status == 403 and _looks_like_provider_block(low):
+        return ("Провайдер модели отклонил запрос (часто это региональная "
+                "блокировка). Обычно помогает повтор — попробуйте ещё раз или "
+                "выберите другую модель.")
     return message[:400] if message else f"Ошибка LLM (HTTP {status})"
 
 
@@ -122,8 +134,12 @@ class LLMClient:
 
             if response.status_code != 200:
                 logger.error(f"AI API Error: {response.status_code} - {response.text[:300]}")
-                if response.status_code in _RETRY_STATUSES and not last:
-                    await asyncio.sleep(1.5 * (attempt + 1))
+                retryable = response.status_code in _RETRY_STATUSES or (
+                    response.status_code == 403
+                    and _looks_like_provider_block(response.text)
+                )
+                if retryable and not last:
+                    await asyncio.sleep(1.0 * (attempt + 1))
                     continue
                 raise HTTPException(
                     status_code=502,

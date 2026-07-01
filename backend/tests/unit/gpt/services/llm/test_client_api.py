@@ -13,6 +13,14 @@ from api.user.gpt.services.llm import client as client_mod
 from api.user.gpt.services.llm.client import LLMClient
 
 
+@pytest.fixture(autouse=True)
+def _no_sleep(monkeypatch):
+    """Make retry backoff instant so retrying paths (403/network) stay fast."""
+    async def _instant(_):
+        return None
+    monkeypatch.setattr(client_mod.asyncio, "sleep", _instant)
+
+
 class _FakeResponse:
     def __init__(self, status_code=200, payload=None, text=""):
         self.status_code = status_code
@@ -50,6 +58,7 @@ def _install_fake_client(monkeypatch, *, response=None, post_exc=None):
             captured["url"] = url
             captured["headers"] = headers
             captured["json"] = json
+            captured["calls"] = captured.get("calls", 0) + 1
             if post_exc is not None:
                 raise post_exc
             return response
@@ -110,14 +119,36 @@ async def test_ask_402_credits_friendly_message(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ask_403_region_friendly_message(monkeypatch):
+async def test_ask_403_region_friendly_message_and_retried(monkeypatch):
+    # A 403 provider/region block is intermittent on OpenRouter → retried, and if
+    # it never clears, surfaced with a friendly "try again / other model" message.
     resp = _FakeResponse(403, payload=None,
-                         text='{"error": {"message": "Country, region, or territory not supported"}}')
-    _install_fake_client(monkeypatch, response=resp)
+                         text='{"error": {"message": "Request not allowed"}}')
+    captured = _install_fake_client(monkeypatch, response=resp)
     with pytest.raises(HTTPException) as ei:
         await LLMClient().ask("m", [])
     assert ei.value.status_code == 502
-    assert "регион" in ei.value.detail.lower()
+    assert "повтор" in ei.value.detail.lower() or "регион" in ei.value.detail.lower()
+    # retried up to _MAX_RETRIES times (not a single attempt)
+    assert captured["calls"] == client_mod._MAX_RETRIES
+
+
+@pytest.mark.asyncio
+async def test_ask_403_provider_block_recovers_on_retry(monkeypatch):
+    # First attempt hits a blocked provider (403), retry lands on an allowed one.
+    seq = [_FakeResponse(403, payload=None, text="Request not allowed"),
+           _FakeResponse(200, _content_payload('{"ok": 1}'))]
+
+    class _FakeClient:
+        def __init__(self, *a, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *exc): return False
+        async def post(self, url, headers=None, json=None):
+            return seq.pop(0)
+
+    monkeypatch.setattr(client_mod.httpx, "AsyncClient", _FakeClient)
+    out = await LLMClient().ask("m", [])
+    assert out == {"ok": 1}
 
 
 @pytest.mark.asyncio
