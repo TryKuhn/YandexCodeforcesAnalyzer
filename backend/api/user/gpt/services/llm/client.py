@@ -56,6 +56,11 @@ class LLMClient:
         """Call the model. With json_mode=True returns the parsed JSON dict;
         with json_mode=False returns {"text": <raw assistant text>}."""
         payload: Dict[str, Any] = {"model": model, "messages": messages}
+        # Always cap output tokens: without this OpenRouter reserves the model's
+        # full max output (e.g. 65536 for gpt-5.5-pro) for its pre-flight
+        # affordability check and returns 402 when the balance can't cover it.
+        if settings.LLM_MAX_TOKENS:
+            payload["max_tokens"] = settings.LLM_MAX_TOKENS
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
 

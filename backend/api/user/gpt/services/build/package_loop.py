@@ -41,9 +41,23 @@ async def _noop(_: str) -> None:
     return None
 
 
-async def _poll(problem_id: int, user_id: int, db: AsyncSession,
-                set_step: StepCb) -> tuple[str, str, Optional[int]]:
-    """Poll problem.packages until READY/FAILED or timeout.
+async def _package_ids(problem_id: int, user_id: int, db: AsyncSession) -> set[int]:
+    """Ids of the problem's packages right now (empty on any API hiccup)."""
+    try:
+        packages = await get_packages(problem_id, user_id, db)
+    except Exception:
+        return set()
+    return {p["id"] for p in packages if p.get("id") is not None}
+
+
+async def _poll(problem_id: int, user_id: int, db: AsyncSession, set_step: StepCb,
+                before_ids: set[int]) -> tuple[str, str, Optional[int]]:
+    """Poll problem.packages until *our* build's package is READY/FAILED or timeout.
+
+    ``problem.packages`` is NOT ordered oldest-first — reading ``packages[-1]``
+    picked an arbitrary (often the oldest) package, so the reported state/comment
+    came from a stale build, not the one we just triggered. Instead we track the
+    single package whose id did not exist before this build was launched.
 
     Returns (state, comment, package_id). state ∈ READY|FAILED|TIMEOUT.
     """
@@ -53,9 +67,10 @@ async def _poll(problem_id: int, user_id: int, db: AsyncSession,
         elapsed += POLL_INTERVAL
 
         packages = await get_packages(problem_id, user_id, db)
-        if not packages:
-            continue
-        latest = packages[-1]
+        fresh = [p for p in packages if p.get("id") not in before_ids]
+        if not fresh:
+            continue  # our new package hasn't appeared yet
+        latest = max(fresh, key=lambda p: p.get("id") or 0)
         state = latest.get("state", "PENDING")
         await set_step(f"Сборка пакета: {state}...")
 
@@ -70,10 +85,11 @@ async def _poll(problem_id: int, user_id: int, db: AsyncSession,
 async def _build_once(problem_id: int, user_id: int, db: AsyncSession,
                       set_step: StepCb) -> tuple[str, str, Optional[int]]:
     """Commit pending changes, trigger one package build, and poll its result."""
+    before_ids = await _package_ids(problem_id, user_id, db)
     await commit_changes(problem_id, user_id, db, minor_changes=True, message="ai-build")
     await set_step("Запуск сборки пакета...")
     await build_package(problem_id=problem_id, user_id=user_id, db=db)
-    return await _poll(problem_id, user_id, db, set_step)
+    return await _poll(problem_id, user_id, db, set_step, before_ids)
 
 
 async def _finalize(session: TaskSession, problem_id: int, db: AsyncSession,

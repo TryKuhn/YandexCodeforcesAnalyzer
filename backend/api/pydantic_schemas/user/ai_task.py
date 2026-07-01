@@ -137,6 +137,19 @@ class ImportFromPolygonRequest(BaseModel):
     model: str
 
 
+class GenerateSolutionCodeRequest(BaseModel):
+    """AI-generate solution code for a user-defined solution (tag + name).
+
+    Unlike ``RefineFileRequest`` (which targets an existing file slot), this
+    creates code for an arbitrary custom solution the user is about to add.
+    """
+
+    session_id: str
+    tag: str
+    name: str
+    instruction: Optional[str] = None
+
+
 class ChatContext(BaseModel):
     """Where the user is acting from. ``file`` requires ``file_key``."""
     scope: Literal["task", "statement", "file"] = "task"

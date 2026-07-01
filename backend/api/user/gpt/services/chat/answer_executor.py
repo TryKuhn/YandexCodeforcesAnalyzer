@@ -14,10 +14,12 @@ from api.user.gpt.services.prompts.answer import SYSTEM_PROMPT
 
 
 # Context budget: include the ACTUAL file contents so the model can answer about
-# solutions/checker/etc. The focused file gets more room; the rest are truncated.
-_FOCUS_LIMIT = 6000
-_PER_FILE_LIMIT = 2500
-_TOTAL_LIMIT = 18000
+# solutions/checker/etc. Modern main models have large context windows, so the
+# budget is generous — every uploaded file should reach the model, not be
+# silently dropped. The focused file still gets extra room.
+_FOCUS_LIMIT = 20000
+_PER_FILE_LIMIT = 12000
+_TOTAL_LIMIT = 120000
 
 
 def _build_context(statement: Dict, files: Dict, resolved: ResolvedContext) -> list[str]:
