@@ -198,7 +198,7 @@ async def test_modify_task_empty_statement_generates_from_scratch(db, task_sessi
     _stub_sync_files(monkeypatch)
 
     async def fake_pack(problem_type, stmt, model, subtasks=None):
-        return {"checker": "c", "validator": "v"}
+        return {"checker": "c", "validator": "v"}, {}
     monkeypatch.setattr(f"{MOD}.file_gen.generate_pack", fake_pack)
 
     out = await me.execute(db, task_session, "make a task",
@@ -218,7 +218,7 @@ async def test_modify_task_statement_but_no_files_generates_pack(db, task_sessio
     _stub_sync_files(monkeypatch)
 
     async def fake_pack(problem_type, stmt, model, subtasks=None):
-        return {"checker": "c"}
+        return {"checker": "c"}, {}
     monkeypatch.setattr(f"{MOD}.file_gen.generate_pack", fake_pack)
 
     out = await me.execute(db, task_session, "generate files",
@@ -296,7 +296,7 @@ async def test_regenerate_redo_when_statement_present(db, task_session, monkeypa
     _stub_sync_files(monkeypatch)
 
     async def fake_pack(problem_type, stmt, model, subtasks=None):
-        return {"checker": "c"}
+        return {"checker": "c"}, {}
     monkeypatch.setattr(f"{MOD}.file_gen.generate_pack", fake_pack)
 
     out = await me.regenerate(db, task_session, "redo it")
@@ -311,7 +311,7 @@ async def test_generate_pack_empty_pack(db, task_session, monkeypatch):
     await db.commit()
 
     async def fake_pack(problem_type, stmt, model, subtasks=None):
-        return {}
+        return {}, {}
     monkeypatch.setattr(f"{MOD}.file_gen.generate_pack", fake_pack)
 
     out = await me._generate_pack(db, task_session)
@@ -326,7 +326,7 @@ async def test_generate_pack_reports_failed_syncs(db, task_session, monkeypatch)
     await db.commit()
 
     async def fake_pack(problem_type, stmt, model, subtasks=None):
-        return {"checker": "c", "validator": "v"}
+        return {"checker": "c", "validator": "v"}, {}
     monkeypatch.setattr(f"{MOD}.file_gen.generate_pack", fake_pack)
 
     # only checker syncs; validator fails
@@ -350,11 +350,11 @@ async def test_generate_pack_with_subtasks_adds_partials(db, task_session, monke
 
     async def fake_pack(problem_type, stmt, model, subtasks=None):
         pack_subtasks["v"] = subtasks
-        return {"checker": "c"}
+        return {"checker": "c"}, {}
     monkeypatch.setattr(f"{MOD}.file_gen.generate_pack", fake_pack)
 
     async def fake_partials(stmt, model, subtasks, problem_type=None):
-        return [{"file_type": "wa_sol", "code": "wa", "tag": "WA", "name": "wa1"}]
+        return [{"file_type": "wa_sol", "code": "wa", "tag": "WA", "name": "wa1"}], {}
     monkeypatch.setattr(f"{MOD}.subtask_solutions_gen.generate", fake_partials)
 
     captured = _stub_sync_files(monkeypatch)

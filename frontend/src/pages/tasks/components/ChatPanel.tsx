@@ -162,12 +162,13 @@ export const ChatPanel = ({ sessionId, model, onModelChange, polygonId, initialM
         : progressLabel(lastMsg?.context?.scope);
     const busy = sending || resuming;
 
-    // While busy, poll the session's progress so the indicator shows the live
-    // stage (Генерирую условие → файлы → сборка) and a progress bar instead of a
-    // flat label. The generation request is synchronous, but it commits progress
-    // at each stage, so a separate poll sees it.
+    // Poll the session's progress ONLY for a background op we're resuming (heavy
+    // generation / build the chat kicked off), so the indicator shows its live
+    // stage. A plain synchronous send (a question or a single-file edit) must NOT
+    // surface unrelated build progress — e.g. a package build still running from
+    // the Packages tab — so it keeps the flat contextual label instead.
     useEffect(() => {
-        if (!busy || !sessionId) { setProgress(null); return; }
+        if (!resuming || !sessionId) { setProgress(null); return; }
         const poll = async () => {
             try {
                 const res = await api.get(`/ai/upload-progress/${sessionId}`);
@@ -183,7 +184,7 @@ export const ChatPanel = ({ sessionId, model, onModelChange, polygonId, initialM
         poll();
         const timer = setInterval(poll, 1500);
         return () => clearInterval(timer);
-    }, [busy, sessionId]);
+    }, [resuming, sessionId]);
 
     // Percentage for a determinate bar (generation stages); null → indeterminate.
     const progressPct = progress?.total

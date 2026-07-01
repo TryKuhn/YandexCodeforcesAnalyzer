@@ -88,13 +88,44 @@ async def test_ask_non_json_mode_returns_text_wrapper(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ask_non_200_raises_500(monkeypatch):
-    resp = _FakeResponse(503, payload=None, text="upstream down")
+async def test_ask_non_200_raises_502_with_message(monkeypatch):
+    # A non-retryable upstream error → 502 with a friendly (or upstream) message.
+    resp = _FakeResponse(400, payload=None, text="upstream down")
     _install_fake_client(monkeypatch, response=resp)
     with pytest.raises(HTTPException) as ei:
         await LLMClient().ask("m", [])
-    assert ei.value.status_code == 500
+    assert ei.value.status_code == 502
     assert "upstream down" in ei.value.detail
+
+
+@pytest.mark.asyncio
+async def test_ask_402_credits_friendly_message(monkeypatch):
+    resp = _FakeResponse(402, payload=None,
+                         text='{"error": {"message": "can only afford 11165 tokens"}}')
+    _install_fake_client(monkeypatch, response=resp)
+    with pytest.raises(HTTPException) as ei:
+        await LLMClient().ask("m", [])
+    assert ei.value.status_code == 502
+    assert "баланс" in ei.value.detail.lower()
+
+
+@pytest.mark.asyncio
+async def test_ask_403_region_friendly_message(monkeypatch):
+    resp = _FakeResponse(403, payload=None,
+                         text='{"error": {"message": "Country, region, or territory not supported"}}')
+    _install_fake_client(monkeypatch, response=resp)
+    with pytest.raises(HTTPException) as ei:
+        await LLMClient().ask("m", [])
+    assert ei.value.status_code == 502
+    assert "регион" in ei.value.detail.lower()
+
+
+@pytest.mark.asyncio
+async def test_ask_sets_max_tokens(monkeypatch):
+    resp = _FakeResponse(200, _content_payload('{"a": 1}'))
+    captured = _install_fake_client(monkeypatch, response=resp)
+    await LLMClient().ask("m", [])
+    assert captured["json"]["max_tokens"] > 0
 
 
 @pytest.mark.asyncio

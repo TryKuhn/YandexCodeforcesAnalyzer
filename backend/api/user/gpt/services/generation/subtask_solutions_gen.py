@@ -7,8 +7,9 @@ file_type key and the Polygon solution tag so the caller can register them in
 ``session.solution_meta`` and sync them as solutions.
 """
 import asyncio
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
+from api.user.gpt.services.generation.solution_skip import parse_skip
 from api.user.gpt.services.llm.client import llm, strip_code_fences
 from api.user.gpt.services.prompts import problem_type as problem_type_guide
 from api.user.gpt.services.prompts.subtask_solution import build_system_prompt
@@ -24,24 +25,27 @@ def _user_prompt(statement: Dict) -> str:
 
 async def generate(
     statement: Dict, model: str, subtasks: List[dict], problem_type=None
-) -> List[dict]:
-    """Return [{file_type, code, tag, name, group}] for non-final subtasks.
+) -> Tuple[List[dict], Dict[str, str]]:
+    """Return ``(partials, skipped)`` for non-final subtasks.
 
-    The last subtask is the full problem — it is already covered by the main
-    solution (tag MA), so no partial solution is generated for it.
+    ``partials`` = [{file_type, code, tag, name, group}]; ``skipped`` maps a
+    subtask label -> the reason its partial solution was declined (the model
+    couldn't guarantee the expected verdict with a genuine algorithm). The last
+    subtask is the full problem — already covered by the main solution (MA) — so
+    no partial is generated for it.
     """
     if len(subtasks) < 2:
-        return []
+        return [], {}
 
     targets = [st for st in subtasks[:-1] if st.get("partial_tag")]
     if not targets:
-        return []
+        return [], {}
 
     sem = asyncio.Semaphore(_CONCURRENCY)
     guide = problem_type_guide.guide(problem_type) if problem_type is not None else ""
 
     async def _one(st: dict) -> dict | None:
-        """Generate one partial solution for a single subtask (or None if empty)."""
+        """Generate one partial solution for a subtask (or a skip/None marker)."""
         async with sem:
             system = build_system_prompt(
                 st["group"], st.get("constraints", ""),
@@ -56,6 +60,10 @@ async def generate(
             ))
             if not code.strip():
                 return None
+            reason = parse_skip(code)
+            if reason is not None:
+                return {"skip": True, "group": st["group"],
+                        "tag": st["partial_tag"], "reason": reason}
             return {
                 "file_type": f"sol_sub{st['group']}",
                 "code": code,
@@ -65,4 +73,9 @@ async def generate(
             }
 
     results = await asyncio.gather(*[_one(st) for st in targets])
-    return [r for r in results if r]
+    partials = [r for r in results if r and not r.get("skip")]
+    skipped = {
+        f"подзадача {r['group']} ({r['tag']})": r["reason"]
+        for r in results if r and r.get("skip")
+    }
+    return partials, skipped

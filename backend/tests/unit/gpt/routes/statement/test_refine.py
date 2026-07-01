@@ -20,7 +20,7 @@ async def test_refine_statement_stage_no_files(db, user, task_session, monkeypat
 
     async def fake_pack(*a, **k):
         called["pack"] = True
-        return {}
+        return {}, {}
 
     monkeypatch.setattr(mod.statement_gen, "generate", fake_stmt_gen)
     monkeypatch.setattr(mod.file_gen, "generate_pack", fake_pack)
@@ -48,7 +48,7 @@ async def test_refine_files_review_regenerates_files(db, user, task_session, mon
         return {"name": "New"}
 
     async def fake_pack(problem_type, stmt, model):
-        return {"checker": "chk"}
+        return {"checker": "chk"}, {}
 
     monkeypatch.setattr(mod.statement_gen, "generate", fake_stmt_gen)
     monkeypatch.setattr(mod.file_gen, "generate_pack", fake_pack)

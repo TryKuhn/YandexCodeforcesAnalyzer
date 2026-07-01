@@ -159,7 +159,8 @@ async def test_generate_pack_regular(monkeypatch):
 
     monkeypatch.setattr(fg, "generate", fake_generate)
 
-    pack = await fg.generate_pack("regular", {"name": "x"}, "model")
+    pack, skipped = await fg.generate_pack("regular", {"name": "x"}, "model")
+    assert skipped == {}
     expected = set(__import__(
         "api.user.gpt.services.files.file_registry",
         fromlist=["applicable_types"],
@@ -187,7 +188,7 @@ async def test_generate_pack_drops_empty_results(monkeypatch):
         return f"// {file_type}"
 
     monkeypatch.setattr(fg, "generate", fake_generate)
-    pack = await fg.generate_pack("regular", {"name": "x"}, "model")
+    pack, _ = await fg.generate_pack("regular", {"name": "x"}, "model")
     assert "validator" not in pack
     assert "generator" in pack
 
@@ -209,7 +210,7 @@ async def test_generate_pack_interactive_includes_interactor(monkeypatch):
         return f"// {file_type}"
 
     monkeypatch.setattr(fg, "generate", fake_generate)
-    pack = await fg.generate_pack("interactive", {"name": "x"}, "model")
+    pack, _ = await fg.generate_pack("interactive", {"name": "x"}, "model")
     assert "interactor" in pack
     # interactive flag propagated to generate().
     assert all(v is True for v in seen_interactive.values())

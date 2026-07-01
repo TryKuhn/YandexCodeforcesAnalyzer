@@ -8,6 +8,7 @@ from api.user.gpt.base_gpt import gpt_router
 from api.user.gpt.services.ai_file_helpers import upsert_ai_file
 from api.user.gpt.services.files.file_registry import get_spec, solution_tag
 from api.user.gpt.services.generation import solution_gen
+from api.user.gpt.services.generation.solution_skip import parse_skip
 from api.user.gpt.services.sessions import get_session_or_404, now_utc
 from app.database import get_db
 
@@ -43,10 +44,18 @@ async def generate_solution(
 
     code = await solution_gen.generate_for_tag(tag, name, session.statement, session.model)
 
+    # Declined (SKIP): the tag's verdict can't be guaranteed with a genuine
+    # algorithm — don't store a bogus file, report why instead.
+    reason = parse_skip(code)
+    if reason is not None:
+        return {"session_id": session.id, "file_key": file_key,
+                "new_code": "", "skipped": True, "reason": reason}
+
     await upsert_ai_file(
         db, session.id, file_key, code, uploaded=False, solution_meta=solution_meta
     )
     session.updated_at = now_utc()
     await db.commit()
 
-    return {"session_id": session.id, "file_key": file_key, "new_code": code}
+    return {"session_id": session.id, "file_key": file_key, "new_code": code,
+            "skipped": False}

@@ -13,6 +13,7 @@ from api.pydantic_schemas.user.ai_task import GenerateSolutionCodeRequest
 from api.user.gpt.base_gpt import gpt_router
 from api.user.gpt.services.chat.file_context import ensure_files_loaded
 from api.user.gpt.services.generation import solution_gen
+from api.user.gpt.services.generation.solution_skip import parse_skip
 from api.user.gpt.services.sessions import get_session_or_404
 from app.database import get_db
 
@@ -37,4 +38,11 @@ async def generate_solution_code(
     code = await solution_gen.generate_for_tag(
         tag, name, session.statement, session.model, instruction=request.instruction
     )
-    return {"session_id": session.id, "tag": tag, "name": name, "code": code}
+    # The model declines (SKIP) when it can't guarantee the tag's verdict with a
+    # genuine algorithm — surface the reason instead of a bogus "SKIP:" file.
+    reason = parse_skip(code)
+    if reason is not None:
+        return {"session_id": session.id, "tag": tag, "name": name,
+                "code": "", "skipped": True, "reason": reason}
+    return {"session_id": session.id, "tag": tag, "name": name,
+            "code": code, "skipped": False}

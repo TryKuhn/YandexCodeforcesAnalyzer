@@ -80,7 +80,7 @@ async def refine_statement(
     tech_data = None
     if session.stage == PipelineStage.FILES_REVIEW:
         try:
-            tech_data = await file_gen.generate_pack(
+            tech_data, _skipped = await file_gen.generate_pack(
                 session.problem_type, stmt, session.model
             )
             await upsert_all_ai_files(db, session.id, tech_data, uploaded=False)

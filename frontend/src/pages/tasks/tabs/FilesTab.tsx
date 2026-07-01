@@ -88,7 +88,12 @@ const AddFileForm = ({ polygonId, section, sessionId, onUploaded, onClose }: Add
                 name: name.trim() || 'solution.cpp',
                 instruction: instruction.trim() || undefined,
             });
-            if (res.data?.code) setContent(res.data.code);
+            if (res.data?.skipped) {
+                setError(`Не удалось создать решение с гарантированным вердиктом «${tag}»: `
+                    + (res.data.reason || 'нет надёжного алгоритма под этот тег для данной задачи.'));
+            } else if (res.data?.code) {
+                setContent(res.data.code);
+            }
         } catch (e: any) {
             setError(e?.response?.data?.detail || 'Не удалось сгенерировать решение');
         } finally {
@@ -368,8 +373,8 @@ export const FilesTab = ({ polygonId, sessionId }: Props) => {
     );
 
     const Section = ({
-        title, items, section, showTag = false
-    }: { title: string; items: PolygonFile[]; section: FileSection; showTag?: boolean }) => {
+        title, items, section, showTag = false, hint
+    }: { title: string; items: PolygonFile[]; section: FileSection; showTag?: boolean; hint?: string }) => {
         const isAdding = addingSection === section;
         return (
             <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
@@ -388,6 +393,11 @@ export const FilesTab = ({ polygonId, sessionId }: Props) => {
                         {isAdding ? 'Закрыть' : 'Добавить'}
                     </button>
                 </div>
+                {hint && (
+                    <div className="px-4 py-1.5 text-[10px] text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                        {hint}
+                    </div>
+                )}
                 {items.length === 0 ? (
                     <div className="px-4 py-3 text-xs text-slate-400 italic">Нет файлов</div>
                 ) : (
@@ -457,7 +467,8 @@ export const FilesTab = ({ polygonId, sessionId }: Props) => {
                 </div>
             )}
 
-            <Section title="Решения"         items={files.solutions}     section="solution" showTag />
+            <Section title="Решения"         items={files.solutions}     section="solution" showTag
+                     hint="Polygon API не поддерживает удаление решений — ненужное решение удалите в веб-интерфейсе Polygon." />
             <Section title="Исходные файлы"  items={files.sourceFiles}   section="source" />
             <Section title="Ресурсы"         items={files.resourceFiles} section="resource" />
             <Section title="Вспомогательные" items={files.auxFiles}      section="aux" />
