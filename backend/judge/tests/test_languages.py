@@ -38,7 +38,7 @@ def test_cpp_compiles_with_o2():
 def test_commands_are_rendered_per_binary():
     # a checker builds beside the solution without overwriting it
     assert CPP.compile_command("checker_main.cpp", "checker") == (
-        "g++", "-O2", "-std=c++17", "-o", "checker", "checker_main.cpp",
+        "/usr/bin/g++", "-O2", "-std=c++17", "-o", "checker", "checker_main.cpp",
     )
     assert CPP.source_file("checker") == "checker_main.cpp"
     assert CPP.source_file("main") == "main.cpp"

@@ -55,12 +55,17 @@ class Language:
 # name of the binary a submission builds into
 DEFAULT_BINARY = "main"
 
+# isolate execve's argv[0] as given, it does not search PATH, so interpreters
+# and compilers must be absolute paths
+GPP = "/usr/bin/g++"
+PYTHON3 = "/usr/bin/python3"
+
 CPP = Language(
     id="cpp",
     name="C++ 17 (g++)",
     source_name="main.cpp",
     # -O2 matches what Codeforces and Polygon use, so timings stay comparable
-    compile_argv=("g++", "-O2", "-std=c++17", "-o", "{binary}", "{source}"),
+    compile_argv=(GPP, "-O2", "-std=c++17", "-o", "{binary}", "{source}"),
     run_argv=("./{binary}",),
 )
 
@@ -69,8 +74,8 @@ PYTHON = Language(
     name="Python 3",
     source_name="main.py",
     # py_compile only checks syntax, which turns a typo into CE instead of RE
-    compile_argv=("python3", "-m", "py_compile", "{source}"),
-    run_argv=("python3", "{source}"),
+    compile_argv=(PYTHON3, "-m", "py_compile", "{source}"),
+    run_argv=(PYTHON3, "{source}"),
     tl_multiplier=3.0,
     ml_multiplier=2.0,
 )
