@@ -16,7 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN git clone --depth 1 --branch ${ISOLATE_VERSION} https://github.com/ioi/isolate.git /src
 WORKDIR /src
-RUN make isolate isolate-cg-keeper
+# make install builds the binaries and the generated config, and sets the setuid bit
+RUN make install DESTDIR=/out
 
 
 FROM ubuntu:24.04
@@ -31,9 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libsystemd0 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=isolate-build /src/isolate /usr/local/bin/isolate
-COPY --from=isolate-build /src/isolate-cg-keeper /usr/local/bin/isolate-cg-keeper
-COPY --from=isolate-build /src/default.cf /usr/local/etc/isolate
+COPY --from=isolate-build /out/ /
 
 # isolate manages namespaces and cgroups, which needs the setuid bit
 RUN chmod 4755 /usr/local/bin/isolate
