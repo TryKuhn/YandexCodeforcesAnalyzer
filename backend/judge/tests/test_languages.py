@@ -32,7 +32,16 @@ def test_unknown_language_is_reported_clearly():
 def test_cpp_compiles_with_o2():
     assert CPP.needs_compilation
     assert "-O2" in CPP.compile_argv
-    assert CPP.run_argv == ("./main",)
+    assert CPP.run_command("main.cpp", "main") == ("./main",)
+
+
+def test_commands_are_rendered_per_binary():
+    # a checker builds beside the solution without overwriting it
+    assert CPP.compile_command("checker_main.cpp", "checker") == (
+        "g++", "-O2", "-std=c++17", "-o", "checker", "checker_main.cpp",
+    )
+    assert CPP.source_file("checker") == "checker_main.cpp"
+    assert CPP.source_file("main") == "main.cpp"
 
 
 def test_cpp_has_no_time_handicap():

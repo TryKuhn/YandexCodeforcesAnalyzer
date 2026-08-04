@@ -180,12 +180,16 @@ class IsolateSandbox(Sandbox):
         return command
 
     async def _init_box(self, box_id: int) -> Path:
-        process = await asyncio.create_subprocess_exec(
-            *self._base_command(box_id),
-            "--init",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *self._base_command(box_id),
+                "--init",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as exc:
+            # misconfigured host, not a broken submission
+            raise SandboxError(f"isolate binary not found: {self._isolate_bin}") from exc
         stdout, stderr = await process.communicate()
         if process.returncode != 0:
             raise SandboxError(
@@ -196,12 +200,16 @@ class IsolateSandbox(Sandbox):
         return Path(stdout.decode().strip()) / "box"
 
     async def _cleanup_box(self, box_id: int) -> None:
-        process = await asyncio.create_subprocess_exec(
-            *self._base_command(box_id),
-            "--cleanup",
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *self._base_command(box_id),
+                "--cleanup",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError:
+            self._pool.retire(box_id)
+            return
         await process.communicate()
         # do not raise, we may already be handling another failure
         if process.returncode != 0:

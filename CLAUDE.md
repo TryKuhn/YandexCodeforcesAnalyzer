@@ -67,11 +67,17 @@
 - `app/languages/` — реестр языков: `registry.py` (`Language`, C++ `g++ -O2`, Python
   `py_compile` + `tl_multiplier=3`), `compile.py` (компиляция в песочнице, лог компилятора
   обрезается). Новый язык добавляется через `register()` — код судейства не меняется.
+- `app/engine/` — движок судейства: `judge.py` (компиляция → прогон по тестам → чекер →
+  агрегация), `checker.py` (протокол testlib: вердикт по КОДУ ВОЗВРАТА чекера, а не diff;
+  `_fail`=3 → внутренняя ошибка, `_points`=7 → частичные баллы), `scoring.py` (группа платит
+  только если прошли ВСЕ её тесты), `spec.py`/`result.py` (входные данные и результаты),
+  `verdict.py` (`OK/WA/TLE/MLE/RE/PE/CE/XX`).
 - `app/workers/` — пул воркеров: N asyncio-тасок разбирают очередь прогонов, события
   (queued/started/finished) уходят в `app/hub.py` (EventHub с реплеем последних событий).
-- `app/server.py` — FastAPI: `GET /health`, `POST /demo/hello-world?count=N` (demo-прогоны
-  C++/Python), `WS /ws/status` (живой поток событий). Порт **8001**, сервис `judge` в
-  dev-compose (privileged — единственный такой контейнер).
+- `app/server.py` — FastAPI: `GET /health`, `POST /judge` (судейство посылки),
+  `POST /demo/hello-world?count=N`, `WS /ws/status` (живой поток событий + прогресс).
+  Порт **8001**, сервис `judge` в dev-compose (privileged — единственный такой контейнер).
+  Живая проверка: `./scripts/judge/demo-judge.py` — судит пять решений A+B и печатает вердикты.
 - `Dockerfile` — isolate v2.6 из исходников (версия запиннена), `g++`, `python3`.
   Собирается с context `./backend`: `docker build -f backend/judge/Dockerfile backend`.
 - Рантайм-зависимости минимальны (fastapi+uvicorn) → тесты гоняются локально без Docker.
