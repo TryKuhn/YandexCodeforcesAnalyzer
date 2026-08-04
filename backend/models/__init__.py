@@ -3,6 +3,8 @@ from models.base import Base
 from models.blobs.blob import Blob
 from models.contest.contest import Contest
 from models.jobs.job import Job, JobStatus
+from models.judge import (JudgeProblem, JudgeRun, JudgeSubmission, JudgeTest,
+                          JudgeVerdict)
 from models.contest.contest_participant import ContestParticipant
 from models.contest.task import Task
 from models.contest.task_result import TaskResult
@@ -31,6 +33,11 @@ __all__ = [
     "Blob",
     "Job",
     "JobStatus",
+    "JudgeProblem",
+    "JudgeRun",
+    "JudgeSubmission",
+    "JudgeTest",
+    "JudgeVerdict",
     "TaskSession",
     "TaskGeneratedFile",
     "PipelineStage",

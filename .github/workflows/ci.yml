@@ -134,6 +134,12 @@ jobs:
       - name: Run migrations
         run: alembic upgrade head
 
+      # downgrades stay honest: roll back to the pre-infra head and re-apply
+      - name: Check migration downgrades
+        run: |
+          alembic downgrade e5f6a7b8c9d0
+          alembic upgrade head
+
       # Restore testmon's coverage DB so pytest runs only tests whose covered
       # code changed. Primary key always misses (run_id) so each run saves a
       # fresh DB; restore-keys pulls the most recent prior DB (incl. main's,
