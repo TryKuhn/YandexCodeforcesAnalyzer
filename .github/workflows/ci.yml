@@ -2,7 +2,8 @@ name: CI Workflow
 
 on:
   pull_request:
-    branches: [main]
+    # judge tickets stack on each other, so those PRs target a judge branch, not main
+    branches: [main, 'judge/**']
   push:
     branches: [main]
 
@@ -16,6 +17,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      judge: ${{ steps.filter.outputs.judge }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -26,6 +28,8 @@ jobs:
               - 'backend/**'
             frontend:
               - 'frontend/**'
+            judge:
+              - 'judge/**'
 
   backend-lint:
     needs: changes
@@ -180,8 +184,39 @@ jobs:
       - name: Check build output
         run: test -f dist/index.html
 
+  judge-test:
+    needs: changes
+    if: needs.changes.outputs.judge == 'true'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./judge
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run ruff
+        run: ruff check .
+
+      - name: Run mypy
+        run: mypy app --ignore-missing-imports
+
+      # only the isolate-free logic runs here, the sandbox itself needs a privileged host
+      - name: Run tests
+        run: pytest -q --tb=short
+
   all-checks-passed:
-    needs: [backend-lint, backend-test, frontend-build]
+    needs: [backend-lint, backend-test, frontend-build, judge-test]
     runs-on: ubuntu-latest
     if: always()
 
@@ -190,7 +225,8 @@ jobs:
         run: |
           if [[ "${{ needs.backend-lint.result }}" == "failure" ]] || \
              [[ "${{ needs.backend-test.result }}" == "failure" ]] || \
-             [[ "${{ needs.frontend-build.result }}" == "failure" ]]; then
+             [[ "${{ needs.frontend-build.result }}" == "failure" ]] || \
+             [[ "${{ needs.judge-test.result }}" == "failure" ]]; then
             echo "Some checks failed"
             exit 1
           fi
