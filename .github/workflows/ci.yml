@@ -247,7 +247,7 @@ jobs:
 
       - name: Judge logs
         if: always()
-        run: docker logs judge
+        run: docker logs judge || true
 
   all-checks-passed:
     needs: [backend-lint, backend-test, frontend-build, judge-test, judge-e2e]

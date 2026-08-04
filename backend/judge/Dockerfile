@@ -6,6 +6,7 @@ ARG ISOLATE_VERSION=v2.6
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
+        ca-certificates \
         git \
         pkg-config \
         libcap-dev \
