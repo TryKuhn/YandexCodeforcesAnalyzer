@@ -14,6 +14,7 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from api import health_router
 from api.crypt import get_current_user, verify_token
+from api.judge.contests import contest_router as judge_contest_router
 from api.user import contest_router
 from api.user.auth import auth_router
 from api.user.codeforces import codeforces_router
@@ -181,6 +182,12 @@ app.include_router(
     contest_router,
     prefix="/api/contests",
     tags=["contest"],
+    dependencies=[Depends(get_current_user)],
+)
+app.include_router(
+    judge_contest_router,
+    prefix="/api/judge/contests",
+    tags=["judge"],
     dependencies=[Depends(get_current_user)],
 )
 app.include_router(

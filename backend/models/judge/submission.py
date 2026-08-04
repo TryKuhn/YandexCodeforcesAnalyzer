@@ -20,6 +20,8 @@ class JudgeSubmission(Base):
     )
     # flat id: participant accounts are another domain
     user_id: Mapped[int | None] = mapped_column()
+    # set when the submission belongs to a contest, null for practice
+    contest_id: Mapped[int | None] = mapped_column(index=True)
 
     # language registry id (cpp / python)
     language: Mapped[str] = mapped_column(String(16))
