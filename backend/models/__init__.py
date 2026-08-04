@@ -1,6 +1,7 @@
 """Aggregates all ORM models and re-exports them for convenient importing."""
 from models.base import Base
 from models.contest.contest import Contest
+from models.jobs.job import Job, JobStatus
 from models.contest.contest_participant import ContestParticipant
 from models.contest.task import Task
 from models.contest.task_result import TaskResult
@@ -26,6 +27,8 @@ from models.user.user import User
 
 __all__ = [
     "Base",
+    "Job",
+    "JobStatus",
     "TaskSession",
     "TaskGeneratedFile",
     "PipelineStage",

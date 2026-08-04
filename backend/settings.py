@@ -81,6 +81,13 @@ class Settings(BaseSettings):
     POSTGRES_HOST: str = "postgres"
     POSTGRES_PORT: int = 5432
 
+    REDIS_HOST: str = "redis"
+    REDIS_PORT: int = 6379
+
+    @property
+    def redis_url(self) -> str:
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+
     @property
     def database_url(self) -> str:
         """Build the asyncpg PostgreSQL connection URL from the POSTGRES_* settings."""
