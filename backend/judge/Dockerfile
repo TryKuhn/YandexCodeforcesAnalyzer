@@ -37,6 +37,11 @@ COPY --from=isolate-build /out/ /
 # isolate manages namespaces and cgroups, which needs the setuid bit
 RUN chmod 4755 /usr/local/bin/isolate
 
+# our config replaces the upstream one, which assumes systemd and /etc/subuid
+COPY judge/isolate.cf /usr/local/etc/isolate
+COPY judge/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # the same testlib the backend ships to Polygon, on the default include path
 COPY api/user/polygon/archive/assets/testlib.h /usr/local/include/testlib.h
 
@@ -49,4 +54,5 @@ COPY judge/tests ./tests
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8001"]
