@@ -77,7 +77,10 @@
 - `app/server.py` — FastAPI: `GET /health`, `POST /judge` (судейство посылки),
   `POST /demo/hello-world?count=N`, `WS /ws/status` (живой поток событий + прогресс).
   Порт **8001**, сервис `judge` в dev-compose (privileged — единственный такой контейнер).
-  Живая проверка: `./scripts/judge/demo-judge.py` — судит пять решений A+B и печатает вердикты.
+- `oracle/` — набор решений с ИЗВЕСТНЫМИ вердиктами (`<тег>_<имя>.<ext>`, теги
+  `ma/ok/wa/tl/ml/re/pe`). Прогоняется скриптом `./scripts/judge/run-oracle.py`;
+  расхождение тега и вердикта = красный CI. Правило: неверное решение должно получать
+  вердикт ЧЕСТНО (реально медленное/жрущее/падающее), без `assert(false)` и пустых циклов.
 - `Dockerfile` — isolate v2.6 из исходников (версия запиннена), `g++`, `python3`.
   Собирается с context `./backend`: `docker build -f backend/judge/Dockerfile backend`.
 - Рантайм-зависимости минимальны (fastapi+uvicorn) → тесты гоняются локально без Docker.
