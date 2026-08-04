@@ -245,6 +245,8 @@ jobs:
       - name: Sanity-check isolate inside the container
         run: |
           docker exec judge isolate --cg --box-id=99 --init
+          docker exec judge sh -c 'cat /sys/fs/cgroup/isolate/cgroup.subtree_control'
+          docker exec judge sh -c 'ls /sys/fs/cgroup/isolate/box-99/ 2>/dev/null | head' || true
           docker exec judge isolate --cg --box-id=99 --cleanup
 
       # the regression gate: every tagged solution must earn exactly its verdict
