@@ -251,6 +251,16 @@ jobs:
       - name: Run the oracle suite
         run: ./scripts/judge/run-oracle.py
 
+      # the prod gate: escapes must stay impossible
+      - name: Run sandbox escape attempts
+        run: ./scripts/judge/run-security.py
+
+      # a breach that leaves traces would show up here rather than in a verdict
+      - name: Check the container was not tampered with
+        run: |
+          docker exec judge sh -c '! grep -q pwned /etc/passwd'
+          docker exec judge sh -c 'test ! -e /etc/pwned -a ! -e /tmp/pwned'
+
       - name: Judge logs
         if: always()
         run: docker logs judge || true
