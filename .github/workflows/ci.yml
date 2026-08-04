@@ -26,10 +26,11 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              - '!backend/judge/**'
             frontend:
               - 'frontend/**'
             judge:
-              - 'judge/**'
+              - 'backend/judge/**'
 
   backend-lint:
     needs: changes
@@ -191,7 +192,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./judge
+        working-directory: ./backend/judge
 
     steps:
       - name: Checkout repository

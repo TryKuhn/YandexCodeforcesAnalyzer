@@ -1,3 +1,4 @@
+# build context is ./backend, so judge shares testlib.h with the backend
 # isolate is built from source so the version is pinned, not whatever apt ships
 FROM ubuntu:24.04 AS isolate-build
 
@@ -35,14 +36,14 @@ COPY --from=isolate-build /src/default.cf /usr/local/etc/isolate
 # isolate manages namespaces and cgroups, which needs the setuid bit
 RUN chmod 4755 /usr/local/bin/isolate
 
-# testlib.h lives on the default include path so checkers compile without extra flags
-COPY vendor/testlib.h /usr/local/include/testlib.h
+# the same testlib the backend ships to Polygon, on the default include path
+COPY api/user/polygon/archive/assets/testlib.h /usr/local/include/testlib.h
 
 WORKDIR /app
-COPY requirements-dev.txt ./
-COPY pytest.ini ./
-COPY app ./app
-COPY tests ./tests
+COPY judge/requirements-dev.txt ./
+COPY judge/pytest.ini ./
+COPY judge/app ./app
+COPY judge/tests ./tests
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
