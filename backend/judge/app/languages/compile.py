@@ -56,8 +56,6 @@ async def compile_source(
         limits,
         stdout=log_name,
         stderr=log_name,
-        # the compiler must write the binary, a submission run never may
-        writable=True,
     )
 
     if result.status is RunStatus.OK:

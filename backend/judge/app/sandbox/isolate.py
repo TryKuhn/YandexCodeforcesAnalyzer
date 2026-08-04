@@ -67,7 +67,6 @@ class IsolateSession(SandboxSession):
         stdout: str | None = None,
         stderr: str | None = None,
         env: Mapping[str, str] | None = None,
-        writable: bool = False,
     ) -> RunResult:
         if not argv:
             raise SandboxError("argv must not be empty")
@@ -78,7 +77,7 @@ class IsolateSession(SandboxSession):
 
         try:
             command = self._build_command(
-                argv, limits, meta_path, stdin, stdout, stderr, env, writable
+                argv, limits, meta_path, stdin, stdout, stderr, env
             )
             process = await asyncio.create_subprocess_exec(
                 *command,
@@ -107,7 +106,6 @@ class IsolateSession(SandboxSession):
         stdout: str | None,
         stderr: str | None,
         env: Mapping[str, str] | None,
-        writable: bool,
     ) -> list[str]:
         command = [self._isolate_bin, f"--box-id={self._box_id}"]
         if self._use_cgroups:
@@ -139,10 +137,6 @@ class IsolateSession(SandboxSession):
 
         for key, value in {**_BASE_ENV, **(env or {})}.items():
             command.append(f"--env={key}={value}")
-
-        # compilation needs to write, a contestant's run never does
-        if writable:
-            command.append("--dir=/box=/box:rw")
 
         command += ["--run", "--"]
         command.extend(argv)
