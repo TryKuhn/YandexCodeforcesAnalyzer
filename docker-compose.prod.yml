@@ -77,6 +77,14 @@ services:
     depends_on:
       - backend
 
+  frontend-participant:
+    image: ghcr.io/trykuhn/yandexcodeforcesanalyzer-frontend-participant:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      - backend
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -89,6 +97,7 @@ services:
       - caddy_config:/config
     depends_on:
       - frontend
+      - frontend-participant
       - backend
 
 volumes:

@@ -10,6 +10,10 @@ COPY . .
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
+# which portal this image serves; the other portal's pages are not bundled
+ARG VITE_PORTAL=jury
+ENV VITE_PORTAL=$VITE_PORTAL
+
 RUN npm run build && test -f /app/dist/index.html
 
 
