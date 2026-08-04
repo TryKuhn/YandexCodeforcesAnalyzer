@@ -1,9 +1,10 @@
 """In-memory sandbox for tests, so judging logic can be checked without isolate."""
 
 from collections.abc import Mapping, Sequence
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from app.sandbox.base import SandboxSession
+from app.sandbox.base import Sandbox, SandboxSession
 from app.sandbox.limits import RunLimits
 from app.sandbox.result import RunResult, RunStatus
 
@@ -51,3 +52,16 @@ class FakeSession(SandboxSession):
         if self._results:
             return self._results.pop(0)
         return RunResult(status=RunStatus.OK)
+
+
+class FakeSandbox(Sandbox):
+    """Hands out FakeSessions; pass canned sessions to script specific runs."""
+
+    def __init__(self, sessions: list[FakeSession] | None = None) -> None:
+        self._sessions = list(sessions or [])
+        self.opened = 0
+
+    @asynccontextmanager
+    async def session(self):
+        self.opened += 1
+        yield self._sessions.pop(0) if self._sessions else FakeSession()

@@ -67,9 +67,14 @@
 - `app/languages/` — реестр языков: `registry.py` (`Language`, C++ `g++ -O2`, Python
   `py_compile` + `tl_multiplier=3`), `compile.py` (компиляция в песочнице, лог компилятора
   обрезается). Новый язык добавляется через `register()` — код судейства не меняется.
+- `app/workers/` — пул воркеров: N asyncio-тасок разбирают очередь прогонов, события
+  (queued/started/finished) уходят в `app/hub.py` (EventHub с реплеем последних событий).
+- `app/server.py` — FastAPI: `GET /health`, `POST /demo/hello-world?count=N` (demo-прогоны
+  C++/Python), `WS /ws/status` (живой поток событий). Порт **8001**, сервис `judge` в
+  dev-compose (privileged — единственный такой контейнер).
 - `Dockerfile` — isolate v2.6 из исходников (версия запиннена), `g++`, `python3`.
   Собирается с context `./backend`: `docker build -f backend/judge/Dockerfile backend`.
-- Рантайм-зависимостей нет (только stdlib) → тесты гоняются локально без Docker.
+- Рантайм-зависимости минимальны (fastapi+uvicorn) → тесты гоняются локально без Docker.
 - testlib.h берётся общий — `backend/api/user/polygon/archive/assets/testlib.h`.
 
 Почему отдельный контейнер: песочнице нужны привилегии (cgroup v2, namespaces). В своём
