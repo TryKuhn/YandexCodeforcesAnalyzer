@@ -261,6 +261,10 @@ jobs:
       - name: Round-trip the package through every format
         run: ./scripts/judge/round-trip.py
 
+      # a broken solution must be caught, a correct one left alone
+      - name: Hunt for counterexamples
+        run: ./scripts/judge/run-stress.py
+
       # the prod gate: escapes must stay impossible
       - name: Run sandbox escape attempts
         run: ./scripts/judge/run-security.py
