@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {useParams} from 'react-router-dom';
+import {Link, useParams} from 'react-router-dom';
 import {
     getContest,
     getScoreboard,
@@ -63,6 +63,8 @@ export function JudgeScoreboard() {
             <h1 className="mb-1 text-2xl font-semibold">{contest.name}</h1>
             <p className="mb-4 text-sm text-gray-500">
                 {isIcpc ? 'Правила ICPC: решённые задачи и штрафное время' : 'Правила IOI: сумма баллов'}
+                {' · '}
+                <Link to="submit" className="text-violet-600 hover:underline">отправить решение</Link>
             </p>
 
             <div className="overflow-x-auto">
