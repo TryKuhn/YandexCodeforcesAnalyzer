@@ -25,6 +25,12 @@ if [ -f "$CG/cgroup.controllers" ]; then
             echo "warning: cannot delegate $controller to isolate boxes" >&2
     done
     echo "cgroup controllers for boxes: $(cat "$CG/isolate/cgroup.subtree_control")"
+
+    # isolate enforces --processes via RLIMIT_NPROC, which a box that is root in
+    # its own user namespace can bypass. This subtree cap is the real backstop
+    # against a fork bomb exhausting the host's pids.
+    echo "${JUDGE_MAX_PIDS:-1024}" > "$CG/isolate/pids.max" 2>/dev/null ||
+        echo "warning: cannot cap pids for isolate boxes" >&2
 else
     echo "warning: no cgroup v2 at $CG, isolate will refuse to run" >&2
 fi

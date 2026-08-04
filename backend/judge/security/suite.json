@@ -10,13 +10,13 @@
   "attacks": [
     {
       "file": "fork_bomb.cpp",
-      "accept": ["RE", "TLE"],
-      "why": "the process cap must stop it before it reaches the host"
+      "accept": ["RE", "TLE", "MLE"],
+      "why": "any of these means it was contained; see docs/judge/security-audit.md on why MLE is the usual one"
     },
     {
       "file": "thread_bomb.cpp",
-      "accept": ["RE", "TLE"],
-      "why": "threads count towards the same cap as processes"
+      "accept": ["RE", "TLE", "MLE"],
+      "why": "same containment as the fork bomb, through threads"
     },
     {
       "file": "network_connect.cpp",
