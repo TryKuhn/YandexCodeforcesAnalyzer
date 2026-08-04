@@ -18,6 +18,10 @@ if [ -f "$CG/cgroup.controllers" ]; then
         echo "+$controller" > "$CG/cgroup.subtree_control" 2>/dev/null || true
     done
     mkdir -p "$CG/isolate"
+    # delegate again inside our own cgroup, else per-box memory.max never appears
+    for controller in cpu memory pids cpuset; do
+        echo "+$controller" > "$CG/isolate/cgroup.subtree_control" 2>/dev/null || true
+    done
 else
     echo "warning: no cgroup v2 at $CG, isolate will refuse to run" >&2
 fi
