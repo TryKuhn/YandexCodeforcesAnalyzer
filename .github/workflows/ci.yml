@@ -3,7 +3,7 @@ name: CI Workflow
 on:
   pull_request:
     # judge tickets stack on each other, so those PRs target a judge branch, not main
-    branches: [main, 'judge/**']
+    branches: [main, 'judge/**', 'judge-*']
   push:
     branches: [main]
 
