@@ -64,6 +64,9 @@
 - `app/sandbox/` — песочница: `limits.py` (лимиты), `result.py` (`RunStatus`), `meta.py`
   (разбор meta-файла isolate + классификация), `pool.py` (пул box-id), `base.py`
   (интерфейс `Sandbox`), `isolate.py` (реализация).
+- `app/languages/` — реестр языков: `registry.py` (`Language`, C++ `g++ -O2`, Python
+  `py_compile` + `tl_multiplier=3`), `compile.py` (компиляция в песочнице, лог компилятора
+  обрезается). Новый язык добавляется через `register()` — код судейства не меняется.
 - `Dockerfile` — isolate v2.6 из исходников (версия запиннена), `g++`, `python3`.
   Собирается с context `./backend`: `docker build -f backend/judge/Dockerfile backend`.
 - Рантайм-зависимостей нет (только stdlib) → тесты гоняются локально без Docker.
@@ -157,7 +160,11 @@ docker exec yandexcodeforcesanalyzer-backend-1 sh -c "cd /app && python -m pytes
 ```bash
 cd backend/judge
 pip install -r requirements-dev.txt
+<<<<<<< HEAD
 pytest -q                            # meta-парсер, лимиты, пул box-id
+=======
+pytest -q                            # meta-парсер, лимиты, пул box-id, языки, компиляция
+>>>>>>> 2188b33 (add language registry and sandboxed compilation)
 ruff check .
 mypy app --ignore-missing-imports
 ```
