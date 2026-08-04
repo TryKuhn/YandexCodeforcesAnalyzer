@@ -1,5 +1,6 @@
 """Judge service API: health, demo run, live status stream."""
 import base64
+import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -11,6 +12,8 @@ from .engine import JudgingEngine, ProblemSpec, SubmissionSpec, TestCase
 from .hub import EventHub
 from .sandbox import BoxPool, IsolateSandbox
 from .workers import DemoJob, WorkerPool
+
+logging.basicConfig(level=logging.INFO)
 
 WORKERS = int(os.environ.get("JUDGE_WORKERS", "2"))
 BOXES = int(os.environ.get("JUDGE_BOXES", "8"))

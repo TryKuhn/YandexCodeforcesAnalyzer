@@ -100,9 +100,12 @@ def main() -> int:
             print(f"cannot reach the judge: {exc}")
             return 2
         comment = next((t["comment"] for t in result["tests"] if t["comment"]), "")
+        # XX and CE carry their reason in the log, not in a test comment
+        if not comment:
+            comment = result["compile_log"].replace("\n", " ")[:60]
         print(
             f"{name:<16} {result['verdict']:<8} {result['score']:>6} "
-            f"{result['max_time_ms']:>6}ms {result['max_memory_kb']:>8}kb  {comment[:30]}"
+            f"{result['max_time_ms']:>6}ms {result['max_memory_kb']:>8}kb  {comment[:60]}"
         )
         if result["verdict"] != expected[name]:
             failures += 1

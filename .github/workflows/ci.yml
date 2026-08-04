@@ -242,6 +242,11 @@ jobs:
             sleep 2
           done
 
+      - name: Sanity-check isolate inside the container
+        run: |
+          docker exec judge isolate --cg --box-id=99 --init
+          docker exec judge isolate --cg --box-id=99 --cleanup
+
       - name: Judge five solutions and check their verdicts
         run: ./scripts/judge/demo-judge.py
 
