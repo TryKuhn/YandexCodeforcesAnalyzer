@@ -25,6 +25,7 @@ import {YandexCallback} from '../pages/YandexCallback.tsx';
 import {CodeforcesCallback} from '../pages/CodeforcesCallback.tsx';
 import {JudgeContests} from '../pages/judge/JudgeContests.tsx';
 import {JudgeScoreboard} from '../pages/judge/JudgeScoreboard.tsx';
+import {JudgeSubmit} from '../pages/judge/JudgeSubmit.tsx';
 
 /** Everything the jury works with; plagiarism, AI authoring and imports live here only. */
 export const portalRoutes = (
@@ -47,6 +48,7 @@ export const portalRoutes = (
 
         <Route path="judge/contests" element={<JudgeContests/>}/>
         <Route path="judge/contests/:id" element={<JudgeScoreboard/>}/>
+        <Route path="judge/contests/:id/submit" element={<JudgeSubmit/>}/>
 
         <Route path="participants" element={<div>Страница участников</div>}/>
         <Route path="ai-tasks" element={<Navigate to="/tasks" replace/>}/>

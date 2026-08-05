@@ -88,6 +88,9 @@ class Settings(BaseSettings):
     def redis_url(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
+    # the judge runs as its own container, see backend/judge/
+    JUDGE_URL: str = "http://judge:8001"
+
     # MinIO in compose; any S3-compatible endpoint works
     S3_ENDPOINT: str = "http://minio:9000"
     S3_ACCESS_KEY: str = "minioadmin"

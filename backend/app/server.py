@@ -14,7 +14,13 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from api import health_router
 from api.crypt import get_current_user, verify_token
+from redis.asyncio import Redis
+
+from api.judge import submissions as judge_submissions
 from api.judge.contests import contest_router as judge_contest_router
+from api.judge.contests import set_cache_backend as set_scoreboard_cache
+from jobs import enqueue
+from jobs.transport import RedisStreamTransport
 from api.user import contest_router
 from api.user.auth import auth_router
 from api.user.codeforces import codeforces_router
@@ -67,6 +73,16 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
 
     cleanup_task = asyncio.create_task(cleanup_expired_tokens())
+
+    # judging: Redis backs both the scoreboard cache and the job queue
+    redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    transport = RedisStreamTransport(redis)
+    set_scoreboard_cache(redis)
+    judge_submissions.set_enqueue(
+        lambda db, job_type, payload, user_id=None: enqueue(
+            db, transport, job_type, payload, user_id=user_id
+        )
+    )
 
     for _ in range(5):
         try:
