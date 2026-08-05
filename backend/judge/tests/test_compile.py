@@ -19,11 +19,12 @@ async def test_successful_compilation():
     assert not result.compile_error
 
 
-async def test_compiler_runs_with_write_access():
+async def test_compiler_writes_its_binary_into_the_box():
     session = FakeSession()
-    await compile_source(session, CPP, b"int main(){}")
-    # the compiler must be able to write the binary
-    assert session.runs[0]["writable"] is True
+    result = await compile_source(session, CPP, b"int main(){}")
+    # isolate's box is writable by default, so -o lands next to the source
+    assert "-o" in session.runs[0]["argv"]
+    assert result.binary_name in session.runs[0]["argv"]
 
 
 async def test_compiler_output_is_captured_for_the_contestant():

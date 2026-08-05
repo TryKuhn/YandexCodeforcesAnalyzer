@@ -73,7 +73,9 @@ class WorkerPool:
             if not compiled.ok:
                 return {"status": "compile_error", "log": compiled.log[:500]}
             result = await session.run(
-                language.run_argv, _DEMO_LIMITS, stdout=_OUTPUT_FILE
+                language.run_command(compiled.source_name, compiled.binary_name),
+                _DEMO_LIMITS,
+                stdout=_OUTPUT_FILE,
             )
             output = await session.read_file(_OUTPUT_FILE, max_bytes=1024)
         return {

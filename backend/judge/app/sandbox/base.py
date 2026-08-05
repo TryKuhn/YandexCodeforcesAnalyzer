@@ -39,7 +39,6 @@ class SandboxSession(ABC):
         stdout: str | None = None,
         stderr: str | None = None,
         env: Mapping[str, str] | None = None,
-        writable: bool = False,
     ) -> RunResult:
         """Execute a program inside the box, stdio names are relative to it."""
 

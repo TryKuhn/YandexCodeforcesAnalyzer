@@ -30,7 +30,8 @@ def test_successful_run_is_ok():
     assert result.ok
     assert result.cpu_time_ms == 52
     assert result.wall_time_ms == 61
-    assert result.memory_kb == 4096
+    # the run's own peak, not the cgroup total that still holds the compiler
+    assert result.memory_kb == 2048
 
 
 def test_nonzero_exit_is_runtime_error():
@@ -70,9 +71,10 @@ def test_oom_kill_is_memory_limit_not_runtime_error():
     assert result.status is RunStatus.MEMORY_LIMIT
 
 
-def test_memory_at_limit_without_oom_flag_is_memory_limit():
-    result = build_result("time:0.4\ncg-mem:262144\nexitcode:0\n", LIMITS)
-    assert result.status is RunStatus.MEMORY_LIMIT
+def test_high_cgroup_usage_without_a_kill_is_not_mle():
+    # the box is shared with the compiler, so cg-mem alone must never mean MLE
+    result = build_result("time:0.4\ncg-mem:262144\nmax-rss:2048\nexitcode:0\n", LIMITS)
+    assert result.status is RunStatus.OK
 
 
 def test_output_limit_signal_is_not_runtime_error():
@@ -85,8 +87,8 @@ def test_isolate_internal_error_is_not_blamed_on_the_program():
     assert result.status is RunStatus.INTERNAL_ERROR
 
 
-def test_falls_back_to_max_rss_when_cgroup_memory_missing():
-    result = build_result("time:0.1\nmax-rss:5000\nexitcode:0\n", LIMITS)
+def test_falls_back_to_cgroup_memory_when_max_rss_missing():
+    result = build_result("time:0.1\ncg-mem:5000\nexitcode:0\n", LIMITS)
     assert result.memory_kb == 5000
 
 
@@ -102,6 +104,7 @@ def test_garbage_values_do_not_crash():
         ("exitcode:0\n", RunStatus.OK),
         ("status:TO\n", RunStatus.TIME_LIMIT),
         ("cg-oom-killed:1\n", RunStatus.MEMORY_LIMIT),
+        ("cg-mem:999999\nexitcode:0\n", RunStatus.OK),
         ("status:XX\n", RunStatus.INTERNAL_ERROR),
     ],
 )
@@ -110,6 +113,6 @@ def test_classification_table(meta, expected):
 
 
 def test_describe_is_human_readable():
-    result = build_result("time:0.5\ncg-mem:1024\nexitsig:11\nstatus:SG\n", LIMITS)
+    result = build_result("time:0.5\nmax-rss:1024\nexitsig:11\nstatus:SG\n", LIMITS)
     assert "RE" in result.describe()
     assert "signal=11" in result.describe()
