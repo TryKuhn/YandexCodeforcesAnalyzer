@@ -178,13 +178,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build frontend
+      - name: Build the jury portal
         env:
           VITE_API_URL: https://createmanager.duckdns.org/api
-        run: npm run build
+        run: npm run build:jury
 
-      - name: Check build output
-        run: test -f dist/index.html
+      - name: Build the participant portal
+        env:
+          VITE_API_URL: https://createmanager.duckdns.org/api
+        run: npm run build:participant
+
+      - name: Check both builds exist
+        run: test -f dist/index.html && test -f dist-participant/index.html
+
+      # the split must be real: jury pages must not ship to contestants
+      - name: Check the participant bundle carries no jury pages
+        run: |
+          for marker in 'Импорт архива' 'Плагиат' 'archive-import'; do
+            if grep -qF "$marker" dist-participant/assets/*.js; then
+              echo "jury code leaked into the participant portal: $marker"
+              exit 1
+            fi
+          done
+          echo "participant bundle is clean"
+
 
   all-checks-passed:
     needs: [backend-lint, backend-test, frontend-build]
