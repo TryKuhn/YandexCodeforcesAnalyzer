@@ -41,11 +41,27 @@
   - `crypt/` — JWT/аутентификация (`get_current_user`).
   - `user/auth/`, `user/codeforces/`, `user/yandex/`, `user/polygon/`, `user/gpt/`,
     `user/plagiarism/`, `user/contests.py`, `user/merge_*.py`.
-- `models/` — SQLAlchemy-модели. `alembic/` — миграции. `settings.py` — конфиг из `.env` (pydantic-settings).
+- `models/` — SQLAlchemy-модели по доменам; `models/judge/` — домен своей тестирующей
+  системы (problem/test/submission/run + contest/participant): вход/ответ теста и исходник
+  посылки — это sha256-ссылки на блобы (см. `blobs/`), одинаковые тесты между задачами
+  дедупятся сами. `alembic/` — миграции. `settings.py` — конфиг из `.env` (pydantic-settings).
+- `api/judge/` — контесты своей ТС: `contests.py` (CRUD только для Admin, скорборд),
+  `scoreboard.py` (ЧИСТЫЕ функции подсчёта ICPC/IOI — вся логика тестируется без БД),
+  `cache.py` (кэш таблицы, сбрасывается ПО СОБЫТИЮ — судейство посылки, правка состава задач),
+  `submissions.py` (отправка решения и свои посылки), `client.py` (HTTP к judge-сервису),
+  `grading.py` (job-хендлер: собрать тесты из блобов → позвать судью → разложить прогоны и
+  вердикт → сбросить кэш). **Сквозной поток:** портал → `POST /judge/contests/{id}/submissions`
+  → блоб + строка `queued` → job в Redis → воркер (`python -m jobs.run_worker`) → судья →
+  `judged` + `JudgeRun` по тестам → скорборд. Судья недоступен → job ретраится, посылка не теряется.
+  ICPC: решённые + пенальти `время + 20 мин × неудачные попытки`, CE попыткой не считается,
+  попытки после решения бесплатны. IOI: сумма ЛУЧШИХ результатов по задачам, пенальти нет.
 - `jobs/` — durable-очередь фоновых задач: строка в таблице `jobs` — источник правды
   (статус/прогресс/результат), Redis Streams только будит воркеров. `enqueue()` → пуш id;
   воркер (`python -m jobs.run_worker`) атомарно забирает job (`UPDATE..RETURNING` — дубли
   доставки безвредны), ретраи с лимитом попыток, брошенные задачи возвращает `XAUTOCLAIM`.
+- `blobs/` — контент-адресное хранилище: байты лежат в MinIO/S3 под своим sha256
+  (`BlobStore.put/get`), строка в таблице `blobs` держит refcount — дедуп бесплатный,
+  удалять объект можно только при refcount=0 (сам GC — YCA-210, отдельный тикет).
 - `plagiarism/` — исходники C++-модуля. `tests/` — pytest (зеркалит структуру `api/`). `conftest.py`, `pytest.ini`, `mypy.ini`.
 
 Роутеры (`app/server.py`), все кроме health/auth требуют `get_current_user`:

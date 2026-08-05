@@ -1,21 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { TaskForgeIcon } from '../TaskForgeLogo';
-import {
-    Trophy, Users, User, Key,
-    LogOut, ChevronDown, Menu, LayoutList, Archive,
-} from 'lucide-react';
+import { User, Key, LogOut, ChevronDown, Menu } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { ThemeToggle } from '../ThemeToggle';
 import { SiteFooter } from '../SiteFooter';
 import { api } from "../../api/instance.ts";
+import { portalMenu } from "@portal-routes";
 
-const MENU_ITEMS = [
-    { icon: Trophy,     label: 'Соревнования',  path: '/contests' },
-    { icon: Users,      label: 'Участники',     path: '/participants' },
-    { icon: LayoutList, label: 'Задачи',        path: '/tasks' },
-    { icon: Archive,    label: 'Импорт архива', path: '/archive-import' },
-];
+// the menu ships with the portal's routes, so jury links are absent from the
+// participant build rather than merely hidden
+const MENU_ITEMS = portalMenu;
 
 export const MainLayout = () => {
     const location  = useLocation();

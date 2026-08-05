@@ -19,7 +19,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /* the active portal's route set is swapped by vite at build time */
+    "paths": {
+      "@portal-routes": ["./src/routes/JuryRoutes.tsx"]
+    }
   },
   "include": ["src"]
 }
