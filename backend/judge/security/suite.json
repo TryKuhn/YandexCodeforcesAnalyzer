@@ -1,0 +1,37 @@
+{
+  "problem": {
+    "name": "A+B under attack",
+    "time_limit_ms": 1000,
+    "memory_limit_mb": 64,
+    "tests": [
+      {"input": "2 3\n", "answer": "5\n", "points": 100}
+    ]
+  },
+  "attacks": [
+    {
+      "file": "fork_bomb.cpp",
+      "accept": ["RE", "TLE", "MLE"],
+      "why": "any of these means it was contained; see docs/judge/security-audit.md on why MLE is the usual one"
+    },
+    {
+      "file": "thread_bomb.cpp",
+      "accept": ["RE", "TLE", "MLE"],
+      "why": "same containment as the fork bomb, through threads"
+    },
+    {
+      "file": "network_connect.cpp",
+      "accept": ["OK"],
+      "why": "OK means the connection was refused; WA means the sandbox has network"
+    },
+    {
+      "file": "write_system_files.cpp",
+      "accept": ["OK"],
+      "why": "OK means every write outside the box failed"
+    },
+    {
+      "file": "read_judge_internals.cpp",
+      "accept": ["OK"],
+      "why": "OK means host secrets and judge sources are not readable"
+    }
+  ]
+}

@@ -16,6 +16,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      judge: ${{ steps.filter.outputs.judge }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -24,8 +25,11 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              - '!backend/judge/**'
             frontend:
               - 'frontend/**'
+            judge:
+              - 'backend/judge/**'
 
   backend-lint:
     needs: changes
@@ -203,8 +207,94 @@ jobs:
           echo "participant bundle is clean"
 
 
+  judge-test:
+    needs: changes
+    if: needs.changes.outputs.judge == 'true'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./backend/judge
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run ruff
+        run: ruff check .
+
+      - name: Run mypy
+        run: mypy app --ignore-missing-imports
+
+      # only the isolate-free logic runs here, the sandbox itself needs a privileged host
+      - name: Run tests
+        run: pytest -q --tb=short
+
+  # the real thing: build the sandbox image and judge actual solutions.
+  # dev machines often lack cgroup v2, GitHub runners have it, so this is where
+  # honest TLE/MLE/RE verdicts get verified.
+  judge-e2e:
+    needs: changes
+    if: needs.changes.outputs.judge == 'true'
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Report host capabilities
+        run: ./scripts/judge/host-probe.sh || true
+
+      - name: Build judge image
+        run: docker build -f backend/judge/Dockerfile -t yca-judge backend
+
+      - name: Start judge service
+        run: |
+          docker run -d --privileged --name judge -p 8001:8001 yca-judge
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:8001/health && break
+            sleep 2
+          done
+
+      - name: Sanity-check isolate inside the container
+        run: |
+          docker exec judge isolate --cg --box-id=99 --init
+          docker exec judge sh -c 'cat /sys/fs/cgroup/isolate/cgroup.subtree_control'
+          docker exec judge sh -c 'ls /sys/fs/cgroup/isolate/box-99/ 2>/dev/null | head' || true
+          docker exec judge isolate --cg --box-id=99 --cleanup
+
+      # the regression gate: every tagged solution must earn exactly its verdict
+      - name: Run the oracle suite
+        run: ./scripts/judge/run-oracle.py
+
+      # the authoring loop: our generator, our validator, our reference answers
+      - name: Build a problem from jury sources and judge it
+        run: ./scripts/judge/build-and-judge.py
+
+      # the prod gate: escapes must stay impossible
+      - name: Run sandbox escape attempts
+        run: ./scripts/judge/run-security.py
+
+      # a breach that leaves traces would show up here rather than in a verdict
+      - name: Check the container was not tampered with
+        run: |
+          docker exec judge sh -c '! grep -q pwned /etc/passwd'
+          docker exec judge sh -c 'test ! -e /etc/pwned -a ! -e /tmp/pwned'
+
+      - name: Judge logs
+        if: always()
+        run: docker logs judge || true
+
   all-checks-passed:
-    needs: [backend-lint, backend-test, frontend-build]
+    needs: [backend-lint, backend-test, frontend-build, judge-test, judge-e2e]
     runs-on: ubuntu-latest
     if: always()
 
@@ -213,7 +303,9 @@ jobs:
         run: |
           if [[ "${{ needs.backend-lint.result }}" == "failure" ]] || \
              [[ "${{ needs.backend-test.result }}" == "failure" ]] || \
-             [[ "${{ needs.frontend-build.result }}" == "failure" ]]; then
+             [[ "${{ needs.frontend-build.result }}" == "failure" ]] || \
+             [[ "${{ needs.judge-test.result }}" == "failure" ]] || \
+             [[ "${{ needs.judge-e2e.result }}" == "failure" ]]; then
             echo "Some checks failed"
             exit 1
           fi

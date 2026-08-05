@@ -1,0 +1,14 @@
+# Isolate configuration for the judge container.
+# Upstream defaults expect systemd and /etc/subuid; in a container we own the
+# whole UID space and prepare cgroups ourselves (see entrypoint.sh).
+
+box_root = /var/local/lib/isolate
+lock_root = /run/isolate/locks
+
+# prepared by entrypoint.sh instead of isolate-cg-keeper
+cg_root = /sys/fs/cgroup/isolate
+
+# explicit UID/GID block, the documented alternative to subid_user
+first_uid = 60000
+first_gid = 60000
+num_boxes = 1000

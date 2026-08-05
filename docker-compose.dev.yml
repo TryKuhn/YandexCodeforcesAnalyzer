@@ -68,6 +68,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+  judge:
+    build:
+      context: ./backend
+      dockerfile: judge/Dockerfile
+    # the ONLY privileged container: isolate needs cgroups and namespaces
+    privileged: true
+    ports:
+      - "8001:8001"
+    environment:
+      JUDGE_WORKERS: 4
+    healthcheck:
+      test: [ "CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
   frontend:
     build:
       context: ./frontend

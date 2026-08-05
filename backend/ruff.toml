@@ -1,0 +1,2 @@
+# judge is a separate service and is linted by its own CI job
+extend-exclude = ["judge"]
