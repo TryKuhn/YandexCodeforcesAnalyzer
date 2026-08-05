@@ -42,6 +42,10 @@
   - `user/auth/`, `user/codeforces/`, `user/yandex/`, `user/polygon/`, `user/gpt/`,
     `user/plagiarism/`, `user/contests.py`, `user/merge_*.py`.
 - `models/` — SQLAlchemy-модели. `alembic/` — миграции. `settings.py` — конфиг из `.env` (pydantic-settings).
+- `jobs/` — durable-очередь фоновых задач: строка в таблице `jobs` — источник правды
+  (статус/прогресс/результат), Redis Streams только будит воркеров. `enqueue()` → пуш id;
+  воркер (`python -m jobs.run_worker`) атомарно забирает job (`UPDATE..RETURNING` — дубли
+  доставки безвредны), ретраи с лимитом попыток, брошенные задачи возвращает `XAUTOCLAIM`.
 - `plagiarism/` — исходники C++-модуля. `tests/` — pytest (зеркалит структуру `api/`). `conftest.py`, `pytest.ini`, `mypy.ini`.
 
 Роутеры (`app/server.py`), все кроме health/auth требуют `get_current_user`:
@@ -99,7 +103,8 @@ make dev.logs.be       # логи backend;  make dev.logs.fe — логи fronte
   `docker compose -f docker-compose.dev.yml up -d backend`.
 - Новые Python-файлы/правки `.py` подхватываются авто-релоадом uvicorn без пересоздания.
 - Ключевые переменные: `OPENAI_API_KEY` (OpenRouter), `SECRET_KEY`, `POSTGRES_*`,
-  Yandex/CF client id/secret; опционально `LLM_MAX_TOKENS`, `OPENROUTER_PROVIDER_ORDER/IGNORE/ALLOW_FALLBACKS`.
+  Yandex/CF client id/secret; опционально `LLM_MAX_TOKENS`, `OPENROUTER_PROVIDER_ORDER/IGNORE/ALLOW_FALLBACKS`,
+  `REDIS_HOST`/`REDIS_PORT` (дефолты `redis`/6379 подходят для compose).
 
 ### Windows-нюанс
 Node/npm не в PATH. Вызывай явно: `& "C:\Program Files\nodejs\npx.cmd"` / `npm.cmd`.
