@@ -16,6 +16,7 @@ from .packaging import Package, PackageError, PackageTest
 from .packaging import available as package_formats
 from .packaging import get as package_format
 from .sandbox import BoxPool, IsolateSandbox
+from .stress import StressTester
 from .workers import DemoJob, WorkerPool
 
 logging.basicConfig(level=logging.INFO)
@@ -71,6 +72,7 @@ async def lifespan(app: FastAPI):
     app.state.hub = EventHub()
     app.state.engine = JudgingEngine(sandbox)
     app.state.builder = ProblemBuilder(sandbox)
+    app.state.stress = StressTester(sandbox)
     app.state.pool = WorkerPool(sandbox, app.state.hub, workers=WORKERS)
     await app.state.pool.start()
     yield
@@ -296,6 +298,66 @@ async def import_package(request: ImportRequest) -> dict:
     except PackageError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _to_payload(package)
+
+
+class StressRequest(BaseModel):
+    candidate: str
+    reference: str
+    generator: str
+    checker: str
+    # {seed} is substituted per round
+    gen_args: str = "{seed}"
+    iterations: int = Field(default=50, ge=1, le=1000)
+    time_limit_ms: int = 1000
+    memory_limit_mb: int = 256
+    language: str = "cpp"
+
+
+@app.post("/stress")
+async def stress(request: StressRequest) -> dict:
+    """Look for a test where the candidate disagrees with the jury solution."""
+    run_id = uuid.uuid4().hex[:8]
+    hub = app.state.hub
+    hub.publish({"type": "stress.started", "run_id": run_id, "rounds": request.iterations})
+
+    async def progress(done: int, total: int) -> None:
+        hub.publish(
+            {"type": "stress.progress", "run_id": run_id, "done": done, "total": total}
+        )
+
+    result = await app.state.stress.hunt(
+        candidate=request.candidate.encode(),
+        reference=request.reference.encode(),
+        generator=request.generator.encode(),
+        checker=request.checker.encode(),
+        gen_args=request.gen_args,
+        iterations=request.iterations,
+        time_limit_ms=request.time_limit_ms,
+        memory_limit_mb=request.memory_limit_mb,
+        language_id=request.language,
+        progress=progress,
+    )
+    hub.publish({"type": "stress.finished", "run_id": run_id, "found": result.found})
+
+    example = result.counterexample
+    return {
+        "run_id": run_id,
+        "found": result.found,
+        "iterations": result.iterations,
+        "error": result.error,
+        "failed_stage": result.failed_stage,
+        "counterexample": (
+            {
+                "seed": example.seed,
+                "input": example.input_data.decode(errors="replace"),
+                "expected": example.expected.decode(errors="replace"),
+                "actual": example.actual.decode(errors="replace"),
+                "reason": example.reason,
+            }
+            if example
+            else None
+        ),
+    }
 
 
 @app.websocket("/ws/status")
