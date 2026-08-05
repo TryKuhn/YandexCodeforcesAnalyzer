@@ -247,8 +247,9 @@ jobs:
           docker exec judge isolate --cg --box-id=99 --init
           docker exec judge isolate --cg --box-id=99 --cleanup
 
-      - name: Judge five solutions and check their verdicts
-        run: ./scripts/judge/demo-judge.py
+      # the regression gate: every tagged solution must earn exactly its verdict
+      - name: Run the oracle suite
+        run: ./scripts/judge/run-oracle.py
 
       - name: Judge logs
         if: always()
