@@ -24,6 +24,7 @@ FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
         g++ \
         python3 \
+        python3-pip \
         libcap2 \
         libseccomp2 \
         libsystemd0 \
@@ -40,12 +41,12 @@ RUN chmod 4755 /usr/local/bin/isolate
 COPY api/user/polygon/archive/assets/testlib.h /usr/local/include/testlib.h
 
 WORKDIR /app
-COPY judge/requirements-dev.txt ./
-COPY judge/pytest.ini ./
+COPY judge/requirements.txt judge/requirements-dev.txt judge/pytest.ini ./
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 COPY judge/app ./app
 COPY judge/tests ./tests
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
-CMD ["python3", "-c", "print('judge service: no entrypoint yet, see YCA-403')"]
+CMD ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8001"]
