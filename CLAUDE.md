@@ -42,9 +42,14 @@
   - `user/auth/`, `user/codeforces/`, `user/yandex/`, `user/polygon/`, `user/gpt/`,
     `user/plagiarism/`, `user/contests.py`, `user/merge_*.py`.
 - `models/` — SQLAlchemy-модели по доменам; `models/judge/` — домен своей тестирующей
-  системы (problem/test/submission/run): вход/ответ теста и исходник посылки — это
-  sha256-ссылки на блобы (см. `blobs/`), одинаковые тесты между задачами дедупятся сами.
-  `alembic/` — миграции. `settings.py` — конфиг из `.env` (pydantic-settings).
+  системы (problem/test/submission/run + contest/participant): вход/ответ теста и исходник
+  посылки — это sha256-ссылки на блобы (см. `blobs/`), одинаковые тесты между задачами
+  дедупятся сами. `alembic/` — миграции. `settings.py` — конфиг из `.env` (pydantic-settings).
+- `api/judge/` — контесты своей ТС: `contests.py` (CRUD только для Admin, скорборд),
+  `scoreboard.py` (ЧИСТЫЕ функции подсчёта ICPC/IOI — вся логика тестируется без БД),
+  `cache.py` (кэш таблицы, сбрасывается ПО СОБЫТИЮ — судейство посылки, правка состава задач).
+  ICPC: решённые + пенальти `время + 20 мин × неудачные попытки`, CE попыткой не считается,
+  попытки после решения бесплатны. IOI: сумма ЛУЧШИХ результатов по задачам, пенальти нет.
 - `jobs/` — durable-очередь фоновых задач: строка в таблице `jobs` — источник правды
   (статус/прогресс/результат), Redis Streams только будит воркеров. `enqueue()` → пуш id;
   воркер (`python -m jobs.run_worker`) атомарно забирает job (`UPDATE..RETURNING` — дубли
