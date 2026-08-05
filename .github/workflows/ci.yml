@@ -1,8 +1,8 @@
 name: CI Workflow
 
 on:
+  # no branch filter: stacked PRs target intermediate branches and still need checks
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 

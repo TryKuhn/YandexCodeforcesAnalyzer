@@ -46,6 +46,9 @@
   (статус/прогресс/результат), Redis Streams только будит воркеров. `enqueue()` → пуш id;
   воркер (`python -m jobs.run_worker`) атомарно забирает job (`UPDATE..RETURNING` — дубли
   доставки безвредны), ретраи с лимитом попыток, брошенные задачи возвращает `XAUTOCLAIM`.
+- `blobs/` — контент-адресное хранилище: байты лежат в MinIO/S3 под своим sha256
+  (`BlobStore.put/get`), строка в таблице `blobs` держит refcount — дедуп бесплатный,
+  удалять объект можно только при refcount=0 (сам GC — YCA-210, отдельный тикет).
 - `plagiarism/` — исходники C++-модуля. `tests/` — pytest (зеркалит структуру `api/`). `conftest.py`, `pytest.ini`, `mypy.ini`.
 
 Роутеры (`app/server.py`), все кроме health/auth требуют `get_current_user`:

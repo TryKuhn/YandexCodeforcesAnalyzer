@@ -28,6 +28,21 @@ services:
       timeout: 3s
       retries: 5
 
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   backend:
     image: ghcr.io/trykuhn/yandexcodeforcesanalyzer-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -38,6 +53,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     expose:
       - "8000"
@@ -77,5 +94,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  minio_data:
   caddy_data:
   caddy_config:
