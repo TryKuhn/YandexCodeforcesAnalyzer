@@ -1,14 +1,10 @@
 """Content-addressed blob: bytes live in S3/MinIO under their sha256, this row counts users."""
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import BigInteger, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from models.base import Base
-
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+from models.base import Base, utcnow
 
 
 class Blob(Base):

@@ -1,18 +1,13 @@
 """Durable background job; the DB row is the source of truth, Redis only wakes workers."""
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import JSON, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from models.base import Base
-
-
-def utcnow() -> datetime:
-    """Naive UTC, like the rest of the server."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+from models.base import Base, utcnow
 
 
 class JobStatus(str, enum.Enum):
