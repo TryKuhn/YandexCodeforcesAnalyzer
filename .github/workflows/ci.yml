@@ -1,9 +1,8 @@
 name: CI Workflow
 
 on:
+  # no branch filter: stacked PRs target intermediate branches and still need checks
   pull_request:
-    # judge tickets stack on each other, so those PRs target a judge branch, not main
-    branches: [main, 'judge/**', 'judge-*']
   push:
     branches: [main]
 
@@ -139,6 +138,12 @@ jobs:
       - name: Run migrations
         run: alembic upgrade head
 
+      # downgrades stay honest: roll back to the pre-infra head and re-apply
+      - name: Check migration downgrades
+        run: |
+          alembic downgrade e5f6a7b8c9d0
+          alembic upgrade head
+
       # Restore testmon's coverage DB so pytest runs only tests whose covered
       # code changed. Primary key always misses (run_id) so each run saves a
       # fresh DB; restore-keys pulls the most recent prior DB (incl. main's,
@@ -177,13 +182,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build frontend
+      - name: Build the jury portal
         env:
           VITE_API_URL: https://createmanager.duckdns.org/api
-        run: npm run build
+        run: npm run build:jury
 
-      - name: Check build output
-        run: test -f dist/index.html
+      - name: Build the participant portal
+        env:
+          VITE_API_URL: https://createmanager.duckdns.org/api
+        run: npm run build:participant
+
+      - name: Check both builds exist
+        run: test -f dist/index.html && test -f dist-participant/index.html
+
+      # the split must be real: jury pages must not ship to contestants
+      - name: Check the participant bundle carries no jury pages
+        run: |
+          for marker in 'Импорт архива' 'Плагиат' 'archive-import'; do
+            if grep -qF "$marker" dist-participant/assets/*.js; then
+              echo "jury code leaked into the participant portal: $marker"
+              exit 1
+            fi
+          done
+          echo "participant bundle is clean"
+
 
   judge-test:
     needs: changes
@@ -216,8 +238,71 @@ jobs:
       - name: Run tests
         run: pytest -q --tb=short
 
+  # the real thing: build the sandbox image and judge actual solutions.
+  # dev machines often lack cgroup v2, GitHub runners have it, so this is where
+  # honest TLE/MLE/RE verdicts get verified.
+  judge-e2e:
+    needs: changes
+    if: needs.changes.outputs.judge == 'true'
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Report host capabilities
+        run: ./scripts/judge/host-probe.sh || true
+
+      - name: Build judge image
+        run: docker build -f backend/judge/Dockerfile -t yca-judge backend
+
+      - name: Start judge service
+        run: |
+          docker run -d --privileged --name judge -p 8001:8001 yca-judge
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:8001/health && break
+            sleep 2
+          done
+
+      - name: Sanity-check isolate inside the container
+        run: |
+          docker exec judge isolate --cg --box-id=99 --init
+          docker exec judge sh -c 'cat /sys/fs/cgroup/isolate/cgroup.subtree_control'
+          docker exec judge sh -c 'ls /sys/fs/cgroup/isolate/box-99/ 2>/dev/null | head' || true
+          docker exec judge isolate --cg --box-id=99 --cleanup
+
+      # the regression gate: every tagged solution must earn exactly its verdict
+      - name: Run the oracle suite
+        run: ./scripts/judge/run-oracle.py
+
+      # the authoring loop: our generator, our validator, our reference answers
+      - name: Build a problem from jury sources and judge it
+        run: ./scripts/judge/build-and-judge.py
+
+      # export and import must not change the problem, Polygon format included
+      - name: Round-trip the package through every format
+        run: ./scripts/judge/round-trip.py
+
+      # a broken solution must be caught, a correct one left alone
+      - name: Hunt for counterexamples
+        run: ./scripts/judge/run-stress.py
+
+      # the prod gate: escapes must stay impossible
+      - name: Run sandbox escape attempts
+        run: ./scripts/judge/run-security.py
+
+      # a breach that leaves traces would show up here rather than in a verdict
+      - name: Check the container was not tampered with
+        run: |
+          docker exec judge sh -c '! grep -q pwned /etc/passwd'
+          docker exec judge sh -c 'test ! -e /etc/pwned -a ! -e /tmp/pwned'
+
+      - name: Judge logs
+        if: always()
+        run: docker logs judge || true
+
   all-checks-passed:
-    needs: [backend-lint, backend-test, frontend-build, judge-test]
+    needs: [backend-lint, backend-test, frontend-build, judge-test, judge-e2e]
     runs-on: ubuntu-latest
     if: always()
 
@@ -227,7 +312,8 @@ jobs:
           if [[ "${{ needs.backend-lint.result }}" == "failure" ]] || \
              [[ "${{ needs.backend-test.result }}" == "failure" ]] || \
              [[ "${{ needs.frontend-build.result }}" == "failure" ]] || \
-             [[ "${{ needs.judge-test.result }}" == "failure" ]]; then
+             [[ "${{ needs.judge-test.result }}" == "failure" ]] || \
+             [[ "${{ needs.judge-e2e.result }}" == "failure" ]]; then
             echo "Some checks failed"
             exit 1
           fi

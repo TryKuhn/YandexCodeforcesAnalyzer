@@ -1,0 +1,9 @@
+{
+  "name": "A+B",
+  "time_limit_ms": 1000,
+  "memory_limit_mb": 64,
+  "tests": [
+    {"input": "2 3\n", "answer": "5\n", "points": 50},
+    {"input": "1000000 2000000\n", "answer": "3000000\n", "points": 50}
+  ]
+}

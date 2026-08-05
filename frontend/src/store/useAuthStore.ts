@@ -7,6 +7,7 @@ interface User {
     login: string;
     email: string;
     role_id: string;
+    role: string | null;
     is_yandex_linked: boolean;
     is_codeforces_linked: boolean;
     is_polygon_linked: boolean;
