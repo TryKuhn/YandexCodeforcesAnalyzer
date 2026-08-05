@@ -12,6 +12,9 @@ from .authoring import (GeneratedTest, LockBusy, ManualTest, ProblemBuilder,
                         ProblemSource)
 from .engine import JudgingEngine, ProblemSpec, SubmissionSpec, TestCase
 from .hub import EventHub
+from .packaging import Package, PackageError, PackageTest
+from .packaging import available as package_formats
+from .packaging import get as package_format
 from .sandbox import BoxPool, IsolateSandbox
 from .workers import DemoJob, WorkerPool
 
@@ -207,6 +210,92 @@ async def build_problem(request: BuildRequest) -> dict:
             for t in result.tests
         ],
     }
+
+
+class PackageTestPayload(BaseModel):
+    index: int
+    input: str
+    answer: str
+    group: str | None = None
+    points: float = 0.0
+    is_sample: bool = False
+
+
+class ExportRequest(BaseModel):
+    name: str
+    checker: str
+    tests: list[PackageTestPayload] = Field(min_length=1)
+    time_limit_ms: int = 1000
+    memory_limit_mb: int = 256
+    format: str = "native"
+
+
+class ImportRequest(BaseModel):
+    # base64 of the archive, so any format travels over JSON
+    archive: str
+    format: str = "native"
+
+
+def _to_payload(package: Package) -> dict:
+    return {
+        "name": package.name,
+        "checker": package.checker.decode(errors="replace"),
+        "time_limit_ms": package.time_limit_ms,
+        "memory_limit_mb": package.memory_limit_mb,
+        "tests": [
+            {
+                "index": t.index,
+                "input": base64.b64encode(t.input_data).decode(),
+                "answer": base64.b64encode(t.answer_data).decode(),
+                "group": t.group,
+                "points": t.points,
+                "is_sample": t.is_sample,
+            }
+            for t in package.tests
+        ],
+    }
+
+
+@app.get("/packaging/formats")
+async def packaging_formats() -> dict:
+    return {"formats": list(package_formats())}
+
+
+@app.post("/packaging/export")
+async def export_package(request: ExportRequest) -> dict:
+    package = Package(
+        name=request.name,
+        checker=request.checker.encode(),
+        time_limit_ms=request.time_limit_ms,
+        memory_limit_mb=request.memory_limit_mb,
+        tests=[
+            PackageTest(
+                index=t.index,
+                input_data=base64.b64decode(t.input),
+                answer_data=base64.b64decode(t.answer),
+                group=t.group,
+                points=t.points,
+                is_sample=t.is_sample,
+            )
+            for t in request.tests
+        ],
+    )
+    try:
+        archive = package_format(request.format).export(package)
+    except PackageError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"format": request.format, "archive": base64.b64encode(archive).decode()}
+
+
+@app.post("/packaging/import")
+async def import_package(request: ImportRequest) -> dict:
+    try:
+        package = package_format(request.format).materialize(
+            base64.b64decode(request.archive)
+        )
+    except PackageError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _to_payload(package)
 
 
 @app.websocket("/ws/status")
