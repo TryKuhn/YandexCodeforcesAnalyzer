@@ -5,9 +5,11 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from .authoring import (GeneratedTest, LockBusy, ManualTest, ProblemBuilder,
+                        ProblemSource)
 from .engine import JudgingEngine, ProblemSpec, SubmissionSpec, TestCase
 from .hub import EventHub
 from .sandbox import BoxPool, IsolateSandbox
@@ -40,11 +42,32 @@ class JudgeRequest(BaseModel):
     stop_on_first_failure: bool = True
 
 
+class BuildTestPayload(BaseModel):
+    # base64 for a manual test, generator arguments for a produced one
+    input: str | None = None
+    args: str | None = None
+    group: str | None = None
+    points: float = 0.0
+
+
+class BuildRequest(BaseModel):
+    name: str
+    main_solution: str
+    checker: str
+    generator: str | None = None
+    validator: str | None = None
+    tests: list[BuildTestPayload] = Field(min_length=1)
+    time_limit_ms: int = 1000
+    memory_limit_mb: int = 256
+    language: str = "cpp"
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     sandbox = IsolateSandbox(BoxPool(size=BOXES))
     app.state.hub = EventHub()
     app.state.engine = JudgingEngine(sandbox)
+    app.state.builder = ProblemBuilder(sandbox)
     app.state.pool = WorkerPool(sandbox, app.state.hub, workers=WORKERS)
     await app.state.pool.start()
     yield
@@ -122,6 +145,68 @@ async def judge_submission(request: JudgeRequest) -> dict:
     }
     hub.publish({"type": "judge.finished", "run_id": run_id, "verdict": payload["verdict"]})
     return payload
+
+
+@app.post("/authoring/build")
+async def build_problem(request: BuildRequest) -> dict:
+    """Build a problem from jury sources: generate tests, validate, solve."""
+    source = ProblemSource(
+        name=request.name,
+        main_solution=request.main_solution.encode(),
+        checker=request.checker.encode(),
+        generator=request.generator.encode() if request.generator else None,
+        validator=request.validator.encode() if request.validator else None,
+        manual_tests=[
+            ManualTest(
+                input_data=base64.b64decode(t.input),
+                group=t.group,
+                points=t.points,
+            )
+            for t in request.tests
+            if t.input is not None
+        ],
+        generated_tests=[
+            GeneratedTest(args=t.args, group=t.group, points=t.points)
+            for t in request.tests
+            if t.args is not None
+        ],
+        time_limit_ms=request.time_limit_ms,
+        memory_limit_mb=request.memory_limit_mb,
+        language_id=request.language,
+    )
+
+    hub = app.state.hub
+    hub.publish({"type": "build.started", "problem": request.name})
+    try:
+        result = await app.state.builder.build(source)
+    except LockBusy as exc:
+        hub.publish({"type": "build.busy", "problem": request.name})
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    hub.publish(
+        {"type": "build.finished", "problem": request.name, "ok": result.ok}
+    )
+    return {
+        "ok": result.ok,
+        "failed_stage": result.failed_stage,
+        "error": result.error,
+        "log": result.log[:2000],
+        "total_points": result.total_points,
+        "time_limit_ms": result.time_limit_ms,
+        "memory_limit_mb": result.memory_limit_mb,
+        "checker": result.checker.decode(errors="replace"),
+        "tests": [
+            {
+                "index": t.index,
+                "input": base64.b64encode(t.input_data).decode(),
+                "answer": base64.b64encode(t.answer_data).decode(),
+                "group": t.group,
+                "points": t.points,
+                "origin": t.origin,
+            }
+            for t in result.tests
+        ],
+    }
 
 
 @app.websocket("/ws/status")

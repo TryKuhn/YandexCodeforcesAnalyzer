@@ -253,6 +253,10 @@ jobs:
       - name: Run the oracle suite
         run: ./scripts/judge/run-oracle.py
 
+      # the authoring loop: our generator, our validator, our reference answers
+      - name: Build a problem from jury sources and judge it
+        run: ./scripts/judge/build-and-judge.py
+
       # the prod gate: escapes must stay impossible
       - name: Run sandbox escape attempts
         run: ./scripts/judge/run-security.py
