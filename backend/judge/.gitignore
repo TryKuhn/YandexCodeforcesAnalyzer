@@ -1,0 +1,10 @@
+# bytecode
+__pycache__/
+*.pyc
+
+# pytest cache
+.pytest_cache/
+
+# linter/type-checker caches (regenerated locally / cached in CI)
+.mypy_cache/
+.ruff_cache/

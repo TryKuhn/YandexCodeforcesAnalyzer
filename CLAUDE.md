@@ -32,6 +32,7 @@
 | Frontend  | React 19, Vite, TypeScript, TailwindCSS v4, react-router v7, axios, zustand, CodeMirror, react-markdown + KaTeX |
 | БД        | PostgreSQL 15 |
 | Плагиат   | C++ (Clang/LLVM), собирается в образ backend через CMake + pybind11 (`plagiarism_cpp*.so`) |
+| Judge     | Python 3.11 (stdlib), песочница на **isolate** v2.6, `testlib.h`, отдельный контейнер |
 | Прокси    | Caddy (только prod, `Caddyfile`) |
 | LLM       | OpenRouter (`settings.OPENAI_HOST`); модели Claude/Gemini/GPT |
 
@@ -53,6 +54,28 @@
 `components/`, `constants/`, `pages/`, `store/` (zustand), `utils/`.
 Навигация — верхнее меню (без сайдбара). Страница ИИ-задачи: `pages/tasks/` (вкладки условия,
 файлов, тестов, пакетов + `ChatPanel`).
+
+### Judge (`backend/judge/`) — своя тестирующая система
+**Отдельный сервис со своим контейнером**, лежит внутри `backend/` (общий build context,
+благодаря чему делит с бэкендом `testlib.h`). Код НЕ импортируется бэкендом и сам из
+бэкенда не импортирует. Эпик «Ф4 Своя ТС» (YCA-400…412). Запускает недоверенный код
+участников в песочнице и выдаёт вердикт.
+
+- `app/sandbox/` — песочница: `limits.py` (лимиты), `result.py` (`RunStatus`), `meta.py`
+  (разбор meta-файла isolate + классификация), `pool.py` (пул box-id), `base.py`
+  (интерфейс `Sandbox`), `isolate.py` (реализация).
+- `Dockerfile` — isolate v2.6 из исходников (версия запиннена), `g++`, `python3`.
+  Собирается с context `./backend`: `docker build -f backend/judge/Dockerfile backend`.
+- Рантайм-зависимостей нет (только stdlib) → тесты гоняются локально без Docker.
+- testlib.h берётся общий — `backend/api/user/polygon/archive/assets/testlib.h`.
+
+Почему отдельный контейнер: песочнице нужны привилегии (cgroup v2, namespaces). В своём
+контейнере они есть только у judge, а backend с кредами платформ остаётся без них.
+Решение «isolate, а не nsjail» и требования к хосту — `docs/judge/host-requirements.md`,
+проверка хоста — `scripts/judge/host-probe.sh`.
+
+Линтеры бэкенда judge НЕ проверяют (`backend/ruff.toml`, `exclude` в `backend/mypy.ini`) —
+у него свой джоб `judge-test` в CI и свой пакет с именем `app`.
 
 ---
 
@@ -127,6 +150,21 @@ docker exec yandexcodeforcesanalyzer-backend-1 sh -c "cd /app && python -m pytes
 - Набор большой (~1000+ тестов), должен быть полностью зелёным.
 
 Фронтенд отдельного тест-раннера не имеет — гейт качества там это type-check (`tsc`, см. ниже).
+
+### Тесты judge (`backend/judge/`) — без Docker
+У judge нет рантайм-зависимостей (только stdlib), поэтому его тесты гоняются локально:
+
+```bash
+cd backend/judge
+pip install -r requirements-dev.txt
+pytest -q                            # meta-парсер, лимиты, пул box-id
+ruff check .
+mypy app --ignore-missing-imports
+```
+
+Покрывается логика, НЕ требующая isolate (разбор meta, классификация вердиктов, пул).
+Сама песочница требует привилегированного хоста с cgroup v2 и проверяется вручную.
+В CI это джоб `judge-test` (фильтр `backend/judge/**`); бэкендовые джобы judge исключают.
 
 ---
 
@@ -208,6 +246,22 @@ make dev.lint.fix   # black .  +  isort .  +  ruff check . --fix
 - **Два поля диалога в сессии:** `session.chat_log` (UI-транскрипт) и `session.history`
   (сообщения для генерации). Не путать — унифицированный чат читает контекст из `chat_log`.
 - **LaTeX в условиях** — ограниченный набор команд Polygon (код через `lstlisting`, не `verbatim`).
+- **CI ничего не проверяет, если не тронуты нужные пути.** В `ci.yml` стоит `dorny/paths-filter`:
+  джобы бэка/фронта/judge запускаются только при изменениях в `backend/**`, `frontend/**`,
+  `judge/**`. PR, трогающий только `docs/` или `scripts/`, получает зелёную галку, НЕ прогнав
+  ни одного теста. Зелёный CI ≠ протестировано.
+- **`testlib.h` лежал не там.** Файл был закоммичен в `frontend/backend/api/user/polygon/archive/assets/`
+  (вся эта папка — артефакт запуска команды не из того каталога), хотя `uploader.py:38` ищет его
+  рядом с собой. Из-за этого догрузка testlib при импорте архива падала. Файл перемещён на
+  ожидаемый путь и теперь ОДИН на весь репозиторий — его же берёт judge-образ.
+- **Judge не импортирует из `backend/`, и наоборот.** Лежит внутри `backend/` только ради общего
+  build context; логически это отдельный сервис со своим контейнером и своими линтерами.
+- **`ruff` в бэкенде запиннен (`ruff==0.14.0`).** Раньше стояло `>=0.9.0`, и свежие версии
+  добавили правил на 700+ срабатываний в существующем коде — CI бы покраснел на ровном месте.
+  Поднимать версию можно только вместе с разгребанием этих ошибок.
+- **Вердикт MLE легко спутать с RE.** При превышении памяти процесс убивает SIGKILL, то есть
+  выглядит как сигнал. В `meta.classify` память проверяется ДО сигналов — иначе каждый MLE
+  превращается в RE. Тот же порядок обязателен в любой новой логике вердиктов.
 
 ---
 
