@@ -42,7 +42,27 @@
   - `crypt/` — JWT/аутентификация (`get_current_user`).
   - `user/auth/`, `user/codeforces/`, `user/yandex/`, `user/polygon/`, `user/gpt/`,
     `user/plagiarism/`, `user/contests.py`, `user/merge_*.py`.
-- `models/` — SQLAlchemy-модели. `alembic/` — миграции. `settings.py` — конфиг из `.env` (pydantic-settings).
+- `models/` — SQLAlchemy-модели по доменам; `models/judge/` — домен своей тестирующей
+  системы (problem/test/submission/run + contest/participant): вход/ответ теста и исходник
+  посылки — это sha256-ссылки на блобы (см. `blobs/`), одинаковые тесты между задачами
+  дедупятся сами. `alembic/` — миграции. `settings.py` — конфиг из `.env` (pydantic-settings).
+- `api/judge/` — контесты своей ТС: `contests.py` (CRUD только для Admin, скорборд),
+  `scoreboard.py` (ЧИСТЫЕ функции подсчёта ICPC/IOI — вся логика тестируется без БД),
+  `cache.py` (кэш таблицы, сбрасывается ПО СОБЫТИЮ — судейство посылки, правка состава задач),
+  `submissions.py` (отправка решения и свои посылки), `client.py` (HTTP к judge-сервису),
+  `grading.py` (job-хендлер: собрать тесты из блобов → позвать судью → разложить прогоны и
+  вердикт → сбросить кэш). **Сквозной поток:** портал → `POST /judge/contests/{id}/submissions`
+  → блоб + строка `queued` → job в Redis → воркер (`python -m jobs.run_worker`) → судья →
+  `judged` + `JudgeRun` по тестам → скорборд. Судья недоступен → job ретраится, посылка не теряется.
+  ICPC: решённые + пенальти `время + 20 мин × неудачные попытки`, CE попыткой не считается,
+  попытки после решения бесплатны. IOI: сумма ЛУЧШИХ результатов по задачам, пенальти нет.
+- `jobs/` — durable-очередь фоновых задач: строка в таблице `jobs` — источник правды
+  (статус/прогресс/результат), Redis Streams только будит воркеров. `enqueue()` → пуш id;
+  воркер (`python -m jobs.run_worker`) атомарно забирает job (`UPDATE..RETURNING` — дубли
+  доставки безвредны), ретраи с лимитом попыток, брошенные задачи возвращает `XAUTOCLAIM`.
+- `blobs/` — контент-адресное хранилище: байты лежат в MinIO/S3 под своим sha256
+  (`BlobStore.put/get`), строка в таблице `blobs` держит refcount — дедуп бесплатный,
+  удалять объект можно только при refcount=0 (сам GC — YCA-210, отдельный тикет).
 - `plagiarism/` — исходники C++-модуля. `tests/` — pytest (зеркалит структуру `api/`). `conftest.py`, `pytest.ini`, `mypy.ini`.
 
 Роутеры (`app/server.py`), все кроме health/auth требуют `get_current_user`:
@@ -67,11 +87,29 @@
 - `app/languages/` — реестр языков: `registry.py` (`Language`, C++ `g++ -O2`, Python
   `py_compile` + `tl_multiplier=3`), `compile.py` (компиляция в песочнице, лог компилятора
   обрезается). Новый язык добавляется через `register()` — код судейства не меняется.
+- `app/engine/` — движок судейства: `judge.py` (компиляция → прогон по тестам → чекер →
+  агрегация), `checker.py` (протокол testlib: вердикт по КОДУ ВОЗВРАТА чекера, а не diff;
+  `_fail`=3 → внутренняя ошибка, `_points`=7 → частичные баллы), `scoring.py` (группа платит
+  только если прошли ВСЕ её тесты), `spec.py`/`result.py` (входные данные и результаты),
+  `verdict.py` (`OK/WA/TLE/MLE/RE/PE/CE/XX`).
+- `app/authoring/` — локальная сборка задачи БЕЗ Polygon: `builder.py` (компиляция
+  генератора/валидатора/эталона → генерация входов → валидация → ответы прогоном эталона →
+  самодостаточный пакет), `lock.py` (блокировка на задачу: локальная и Redlock на Redis —
+  два воркера не собирают одну задачу одновременно). Невалидный тест останавливает сборку.
+- `app/packaging/` — обмен пакетами через плагины: `native` (свой формат, ничего не теряет)
+  и `polygon` (раскладка `problem.xml` + `tests/NN` + `tests/NN.a` + `check.cpp`). Polygon —
+  ОДИН ИЗ форматов, а не привилегированный: новый добавляется через `register()`.
+  Круговой прогон (собрать → экспорт → импорт → судить) проверяется в CI.
 - `app/workers/` — пул воркеров: N asyncio-тасок разбирают очередь прогонов, события
   (queued/started/finished) уходят в `app/hub.py` (EventHub с реплеем последних событий).
-- `app/server.py` — FastAPI: `GET /health`, `POST /demo/hello-world?count=N` (demo-прогоны
-  C++/Python), `WS /ws/status` (живой поток событий). Порт **8001**, сервис `judge` в
-  dev-compose (privileged — единственный такой контейнер).
+- `app/server.py` — FastAPI: `GET /health`, `POST /judge` (судейство посылки),
+  `POST /authoring/build` (сборка задачи из исходников жюри, 409 если уже собирается),
+  `POST /demo/hello-world?count=N`, `WS /ws/status` (живой поток событий + прогресс).
+  Порт **8001**, сервис `judge` в dev-compose (privileged — единственный такой контейнер).
+- `oracle/` — набор решений с ИЗВЕСТНЫМИ вердиктами (`<тег>_<имя>.<ext>`, теги
+  `ma/ok/wa/tl/ml/re/pe`). Прогоняется скриптом `./scripts/judge/run-oracle.py`;
+  расхождение тега и вердикта = красный CI. Правило: неверное решение должно получать
+  вердикт ЧЕСТНО (реально медленное/жрущее/падающее), без `assert(false)` и пустых циклов.
 - `Dockerfile` — isolate v2.6 из исходников (версия запиннена), `g++`, `python3`.
   Собирается с context `./backend`: `docker build -f backend/judge/Dockerfile backend`.
 - Рантайм-зависимости минимальны (fastapi+uvicorn) → тесты гоняются локально без Docker.
@@ -130,7 +168,8 @@ make dev.logs.be       # логи backend;  make dev.logs.fe — логи fronte
   `docker compose -f docker-compose.dev.yml up -d backend`.
 - Новые Python-файлы/правки `.py` подхватываются авто-релоадом uvicorn без пересоздания.
 - Ключевые переменные: `OPENAI_API_KEY` (OpenRouter), `SECRET_KEY`, `POSTGRES_*`,
-  Yandex/CF client id/secret; опционально `LLM_MAX_TOKENS`, `OPENROUTER_PROVIDER_ORDER/IGNORE/ALLOW_FALLBACKS`.
+  Yandex/CF client id/secret; опционально `LLM_MAX_TOKENS`, `OPENROUTER_PROVIDER_ORDER/IGNORE/ALLOW_FALLBACKS`,
+  `REDIS_HOST`/`REDIS_PORT` (дефолты `redis`/6379 подходят для compose).
 
 ### Windows-нюанс
 Node/npm не в PATH. Вызывай явно: `& "C:\Program Files\nodejs\npx.cmd"` / `npm.cmd`.
@@ -274,6 +313,19 @@ make dev.lint.fix   # black .  +  isort .  +  ruff check . --fix
 - **Вердикт MLE легко спутать с RE.** При превышении памяти процесс убивает SIGKILL, то есть
   выглядит как сигнал. В `meta.classify` память проверяется ДО сигналов — иначе каждый MLE
   превращается в RE. Тот же порядок обязателен в любой новой логике вердиктов.
+- **`cg-mem` нельзя использовать как признак MLE.** Это пик памяти по всей cgroup, а box
+  делится с компилятором: после `g++` там остаётся ~227 МБ, и любой прогон становился ложным
+  MLE. MLE даёт ТОЛЬКО флаг `cg-oom-killed`, в отчёт идёт `max-rss` (пик самого процесса).
+- **isolate вызывает `execve(argv[0])` и НЕ ищет по `PATH`** — компиляторы/интерпретаторы
+  в реестре языков указаны абсолютными путями (`/usr/bin/g++`), иначе `No such file`.
+- **isolate в контейнере требует ручной подготовки** (обычно это делает systemd): свой
+  `judge/isolate.cf` (без `subid_user`, с явным диапазоном UID) и `judge/entrypoint.sh`
+  (создать `/run/isolate/locks`, увести процессы в `/sys/fs/cgroup/init`, включить контроллеры
+  в корне И в `/sys/fs/cgroup/isolate`). Устанавливать isolate через `make install`, а не
+  копированием бинарей: `default.cf` генерируется при сборке.
+- **Реальную проверку судейства делает CI-джоб `judge-e2e`**, а не dev-машина: там нужен
+  cgroup v2 + привилегии. Он собирает образ и гоняет `scripts/judge/demo-judge.py` — пять
+  решений A+B должны получить OK/WA/TLE/MLE/RE. Это главный гейт честности вердиктов.
 
 ---
 

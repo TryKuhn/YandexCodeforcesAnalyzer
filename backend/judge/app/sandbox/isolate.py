@@ -67,7 +67,6 @@ class IsolateSession(SandboxSession):
         stdout: str | None = None,
         stderr: str | None = None,
         env: Mapping[str, str] | None = None,
-        writable: bool = False,
     ) -> RunResult:
         if not argv:
             raise SandboxError("argv must not be empty")
@@ -78,7 +77,7 @@ class IsolateSession(SandboxSession):
 
         try:
             command = self._build_command(
-                argv, limits, meta_path, stdin, stdout, stderr, env, writable
+                argv, limits, meta_path, stdin, stdout, stderr, env
             )
             process = await asyncio.create_subprocess_exec(
                 *command,
@@ -107,7 +106,6 @@ class IsolateSession(SandboxSession):
         stdout: str | None,
         stderr: str | None,
         env: Mapping[str, str] | None,
-        writable: bool,
     ) -> list[str]:
         command = [self._isolate_bin, f"--box-id={self._box_id}"]
         if self._use_cgroups:
@@ -139,10 +137,6 @@ class IsolateSession(SandboxSession):
 
         for key, value in {**_BASE_ENV, **(env or {})}.items():
             command.append(f"--env={key}={value}")
-
-        # compilation needs to write, a contestant's run never does
-        if writable:
-            command.append("--dir=/box=/box:rw")
 
         command += ["--run", "--"]
         command.extend(argv)
@@ -180,12 +174,16 @@ class IsolateSandbox(Sandbox):
         return command
 
     async def _init_box(self, box_id: int) -> Path:
-        process = await asyncio.create_subprocess_exec(
-            *self._base_command(box_id),
-            "--init",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *self._base_command(box_id),
+                "--init",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as exc:
+            # misconfigured host, not a broken submission
+            raise SandboxError(f"isolate binary not found: {self._isolate_bin}") from exc
         stdout, stderr = await process.communicate()
         if process.returncode != 0:
             raise SandboxError(
@@ -196,12 +194,16 @@ class IsolateSandbox(Sandbox):
         return Path(stdout.decode().strip()) / "box"
 
     async def _cleanup_box(self, box_id: int) -> None:
-        process = await asyncio.create_subprocess_exec(
-            *self._base_command(box_id),
-            "--cleanup",
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *self._base_command(box_id),
+                "--cleanup",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError:
+            self._pool.retire(box_id)
+            return
         await process.communicate()
         # do not raise, we may already be handling another failure
         if process.returncode != 0:

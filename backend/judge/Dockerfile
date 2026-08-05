@@ -6,6 +6,7 @@ ARG ISOLATE_VERSION=v2.6
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
+        ca-certificates \
         git \
         pkg-config \
         libcap-dev \
@@ -15,7 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN git clone --depth 1 --branch ${ISOLATE_VERSION} https://github.com/ioi/isolate.git /src
 WORKDIR /src
-RUN make isolate isolate-cg-keeper
+# make install builds the binaries and the generated config, and sets the setuid bit
+RUN make install DESTDIR=/out
 
 
 FROM ubuntu:24.04
@@ -30,12 +32,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libsystemd0 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=isolate-build /src/isolate /usr/local/bin/isolate
-COPY --from=isolate-build /src/isolate-cg-keeper /usr/local/bin/isolate-cg-keeper
-COPY --from=isolate-build /src/default.cf /usr/local/etc/isolate
+COPY --from=isolate-build /out/ /
 
 # isolate manages namespaces and cgroups, which needs the setuid bit
 RUN chmod 4755 /usr/local/bin/isolate
+
+# our config replaces the upstream one, which assumes systemd and /etc/subuid
+COPY judge/isolate.cf /usr/local/etc/isolate
+COPY judge/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # the same testlib the backend ships to Polygon, on the default include path
 COPY api/user/polygon/archive/assets/testlib.h /usr/local/include/testlib.h
@@ -49,4 +54,5 @@ COPY judge/tests ./tests
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8001"]

@@ -48,10 +48,10 @@ def classify(fields: dict[str, str], limits: RunLimits) -> RunStatus:
     status = fields.get("status", "")
     signal = _to_int(fields.get("exitsig"))
 
-    # OOM also looks like a SIGKILL, so it must be checked before signals
+    # OOM also looks like a SIGKILL, so it must be checked before signals.
+    # Only the kill flag is trusted: cg-mem is the cgroup peak and still holds
+    # the compiler's footprint, which would turn every run into a false MLE.
     if _to_int(fields.get("cg-oom-killed")) == 1:
-        return RunStatus.MEMORY_LIMIT
-    if _to_int(fields.get("cg-mem")) >= limits.memory_kb > 0:
         return RunStatus.MEMORY_LIMIT
 
     if signal == SIGXFSZ:
@@ -87,7 +87,8 @@ def build_result(text: str, limits: RunLimits) -> RunResult:
         signal=signal or None,
         cpu_time_ms=_seconds_to_ms(fields.get("time")),
         wall_time_ms=_seconds_to_ms(fields.get("time-wall")),
-        # cg-mem covers the whole process tree, max-rss only the main process
-        memory_kb=_to_int(fields.get("cg-mem")) or _to_int(fields.get("max-rss")),
+        # max-rss is the run's own peak; cg-mem would include the compiler that
+        # shared this box, so it is only a fallback
+        memory_kb=_to_int(fields.get("max-rss")) or _to_int(fields.get("cg-mem")),
         message=fields.get("message", ""),
     )

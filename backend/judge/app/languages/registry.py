@@ -5,7 +5,11 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class Language:
-    """One supported language, described by data rather than by code."""
+    """One supported language, described by data rather than by code.
+
+    Commands are templates over {source} and {binary}, so the same language can
+    build a solution and a checker side by side without clashing.
+    """
 
     id: str
     name: str
@@ -32,14 +36,37 @@ class Language:
     def needs_compilation(self) -> bool:
         return self.compile_argv is not None
 
+    def _render(self, argv: tuple[str, ...], source: str, binary: str) -> tuple[str, ...]:
+        return tuple(a.format(source=source, binary=binary) for a in argv)
+
+    def compile_command(self, source: str, binary: str) -> tuple[str, ...]:
+        assert self.compile_argv is not None
+        return self._render(self.compile_argv, source, binary)
+
+    def run_command(self, source: str, binary: str) -> tuple[str, ...]:
+        return self._render(self.run_argv, source, binary)
+
+    def source_file(self, binary: str) -> str:
+        """Per-binary source name, so a checker never overwrites the solution."""
+        stem, _, ext = self.source_name.partition(".")
+        return self.source_name if binary == DEFAULT_BINARY else f"{binary}_{stem}.{ext}"
+
+
+# name of the binary a submission builds into
+DEFAULT_BINARY = "main"
+
+# isolate execve's argv[0] as given, it does not search PATH, so interpreters
+# and compilers must be absolute paths
+GPP = "/usr/bin/g++"
+PYTHON3 = "/usr/bin/python3"
 
 CPP = Language(
     id="cpp",
     name="C++ 17 (g++)",
     source_name="main.cpp",
     # -O2 matches what Codeforces and Polygon use, so timings stay comparable
-    compile_argv=("g++", "-O2", "-std=c++17", "-o", "main", "main.cpp"),
-    run_argv=("./main",),
+    compile_argv=(GPP, "-O2", "-std=c++17", "-o", "{binary}", "{source}"),
+    run_argv=("./{binary}",),
 )
 
 PYTHON = Language(
@@ -47,8 +74,8 @@ PYTHON = Language(
     name="Python 3",
     source_name="main.py",
     # py_compile only checks syntax, which turns a typo into CE instead of RE
-    compile_argv=("python3", "-m", "py_compile", "main.py"),
-    run_argv=("python3", "main.py"),
+    compile_argv=(PYTHON3, "-m", "py_compile", "{source}"),
+    run_argv=(PYTHON3, "{source}"),
     tl_multiplier=3.0,
     ml_multiplier=2.0,
 )

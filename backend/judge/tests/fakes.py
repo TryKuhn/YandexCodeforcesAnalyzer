@@ -37,7 +37,6 @@ class FakeSession(SandboxSession):
         stdout: str | None = None,
         stderr: str | None = None,
         env: Mapping[str, str] | None = None,
-        writable: bool = False,
     ) -> RunResult:
         self.runs.append(
             {
@@ -46,7 +45,6 @@ class FakeSession(SandboxSession):
                 "stdin": stdin,
                 "stdout": stdout,
                 "stderr": stderr,
-                "writable": writable,
             }
         )
         if self._results:
