@@ -279,6 +279,14 @@ jobs:
       - name: Build a problem from jury sources and judge it
         run: ./scripts/judge/build-and-judge.py
 
+      # export and import must not change the problem, Polygon format included
+      - name: Round-trip the package through every format
+        run: ./scripts/judge/round-trip.py
+
+      # a broken solution must be caught, a correct one left alone
+      - name: Hunt for counterexamples
+        run: ./scripts/judge/run-stress.py
+
       # the prod gate: escapes must stay impossible
       - name: Run sandbox escape attempts
         run: ./scripts/judge/run-security.py
