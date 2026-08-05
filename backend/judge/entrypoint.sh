@@ -15,13 +15,22 @@ if [ -f "$CG/cgroup.controllers" ]; then
         done < "$CG/cgroup.procs"
     fi
     for controller in cpu memory pids cpuset; do
-        echo "+$controller" > "$CG/cgroup.subtree_control" 2>/dev/null || true
+        echo "+$controller" > "$CG/cgroup.subtree_control" 2>/dev/null ||
+            echo "warning: cannot delegate $controller at the cgroup root" >&2
     done
     mkdir -p "$CG/isolate"
-    # delegate again inside our own cgroup, else per-box memory.max never appears
+    # delegate again inside our own cgroup, else per-box limits never appear
     for controller in cpu memory pids cpuset; do
-        echo "+$controller" > "$CG/isolate/cgroup.subtree_control" 2>/dev/null || true
+        echo "+$controller" > "$CG/isolate/cgroup.subtree_control" 2>/dev/null ||
+            echo "warning: cannot delegate $controller to isolate boxes" >&2
     done
+    echo "cgroup controllers for boxes: $(cat "$CG/isolate/cgroup.subtree_control")"
+
+    # isolate enforces --processes via RLIMIT_NPROC, which a box that is root in
+    # its own user namespace can bypass. This subtree cap is the real backstop
+    # against a fork bomb exhausting the host's pids.
+    echo "${JUDGE_MAX_PIDS:-1024}" > "$CG/isolate/pids.max" 2>/dev/null ||
+        echo "warning: cannot cap pids for isolate boxes" >&2
 else
     echo "warning: no cgroup v2 at $CG, isolate will refuse to run" >&2
 fi
