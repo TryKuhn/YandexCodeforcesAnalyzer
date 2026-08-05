@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.crypt import get_current_payload, get_current_user
 from api.user.auth import auth_router
 from app.database import get_db
-from models import RefreshToken, User
+from models import RefreshToken, Role, User
 
 
 @auth_router.get("/me")
@@ -23,11 +23,15 @@ async def get_me(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
         )
 
+    # the jury portal gates on the role name, so send it alongside the id
+    role_name = await db.scalar(select(Role.name).where(Role.id == user.role_id))
+
     return {
         "id": user.id,
         "login": user.login,
         "email": user.email,
         "role_id": user.role_id,
+        "role": role_name,
         "is_yandex_linked": bool(user.yandex_access_token),
         "is_codeforces_linked": bool(user.codeforces_api_key),
         "is_polygon_linked": bool(user.polygon_api_key),
