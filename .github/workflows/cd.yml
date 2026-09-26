@@ -11,8 +11,6 @@ permissions:
   packages: write
 
 env:
-  BACKEND_IMAGE: ghcr.io/trykuhn/yandexcodeforcesanalyzer-backend
-  FRONTEND_IMAGE: ghcr.io/trykuhn/yandexcodeforcesanalyzer-frontend
   IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
 
 jobs:
@@ -25,6 +23,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      judge: ${{ steps.filter.outputs.judge }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,13 +34,55 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              - '!backend/judge/**'
             frontend:
               - 'frontend/**'
+            judge:
+              - 'backend/judge/**'
+              - 'backend/api/user/polygon/archive/assets/testlib.h'
 
+  # Every image gets the commit tag on every deploy: changed ones are rebuilt,
+  # unchanged ones just get the tag added to their current :latest (no rebuild).
+  # So docker-compose.prod.yml can run the whole stack on one IMAGE_TAG and a
+  # rollback is a single tag switch.
   build-and-push:
     needs: changes
-    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - image: backend
+            component: backend
+            context: ./backend
+            file: ./backend/Dockerfile.prod
+            build_args: ""
+          - image: frontend
+            component: frontend
+            context: ./frontend
+            file: ./frontend/Dockerfile.prod
+            build_args: |
+              VITE_API_URL=https://createmanager.duckdns.org/api
+              VITE_PORTAL=jury
+          # Caddy proxies /api on the contest domain too, so the participant
+          # portal talks to its own origin and needs no CORS
+          - image: frontend-participant
+            component: frontend
+            context: ./frontend
+            file: ./frontend/Dockerfile.prod
+            build_args: |
+              VITE_API_URL=https://contest.createmanager.duckdns.org/api
+              VITE_PORTAL=participant
+          # shares the backend build context for testlib.h
+          - image: judge
+            component: judge
+            context: ./backend
+            file: ./backend/judge/Dockerfile
+            build_args: ""
+
+    env:
+      IMAGE: ghcr.io/trykuhn/yandexcodeforcesanalyzer-${{ matrix.image }}
+      CHANGED: ${{ needs.changes.outputs[matrix.component] }}
 
     steps:
       - name: Checkout exact commit
@@ -59,42 +100,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push backend image
-        if: needs.changes.outputs.backend == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile.prod
-          push: true
-          tags: |
-            ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
-            ${{ env.BACKEND_IMAGE }}:latest
-          cache-from: type=gha,scope=backend-prod
-          cache-to: type=gha,mode=max,scope=backend-prod
+      # an image that was never pushed has no :latest to retag, so build it
+      - name: Decide whether to build
+        id: plan
+        run: |
+          if [ "$CHANGED" = "true" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          elif docker buildx imagetools inspect "$IMAGE:latest" >/dev/null 2>&1; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$IMAGE:latest not found, building it for the first time"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Build and push frontend image
-        if: needs.changes.outputs.frontend == 'true'
+      - name: Build and push
+        if: steps.plan.outputs.build == 'true'
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile.prod
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           push: true
-          build-args: |
-            VITE_API_URL=https://createmanager.duckdns.org/api
+          build-args: ${{ matrix.build_args }}
           tags: |
-            ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
-            ${{ env.FRONTEND_IMAGE }}:latest
-          cache-from: type=gha,scope=frontend-prod
-          cache-to: type=gha,mode=max,scope=frontend-prod
+            ${{ env.IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha,scope=${{ matrix.image }}-prod
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-prod
+
+      - name: Tag the unchanged image with this commit
+        if: steps.plan.outputs.build == 'false'
+        run: docker buildx imagetools create -t "$IMAGE:$IMAGE_TAG" "$IMAGE:latest"
 
   deploy:
     needs: [changes, build-and-push]
     runs-on: ubuntu-latest
-
-    env:
-      IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
-      DEPLOY_BACKEND: ${{ needs.changes.outputs.backend }}
-      DEPLOY_FRONTEND: ${{ needs.changes.outputs.frontend }}
 
     steps:
       - name: Setup SSH key
@@ -111,8 +150,6 @@ jobs:
             GHCR_USERNAME='${{ github.actor }}' \
             GHCR_TOKEN='${{ secrets.GITHUB_TOKEN }}' \
             IMAGE_TAG='${{ env.IMAGE_TAG }}' \
-            DEPLOY_BACKEND='${{ env.DEPLOY_BACKEND }}' \
-            DEPLOY_FRONTEND='${{ env.DEPLOY_FRONTEND }}' \
             bash -s << 'ENDSSH'
           set -e
 
@@ -124,10 +161,14 @@ jobs:
           fi
 
           if command -v docker-compose >/dev/null 2>&1; then
-            DC="docker-compose"
+            DC="docker-compose -f docker-compose.prod.yml"
           else
-            DC="docker compose"
+            DC="docker compose -f docker-compose.prod.yml"
           fi
+
+          # our own images; postgres/redis/minio/caddy are never pulled here,
+          # so a deploy can't silently upgrade them
+          APP_SERVICES="backend worker judge frontend frontend-participant"
 
           echo "Pulling latest compose/config changes..."
           git fetch origin main
@@ -136,86 +177,101 @@ jobs:
           echo "Logging into GHCR..."
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
 
-          export IMAGE_TAG="$IMAGE_TAG"
-
-          # Save previous backend image tag for rollback
+          # all app images share one tag, so the backend's tells the whole stack's
           PREV_TAG=""
-          BACKEND_CID_OLD=$($DC -f docker-compose.prod.yml ps -q backend 2>/dev/null || true)
+          BACKEND_CID_OLD=$($DC ps -q backend 2>/dev/null || true)
           if [ -n "$BACKEND_CID_OLD" ]; then
             PREV_TAG=$(docker inspect --format='{{index .Config.Image}}' "$BACKEND_CID_OLD" 2>/dev/null | \
               sed 's/.*://' || true)
-            echo "Previous backend tag: ${PREV_TAG:-unknown}"
+            echo "Previous tag: ${PREV_TAG:-unknown}"
           else
             echo "No previous backend container found (fresh deploy)"
           fi
 
-          echo "Pulling new images..."
-          if [ "$DEPLOY_BACKEND" = "true" ]; then
-            $DC -f docker-compose.prod.yml pull --quiet backend
-          fi
-          if [ "$DEPLOY_FRONTEND" = "true" ]; then
-            $DC -f docker-compose.prod.yml pull --quiet frontend
-          fi
+          export IMAGE_TAG="$IMAGE_TAG"
 
+          echo "Pulling new images ($IMAGE_TAG)..."
+          $DC pull --quiet $APP_SERVICES
+
+          # the worker waits for a healthy backend, so a broken backend makes
+          # `up` itself fail - carry on to the health report and rollback
           echo "Restarting services..."
-          $DC -f docker-compose.prod.yml up -d --remove-orphans
+          $DC up -d --remove-orphans || echo "compose up reported an error"
 
-          echo "Cleaning dangling images..."
-          docker image prune -f
+          # the Caddyfile is bind-mounted: `up` does not notice edits to it
+          $DC exec -T caddy caddy reload --config /etc/caddy/Caddyfile \
+            || echo "WARNING: caddy reload failed, the old config stays active"
 
           echo "Current container status:"
           docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
 
-          # Brief settle, then start polling health. Docker reports "healthy"
-          # as soon as a check passes (start_period doesn't delay success — it
-          # only suppresses early failures), and the poll loop below treats
-          # "starting" as "keep waiting", so we don't need to block the full
-          # start_period up front.
+          # Docker reports "healthy" as soon as a check passes (start_period only
+          # suppresses early failures), so polling beats sleeping the full period.
+          # A service without a healthcheck (worker) only has to stay running.
+          wait_ready() {
+            svc=$1
+            for i in $(seq 1 60); do
+              CID=$($DC ps -q "$svc")
+              if [ -z "$CID" ]; then
+                STATUS="missing"
+              else
+                STATUS=$(docker inspect \
+                  --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                  "$CID")
+              fi
+              echo "Attempt $i/60: $svc status = $STATUS"
+
+              case "$STATUS" in
+                healthy) return 0 ;;
+                running)
+                  # no healthcheck: make sure it is not crash-looping
+                  sleep 10
+                  [ "$(docker inspect --format='{{.RestartCount}}' "$CID")" = "0" ] \
+                    && [ "$(docker inspect --format='{{.State.Status}}' "$CID")" = "running" ] \
+                    && return 0
+                  echo "$svc keeps restarting!"
+                  return 1 ;;
+                unhealthy|exited|dead)
+                  echo "$svc failed!"
+                  return 1 ;;
+              esac
+              sleep 5
+            done
+            echo "$svc was not ready in time"
+            return 1
+          }
+
           echo "Waiting 30s before polling health..."
           sleep 30
 
-          BACKEND_CID=$($DC -f docker-compose.prod.yml ps -q backend)
-          if [ -z "$BACKEND_CID" ]; then
-            echo "Backend container not found after deploy!"
-            $DC -f docker-compose.prod.yml ps
-            exit 1
-          fi
-
-          echo "Polling backend health (max 5 min)..."
-          HEALTHY=false
-          for i in $(seq 1 60); do
-            STATUS=$(docker inspect \
-              --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
-              "$BACKEND_CID")
-            echo "Attempt $i/60: backend status = $STATUS"
-
-            if [ "$STATUS" = "healthy" ]; then
-              HEALTHY=true
+          HEALTHY=true
+          for svc in backend judge worker; do
+            if ! wait_ready "$svc"; then
+              HEALTHY=false
               break
             fi
-
-            if [ "$STATUS" = "exited" ] || [ "$STATUS" = "dead" ]; then
-              echo "Backend container crashed!"
-              $DC -f docker-compose.prod.yml logs --tail=100 backend postgres
-              break
-            fi
-
-            sleep 5
           done
 
           if [ "$HEALTHY" = "true" ]; then
-            echo "Backend is healthy — deployment successful!"
+            echo "All services are healthy - deployment successful!"
+            echo "Cleaning dangling images..."
+            docker image prune -f
             docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
             exit 0
           fi
 
-          echo "Health check failed after timeout!"
-          $DC -f docker-compose.prod.yml ps
-          $DC -f docker-compose.prod.yml logs --tail=100 backend postgres caddy
+          echo "Health check failed!"
+          $DC ps
+          $DC logs --tail=100 backend worker judge postgres caddy
 
           if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$IMAGE_TAG" ]; then
             echo "Rolling back to previous tag: $PREV_TAG"
-            IMAGE_TAG="$PREV_TAG" $DC -f docker-compose.prod.yml up -d backend frontend
+            # one service at a time: an image that is new in this release has
+            # no old tag to go back to, and that must not block the others
+            for svc in $APP_SERVICES; do
+              IMAGE_TAG="$PREV_TAG" $DC up -d --no-deps "$svc" \
+                || echo "could not roll back $svc (no image for $PREV_TAG?)"
+            done
             echo "Rollback deployed. Current status:"
             docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
           else

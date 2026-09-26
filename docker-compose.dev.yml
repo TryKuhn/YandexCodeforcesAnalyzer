@@ -68,6 +68,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+  # runs queued jobs (submission judging); no auto-reload - after editing
+  # job/grading code run `make dev.restart.worker`
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    command: ["python", "-m", "jobs.run_worker"]
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: 1
+      PYTHONPATH: /app
+    volumes:
+      - ./backend:/app
+    # a healthy backend means the migrations the jobs table needs are applied
+    depends_on:
+      backend:
+        condition: service_healthy
+      judge:
+        condition: service_started
   judge:
     build:
       context: ./backend

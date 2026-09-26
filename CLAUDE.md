@@ -152,6 +152,9 @@
 make dev.up            # docker compose -f docker-compose.dev.yml up -d --build
 make dev.down
 make dev.logs.be       # логи backend;  make dev.logs.fe — логи frontend
+make dev.logs.worker   # логи воркера очереди;  make dev.logs.judge — логи судьи
+make dev.restart.worker  # воркер БЕЗ авто-релоада: после правок jobs/ и api/judge/grading.py
+make judge.test        # тесты judge локально (+ make judge.lint)
 ```
 
 Порты и URL:
@@ -159,7 +162,10 @@ make dev.logs.be       # логи backend;  make dev.logs.fe — логи fronte
 - Frontend: **http://localhost:5173** (Vite HMR).
 - Postgres: **localhost:5432**.
 
-Контейнеры: `yandexcodeforcesanalyzer-backend-1`, `-frontend-1`, `-postgres-1`.
+Контейнеры: `yandexcodeforcesanalyzer-backend-1`, `-worker-1`, `-judge-1`, `-frontend-1`,
+`-frontend-participant-1`, `-postgres-1`, `-redis-1`, `-minio-1`.
+`worker` — тот же образ backend с командой `python -m jobs.run_worker`; без него посылки
+навсегда остаются `queued`.
 Миграции применяются автоматически при старте backend (`alembic upgrade head` в CMD).
 
 ### `.env` (корень репозитория) — НЕОЧЕВИДНО
@@ -204,11 +210,7 @@ docker exec yandexcodeforcesanalyzer-backend-1 sh -c "cd /app && python -m pytes
 ```bash
 cd backend/judge
 pip install -r requirements-dev.txt
-<<<<<<< HEAD
-pytest -q                            # meta-парсер, лимиты, пул box-id
-=======
 pytest -q                            # meta-парсер, лимиты, пул box-id, языки, компиляция
->>>>>>> 2188b33 (add language registry and sandboxed compilation)
 ruff check .
 mypy app --ignore-missing-imports
 ```
@@ -334,5 +336,10 @@ make dev.lint.fix   # black .  +  isort .  +  ruff check . --fix
 - `make dev.migrate msg="..."` — автогенерация миграции; `make dev.migrate.upgrade/downgrade`.
 - `make dev.db.shell` — psql в контейнере. `make dev.clean` — снести всё (образы/volume).
 - Prod: `docker-compose.prod.yml` + Caddy; команды `make prod.*`. Локальная разработка — только `dev.*`.
+- **Автодеплой** (`.github/workflows/cd.yml`): после зелёного CI на `main` собираются только
+  изменившиеся образы (`backend`, `frontend`, `frontend-participant`, `judge`), а неизменённые
+  получают тег коммита ретегом `:latest` без пересборки — весь стек всегда на одном `IMAGE_TAG`.
+  Деплой ждёт здоровья `backend`, `judge` и `worker`, иначе откатывает все app-сервисы на
+  предыдущий тег. Caddyfile подхватывается через `caddy reload` (`make prod.caddy.reload`).
 - Память Claude по проекту (кросс-сессионная) лежит в `~/.claude/projects/.../memory/` — там же
   детальные заметки по подсистеме ИИ-задач и подводным камням.

@@ -69,6 +69,21 @@ services:
       timeout: 5s
       retries: 6
 
+  # runs queued jobs (submission judging); same image as the backend
+  worker:
+    image: ghcr.io/trykuhn/yandexcodeforcesanalyzer-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: 1
+    command: ["python", "-m", "jobs.run_worker"]
+    # a healthy backend means the migrations the jobs table needs are applied
+    depends_on:
+      backend:
+        condition: service_healthy
+      judge:
+        condition: service_started
+
   frontend:
     image: ghcr.io/trykuhn/yandexcodeforcesanalyzer-frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -84,6 +99,27 @@ services:
       - "80"
     depends_on:
       - backend
+
+  judge:
+    image: ghcr.io/trykuhn/yandexcodeforcesanalyzer-judge:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    # the ONLY privileged container: isolate needs cgroups and namespaces
+    # (host requirements: docs/judge/host-requirements.md)
+    privileged: true
+    expose:
+      - "8001"
+    environment:
+      JUDGE_WORKERS: ${JUDGE_WORKERS:-2}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\"",
+        ]
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   caddy:
     image: caddy:2-alpine
@@ -105,4 +141,4 @@ volumes:
   redis_data:
   minio_data:
   caddy_data:
-  caddy_config:
+  caddy_config:
