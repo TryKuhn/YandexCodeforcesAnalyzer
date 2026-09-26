@@ -28,22 +28,27 @@ services:
       timeout: 3s
       retries: 5
 
-  minio:
-    # Docker Hub no longer hosts minio/minio (removed Sept 2026), quay.io still does
-    image: quay.io/minio/minio
+  # S3-compatible blob storage. MinIO pulled its public images from Docker Hub
+  # and quay.io in Sept 2026; RustFS speaks the same S3 API, and the backend
+  # only uses plain S3 calls (aioboto3), so any S3 server fits here
+  s3:
+    image: rustfs/rustfs:1.0.0
     restart: unless-stopped
-    command: ["server", "/data"]
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_VOLUMES: /data
+      RUSTFS_CONSOLE_ENABLE: "false"
     volumes:
-      - minio_data:/data
+      - s3_data:/data
     healthcheck:
-      # newer minio images ship without curl, but always with mc
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
+      start_period: 20s
+
 
   backend:
     image: ghcr.io/trykuhn/yandexcodeforcesanalyzer-backend:${IMAGE_TAG:-latest}
@@ -56,7 +61,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
+      s3:
         condition: service_healthy
     expose:
       - "8000"
@@ -141,6 +146,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  minio_data:
+  s3_data:
   caddy_data:
   caddy_config:

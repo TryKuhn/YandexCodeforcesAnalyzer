@@ -1,4 +1,4 @@
-"""Content-addressed blob: bytes live in S3/MinIO under their sha256, this row counts users."""
+"""Content-addressed blob: bytes live in S3 under their sha256, this row counts users."""
 from datetime import datetime
 
 from sqlalchemy import BigInteger, String

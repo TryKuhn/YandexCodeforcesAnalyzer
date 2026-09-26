@@ -5,7 +5,7 @@ PROD := docker-compose.prod.yml
 
 IMAGE_TAG ?= latest
 
-# our own images (worker runs on the backend image); postgres/redis/minio/caddy
+# our own images (worker runs on the backend image); postgres/redis/s3/caddy
 # are left alone so a pull can't silently upgrade them
 APP_SERVICES := backend worker judge frontend frontend-participant
 
