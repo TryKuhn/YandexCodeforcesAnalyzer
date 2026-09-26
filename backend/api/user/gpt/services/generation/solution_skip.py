@@ -24,7 +24,8 @@ def parse_skip(text: str) -> str | None:
     stripped = (text or "").strip().strip("`*\"' ").strip()
     if not stripped.upper().startswith(SKIP_MARKER.upper()):
         return None
-    reason = stripped[len(SKIP_MARKER):].lstrip(" :\t—-").strip()
+    # the wrapping may sit right after the marker too: "`SKIP`: reason"
+    reason = stripped[len(SKIP_MARKER):].lstrip(" :\t—-`*\"'").strip()
     # Keep it to the first line — the model may add stray trailing text.
     reason = reason.splitlines()[0].strip().strip("`*\"' ") if reason else ""
     return reason or _DEFAULT_REASON
