@@ -132,11 +132,20 @@ async def _modify_statement(db: AsyncSession, session: TaskSession, message: str
         if regenerated:
             updated_files = await file_sync.sync_files(db, session, regenerated)
 
+    # a changed essence (format, constraints) invalidates the old samples too:
+    # the regenerated validator would reject them and the build would fail
+    samples_note = None
+    if essence.get("essence_changed") and session.examples:
+        stale = _drop_examples(session)
+        _, samples_note = await _prepare_samples(db, session, new_stmt, stale=stale)
+
     if updated_files:
         msg = (f"Обновил условие и зависимые файлы: "
                f"{', '.join(_label(k) for k in updated_files)}.")
     else:
         msg = "Обновил условие задачи."
+    if samples_note:
+        msg += "\n" + samples_note
     return {
         "response": msg,
         "updated_files": updated_files,
@@ -255,23 +264,54 @@ async def _gen_progress(db: AsyncSession, session_id: str, step: str, idx: int) 
     }})
 
 
-async def _prepare_samples(db: AsyncSession, session: TaskSession, stmt: dict) -> bool:
+def _drop_examples(session: TaskSession) -> int:
+    """Forget the session's samples so they get regenerated; return how many."""
+    stale = len(session.examples or [])
+    session.examples = []
+    flag_modified(session, "examples")
+    return stale
+
+
+def _stale_samples_note(stale: int, fresh: int) -> str | None:
+    """Warn about old sample tests that are still in Polygon.
+
+    Only reached when Polygon refused to delete them (or the new samples never
+    got uploaded): they would fail the new validator until removed by hand.
+    """
+    if fresh >= stale:
+        return None
+    first = fresh + 1
+    tests = f"№{first}" if first == stale else f"№{first}–{stale}"
+    return (f"Старые тесты-примеры {tests} остались в Polygon от прежнего условия, "
+            f"удалить их автоматически не вышло — удалите их вручную на вкладке "
+            f"Tests в Polygon, иначе новый валидатор их отвергнет.")
+
+
+async def _prepare_samples(db: AsyncSession, session: TaskSession, stmt: dict,
+                           stale: int = 0) -> tuple[bool, str | None]:
     """Generate 1-3 manual samples, store them, and push them as sample tests.
 
     Done before the generator so the participant has concrete examples; with
-    groups enabled they go to group 0 (no points). Returns True only when the
+    groups enabled they go to group 0 (no points). ``ok`` is True only when the
     samples were both generated AND uploaded to Polygon — a Polygon upload
     failure is logged and reported (not raised), so it no longer silently
     leaves the problem with no sample tests.
+
+    ``stale`` is how many old samples (tests 1..stale) the problem had: the new
+    ones overwrite them index by index and the leftover tail is deleted. The
+    returned note is set only when some old samples are still in Polygon.
     """
     try:
-        examples = await samples_gen.generate(stmt, session.model, count=3)
+        # as many as the old ones if possible, so they are all overwritten
+        examples = await samples_gen.generate(stmt, session.model, count=max(3, stale))
     except Exception as e:
         logger.warning(f"[{session.id}] sample generation failed: {e}")
-        return False
+        return False, _stale_samples_note(stale, 0)
+    # dedupe up front, so the stored indices are exactly the Polygon test indices
+    examples = samples_sync.unique_examples(examples)
     if not examples:
         logger.warning(f"[{session.id}] sample generation returned no examples")
-        return False
+        return False, _stale_samples_note(stale, 0)
     indexed = [
         {"index": i + 1, "input": ex["input"], "output": ex["output"]}
         for i, ex in enumerate(examples)
@@ -283,14 +323,21 @@ async def _prepare_samples(db: AsyncSession, session: TaskSession, stmt: dict) -
 
     try:
         problem_id = await file_sync.ensure_problem(db, session)
-        await samples_sync.upload_examples(
+        saved = await samples_sync.upload_examples(
             db, problem_id, session.user_id, indexed,
             group="0" if _groups_enabled(session) else None,
         )
     except Exception as e:
         logger.warning(f"[{session.id}] sample upload to Polygon failed: {e}")
-        return False
-    return True
+        return False, _stale_samples_note(stale, 0)
+
+    if stale:
+        # a failed upload leaves an OLD test in its slot: deleting the tail
+        # could then hit a new sample, so only clean up after a full upload
+        if saved != len(indexed) or not await samples_sync.delete_stale_examples(
+                db, problem_id, session.user_id, len(indexed), stale):
+            return True, _stale_samples_note(stale, min(saved, len(indexed)))
+    return True, None
 
 
 async def _prepare_subtasks(db: AsyncSession, session: TaskSession, stmt: dict) -> dict:
@@ -325,14 +372,23 @@ async def _generate_from_scratch(db: AsyncSession, session: TaskSession,
     """Generate a full problem (statement + file pack) from a description.
 
     Used both for an empty problem and for a "переделай полностью" redo (the new
-    pack overwrites the existing files by file_type).
+    pack overwrites the existing files by file_type). A redo sees the current
+    statement: "переделай задачу" alone would otherwise invent an unrelated
+    problem, while a brand-new description in the message still overrides it.
     """
+    history = []
+    if redo and session.statement:
+        history.append({"role": "assistant",
+                        "content": json.dumps(session.statement, ensure_ascii=False)})
+
     await _gen_progress(db, session.id, "Генерирую условие задачи…", 1)
     stmt = await statement_gen.generate(
         user_idea=message, model=session.model,
-        user_prompt=session.system_prompt, history=[],
+        user_prompt=session.system_prompt, history=history,
         problem_type=session.problem_type,
     )
+    # the old samples fit the old statement: drop them so the pack makes new ones
+    stale_samples = _drop_examples(session) if redo else 0
     session.statement = stmt
     flag_modified(session, "statement")
     session.updated_at = now_utc()
@@ -342,7 +398,8 @@ async def _generate_from_scratch(db: AsyncSession, session: TaskSession,
 
     stmt = await _prepare_subtasks(db, session, stmt)
 
-    pack_result = await _generate_pack(db, session, statement=stmt)
+    pack_result = await _generate_pack(db, session, statement=stmt,
+                                       stale_samples=stale_samples)
     files_part = (f" и файлы: {', '.join(_label(k) for k in pack_result['updated_files'])}"
                   if pack_result["updated_files"] else "")
     verb = "Пересоздал" if redo else "Создал"
@@ -358,6 +415,8 @@ async def _generate_from_scratch(db: AsyncSession, session: TaskSession,
     if not pack_result.get("samples_ok"):
         warns.append("Примеры (семплы) не созданы — без них и без скрипта тесты "
                      "не сгенерируются. Попробуйте ещё раз или проверьте логи.")
+    if pack_result.get("samples_note"):
+        warns.append(pack_result["samples_note"])
     if warns:
         response += "\n" + "\n".join(warns)
 
@@ -406,7 +465,7 @@ async def _sync_script_with_retry(
 
 
 async def _generate_pack(db: AsyncSession, session: TaskSession,
-                         statement: dict | None = None) -> dict:
+                         statement: dict | None = None, stale_samples: int = 0) -> dict:
     """Generate every file applicable to the problem type and sync them.
 
     With groups enabled, the script emits tests grouped by subtask and a partial
@@ -416,10 +475,11 @@ async def _generate_pack(db: AsyncSession, session: TaskSession,
     """
     stmt = statement if statement is not None else (session.statement or {})
 
-    samples_ok = bool(session.examples)
+    samples_ok, samples_note = bool(session.examples), None
     if not session.examples:
         await _gen_progress(db, session.id, "Генерирую примеры (семплы)…", 3)
-        samples_ok = await _prepare_samples(db, session, stmt)
+        samples_ok, samples_note = await _prepare_samples(
+            db, session, stmt, stale=stale_samples)
 
     settings = session.problem_settings or {}
     subtasks = settings.get("subtasks") if _groups_enabled(session) else None
@@ -486,4 +546,5 @@ async def _generate_pack(db: AsyncSession, session: TaskSession,
         "build": bool(updated_files),
         "failed": failed,
         "samples_ok": samples_ok,
+        "samples_note": samples_note,
     }

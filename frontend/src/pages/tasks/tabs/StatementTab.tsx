@@ -315,8 +315,12 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
             knownInput ? Promise.resolve({ data: knownInput }) : api.get(`${base}/input`),
             api.get(`${base}/answer`),
         ]);
-        const text = (r: PromiseSettledResult<any>, fallback: string) =>
-            r.status === 'fulfilled' ? (r.value.data?.content ?? r.value.data ?? '') : fallback;
+        // the endpoints answer {content}, the known input is a bare string
+        const text = (r: PromiseSettledResult<{ data: unknown }>, fallback: string): string => {
+            if (r.status !== 'fulfilled') return fallback;
+            const d = r.value.data;
+            return typeof d === 'string' ? d : ((d as { content?: string } | null)?.content ?? '');
+        };
         setSampleTests(prev => prev.map(t => t.index === index ? {
             ...t,
             input: text(inRes, '(не удалось загрузить)'),

@@ -34,6 +34,7 @@ from api.user.polygon.files.generator.post.save_file import set_generator
 from api.user.polygon.files.interactor.post.set_interactor import set_interactor
 from api.user.polygon.files.script.post.save_script import save_script
 from api.user.polygon.files.solution.post.save_solution import save_solution
+from api.user.polygon.files.test.post.delete_tests import delete_tests
 from api.user.polygon.files.test.post.save_test import save_test
 from api.user.polygon.files.validator.post.set_validator import set_validator
 from api.user.polygon.files.get.files import get_files
@@ -82,6 +83,7 @@ __all__ = [
     "save_script",
     "save_solution",
     "save_test",
+    "delete_tests",
     "set_validator",
     "get_files",
     "view_file",

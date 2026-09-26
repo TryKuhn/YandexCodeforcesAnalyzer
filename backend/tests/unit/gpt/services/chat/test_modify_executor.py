@@ -408,6 +408,188 @@ async def test_regenerate_redo_when_statement_present(db, task_session, monkeypa
     assert out["statement"] == {"name": "redone"}
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("old_statement, expect_history", [
+    # regression: a redo generated with empty history and invented an unrelated task
+    ({"name": "Распил брёвен"}, True),
+    (None, False),  # brand-new task: nothing to build on
+])
+async def test_generate_from_scratch_history(db, task_session, monkeypatch,
+                                             old_statement, expect_history):
+    task_session.statement = old_statement
+    await db.commit()
+
+    seen = {}
+
+    async def fake_gen(**kwargs):
+        seen["history"] = kwargs["history"]
+        return {"name": "new"}
+    monkeypatch.setattr(f"{MOD}.statement_gen.generate", fake_gen)
+    _stub_statement_sync(monkeypatch)
+    _stub_sync_files(monkeypatch)
+
+    async def fake_pack(problem_type, stmt, model, subtasks=None):
+        return {"checker": "c"}, {}
+    monkeypatch.setattr(f"{MOD}.file_gen.generate_pack", fake_pack)
+
+    await me.regenerate(db, task_session, "переделай задачу")
+    if expect_history:
+        assert seen["history"][0]["role"] == "assistant"
+        assert "Распил брёвен" in seen["history"][0]["content"]
+    else:
+        assert seen["history"] == []
+
+
+# ── samples follow the statement they belong to ──────────────────────────────
+@pytest.mark.parametrize("stale, fresh, expected", [
+    (0, 0, None),
+    (3, 3, None),
+    (3, 5, None),
+    (3, 2, "№3"),
+    (3, 1, "№2–3"),
+    (2, 0, "№1–2"),
+])
+def test_stale_samples_note(stale, fresh, expected):
+    note = me._stale_samples_note(stale, fresh)
+    if expected is None:
+        assert note is None
+    else:
+        assert f"тесты-примеры {expected} остались" in note
+
+
+def _stub_samples(monkeypatch, produced, delete_ok=True):
+    """Fake sample generation + Polygon upload/delete; returns the recorded calls."""
+    calls = {}
+
+    async def fake_gen(stmt, model, count=3):
+        calls["count"] = count
+        return produced
+    monkeypatch.setattr(f"{MOD}.samples_gen.generate", fake_gen)
+
+    async def fake_ensure_problem(db_, session):
+        return 777
+    monkeypatch.setattr(f"{MOD}.file_sync.ensure_problem", fake_ensure_problem)
+
+    async def fake_upload(db_, problem_id, user_id, indexed, group=None):
+        calls["uploaded"] = indexed
+        return len(indexed)
+    monkeypatch.setattr(f"{MOD}.samples_sync.upload_examples", fake_upload)
+
+    async def fake_delete(db_, problem_id, user_id, fresh, stale):
+        calls["deleted"] = (fresh, stale)
+        return delete_ok
+    monkeypatch.setattr(f"{MOD}.samples_sync.delete_stale_examples", fake_delete)
+    return calls
+
+
+_OLD_SAMPLES = [{"index": i, "input": f"old {i}", "output": "x"} for i in (1, 2, 3)]
+
+
+@pytest.mark.asyncio
+async def test_regenerate_replaces_old_samples(db, task_session, monkeypatch):
+    """Regression: a redo kept the old task's samples (the pack skipped samples
+    whenever session.examples was non-empty), so the new validator failed them."""
+    task_session.statement = {"name": "old"}
+    task_session.examples = list(_OLD_SAMPLES)
+    await db.commit()
+
+    _stub_statement_gen(monkeypatch, {"name": "new"})
+    _stub_statement_sync(monkeypatch)
+    _stub_sync_files(monkeypatch)
+    new = [{"input": f"new {i}", "output": "y"} for i in (1, 2, 3)]
+    calls = _stub_samples(monkeypatch, new)
+
+    async def fake_pack(problem_type, stmt, model, subtasks=None):
+        return {"checker": "c"}, {}
+    monkeypatch.setattr(f"{MOD}.file_gen.generate_pack", fake_pack)
+
+    out = await me.regenerate(db, task_session, "переделай задачу")
+    assert calls["count"] == 3
+    assert [e["input"] for e in calls["uploaded"]] == ["new 1", "new 2", "new 3"]
+    assert [e["input"] for e in task_session.examples] == ["new 1", "new 2", "new 3"]
+    assert "остались в Polygon" not in out["response"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delete_ok", [True, False])
+async def test_regenerate_deletes_leftover_samples(db, task_session, monkeypatch, delete_ok):
+    task_session.statement = {"name": "old"}
+    task_session.examples = list(_OLD_SAMPLES)
+    await db.commit()
+
+    _stub_statement_gen(monkeypatch, {"name": "new"})
+    _stub_statement_sync(monkeypatch)
+    _stub_sync_files(monkeypatch)
+    calls = _stub_samples(monkeypatch, [{"input": "only one", "output": "y"}],
+                          delete_ok=delete_ok)
+
+    async def fake_pack(problem_type, stmt, model, subtasks=None):
+        return {"checker": "c"}, {}
+    monkeypatch.setattr(f"{MOD}.file_gen.generate_pack", fake_pack)
+
+    out = await me.regenerate(db, task_session, "переделай задачу")
+    # one new sample overwrote #1, old #2-#3 get deleted
+    assert calls["deleted"] == (1, 3)
+    # the user hears about leftovers only if Polygon refused to delete them
+    assert ("тесты-примеры №2–3 остались" in out["response"]) is not delete_ok
+
+
+@pytest.mark.asyncio
+async def test_prepare_samples_partial_upload_skips_delete(db, task_session, monkeypatch):
+    """A failed upload leaves an old test in its slot, so deleting the tail could
+    hit a new sample: skip the cleanup and warn instead."""
+    calls = _stub_samples(monkeypatch, [{"input": "a", "output": "1"},
+                                        {"input": "b", "output": "2"}])
+
+    async def half_upload(db_, problem_id, user_id, indexed, group=None):
+        return 1  # one of two failed
+    monkeypatch.setattr(f"{MOD}.samples_sync.upload_examples", half_upload)
+
+    ok, note = await me._prepare_samples(db, task_session, {"name": "S"}, stale=3)
+    assert ok is True
+    assert "deleted" not in calls
+    assert note is not None
+
+
+@pytest.mark.asyncio
+async def test_modify_statement_essence_change_regenerates_samples(db, task_session, monkeypatch):
+    task_session.statement = {"name": "old"}
+    task_session.examples = list(_OLD_SAMPLES)
+    await db.commit()
+
+    _stub_statement_gen(monkeypatch, {"name": "new format"})
+    _stub_statement_sync(monkeypatch)
+    calls = _stub_samples(monkeypatch, [{"input": f"n{i}", "output": "y"} for i in (1, 2, 3)])
+
+    async def fake_essence(old, new):
+        return {"essence_changed": True, "dependents": [], "reason": "input format"}
+    monkeypatch.setattr(f"{MOD}.essence_checker.check", fake_essence)
+
+    await me.execute(db, task_session, "change the input format",
+                     ResolvedContext(scope="statement"))
+    assert calls["count"] == 3
+    assert [e["input"] for e in task_session.examples] == ["n1", "n2", "n3"]
+
+
+@pytest.mark.asyncio
+async def test_modify_statement_cosmetic_keeps_samples(db, task_session, monkeypatch):
+    task_session.statement = {"name": "old"}
+    task_session.examples = list(_OLD_SAMPLES)
+    await db.commit()
+
+    _stub_statement_gen(monkeypatch, {"name": "old, typo fixed"})
+    _stub_statement_sync(monkeypatch)
+    calls = _stub_samples(monkeypatch, [])
+
+    async def fake_essence(old, new):
+        return {"essence_changed": False, "dependents": [], "reason": ""}
+    monkeypatch.setattr(f"{MOD}.essence_checker.check", fake_essence)
+
+    await me.execute(db, task_session, "fix typo", ResolvedContext(scope="statement"))
+    assert "count" not in calls
+    assert task_session.examples == _OLD_SAMPLES
+
+
 # ── _generate_pack with groups / subtasks ────────────────────────────────────
 @pytest.mark.asyncio
 async def test_generate_pack_empty_pack(db, task_session, monkeypatch):
