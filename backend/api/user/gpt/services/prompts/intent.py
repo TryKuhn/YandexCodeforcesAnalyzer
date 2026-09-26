@@ -30,9 +30,14 @@ SYSTEM_PROMPT = (
     "(pick from the available files).\n"
     '- "edit_test": change tests, the test-generation script, or the sample '
     "tests.\n"
-    '- "build": build / rebuild the Polygon package.\n'
-    '- "regenerate": recreate the ENTIRE task from scratch (e.g. "переделай '
-    'задачу полностью", "сделай задачу заново", a brand-new problem description).\n'
+    '- "build": build / rebuild the Polygon package. In this editor "пакет" / '
+    '"package" ALWAYS means the Polygon package build, so e.g. "собери пакет", '
+    '"пересобери", "пересоздай пакет заново", "пакет не собрался, попробуй ещё '
+    'раз" are all "build".\n'
+    '- "regenerate": recreate the ENTIRE task (statement AND files) from scratch — '
+    'only when the user explicitly asks to redo the PROBLEM itself (e.g. '
+    '"переделай задачу полностью", "сделай задачу заново", a brand-new problem '
+    "description). Never for a message that is only about the package.\n"
     '- "edit_task": a change touching several files or the whole problem that is '
     "not a full regeneration.\n\n"
     "Rules:\n"
