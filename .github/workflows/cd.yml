@@ -166,7 +166,7 @@ jobs:
             DC="docker compose -f docker-compose.prod.yml"
           fi
 
-          # our own images; postgres/redis/minio/caddy are never pulled here,
+          # our own images; postgres/redis/s3/caddy are never pulled here,
           # so a deploy can't silently upgrade them
           APP_SERVICES="backend worker judge frontend frontend-participant"
 

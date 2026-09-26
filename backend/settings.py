@@ -91,8 +91,8 @@ class Settings(BaseSettings):
     # the judge runs as its own container, see backend/judge/
     JUDGE_URL: str = "http://judge:8001"
 
-    # MinIO in compose; any S3-compatible endpoint works
-    S3_ENDPOINT: str = "http://minio:9000"
+    # the `s3` service in compose (RustFS); any S3-compatible endpoint works
+    S3_ENDPOINT: str = "http://s3:9000"
     S3_ACCESS_KEY: str = "minioadmin"
     S3_SECRET_KEY: str = "minioadmin"
     S3_BUCKET: str = "yca-blobs"

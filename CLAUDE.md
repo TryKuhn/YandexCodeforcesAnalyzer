@@ -60,7 +60,7 @@
   (статус/прогресс/результат), Redis Streams только будит воркеров. `enqueue()` → пуш id;
   воркер (`python -m jobs.run_worker`) атомарно забирает job (`UPDATE..RETURNING` — дубли
   доставки безвредны), ретраи с лимитом попыток, брошенные задачи возвращает `XAUTOCLAIM`.
-- `blobs/` — контент-адресное хранилище: байты лежат в MinIO/S3 под своим sha256
+- `blobs/` — контент-адресное хранилище: байты лежат в S3 (в compose — сервис `s3` на RustFS: MinIO убрал публичные образы) под своим sha256
   (`BlobStore.put/get`), строка в таблице `blobs` держит refcount — дедуп бесплатный,
   удалять объект можно только при refcount=0 (сам GC — YCA-210, отдельный тикет).
 - `plagiarism/` — исходники C++-модуля. `tests/` — pytest (зеркалит структуру `api/`). `conftest.py`, `pytest.ini`, `mypy.ini`.
@@ -163,7 +163,7 @@ make judge.test        # тесты judge локально (+ make judge.lint)
 - Postgres: **localhost:5432**.
 
 Контейнеры: `yandexcodeforcesanalyzer-backend-1`, `-worker-1`, `-judge-1`, `-frontend-1`,
-`-frontend-participant-1`, `-postgres-1`, `-redis-1`, `-minio-1`.
+`-frontend-participant-1`, `-postgres-1`, `-redis-1`, `-s3-1`.
 `worker` — тот же образ backend с командой `python -m jobs.run_worker`; без него посылки
 навсегда остаются `queued`.
 Миграции применяются автоматически при старте backend (`alembic upgrade head` в CMD).
