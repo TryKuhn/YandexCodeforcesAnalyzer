@@ -211,14 +211,16 @@ jobs:
           wait_ready() {
             svc=$1
             for i in $(seq 1 60); do
-              CID=$($DC ps -q "$svc")
+              # `up` creates containers before returning, so none now means
+              # it failed outright (e.g. an image could not be pulled)
+              CID=$($DC ps -a -q "$svc")
               if [ -z "$CID" ]; then
-                STATUS="missing"
-              else
-                STATUS=$(docker inspect \
-                  --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
-                  "$CID")
+                echo "$svc container was never created, see the compose up errors above"
+                return 1
               fi
+              STATUS=$(docker inspect \
+                --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                "$CID")
               echo "Attempt $i/60: $svc status = $STATUS"
 
               case "$STATUS" in
