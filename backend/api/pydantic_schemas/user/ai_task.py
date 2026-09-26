@@ -24,12 +24,6 @@ class UpdateProblemSettingsRequest(BaseModel):
     settings: ProblemSettings
 
 
-class SuggestTagsRequest(BaseModel):
-    """Request to suggest tags for a session's problem."""
-
-    session_id: str
-
-
 class UpdateExamplesRequest(BaseModel):
     """Request to replace a session's examples.
 

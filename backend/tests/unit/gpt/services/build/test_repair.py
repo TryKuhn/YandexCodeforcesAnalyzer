@@ -155,3 +155,22 @@ async def test_run_build_with_repair_exception_sets_failed(
     assert refreshed.stage == PipelineStage.FAILED
     assert refreshed.progress["status"] == "failed"
     assert "kaboom" in refreshed.progress["error"]
+    # the step no longer freezes on the last "attempt N/3" text
+    assert refreshed.progress["current_step"] == "Сборка остановлена из-за ошибки"
+    # and the chat learns the build is over
+    last = refreshed.chat_log[-1]
+    assert last["role"] == "system" and last["is_error"] is True
+    assert "kaboom" in last["content"]
+
+
+@pytest.mark.asyncio
+async def test_mark_build_started(task_session, db):
+    task_session.progress = {"status": "done", "current_step": "old run"}
+    await db.commit()
+
+    await repair.mark_build_started(db, task_session.id)
+
+    refreshed = await db.get(type(task_session), task_session.id)
+    await db.refresh(refreshed)
+    assert refreshed.progress["status"] == "building"
+    assert refreshed.stage == PipelineStage.BUILDING_PACKAGE

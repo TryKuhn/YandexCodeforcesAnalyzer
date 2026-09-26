@@ -19,7 +19,8 @@ from api.crypt import get_current_user
 from api.pydantic_schemas.user.ai_task import ChatRequest, ChatResponse
 from api.user.gpt.base_gpt import gpt_router
 from api.user.gpt.services.ai_file_helpers import get_all_file_contents
-from api.user.gpt.services.build.repair import run_build_with_repair
+from api.user.gpt.services.build.repair import (mark_build_started,
+                                               run_build_with_repair)
 from api.user.gpt.services.chat import (answer_executor, context_resolver,
                                         intent_router, modify_executor)
 from api.user.gpt.services.chat.context_resolver import ResolvedContext
@@ -31,6 +32,26 @@ from app.database import Session, get_db
 from models.task.session import TaskSession
 
 logger = logging.getLogger(__name__)
+
+# asyncio keeps only a weak reference to a task: without a strong one a
+# background generation/build can be garbage-collected mid-run
+_background_tasks: set[asyncio.Task] = set()
+
+_BUILD_STARTED = ("Запустил сборку пакета с авто-починкой — "
+                  "статус и результат появятся здесь, в чате.")
+
+
+def _spawn(coro) -> None:
+    """Run ``coro`` in the background, holding a reference until it finishes."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+async def _start_build(db: AsyncSession, session_id: str) -> None:
+    """Spawn the package build; the chat watches its status from the progress."""
+    await mark_build_started(db, session_id)
+    _spawn(run_build_with_repair(session_id))
 
 
 def _error_text(e: Exception) -> str:
@@ -99,9 +120,8 @@ async def _run_generation_bg(
             response_text = result["response"]
             updated_files = result["updated_files"]
             if result.get("build") and session.polygon_problem_id:
-                asyncio.create_task(run_build_with_repair(session.id))
-                response_text += ("\n\nЗапустил сборку пакета с авто-починкой — "
-                                  "прогресс на вкладке «Пакеты».")
+                await _start_build(db, session.id)
+                response_text += "\n\n" + _BUILD_STARTED
         except Exception as e:
             logger.exception(f"[{session_id}] background generation failed: {e}")
             is_error = True
@@ -153,9 +173,8 @@ async def unified_chat(
         if not session.polygon_problem_id:
             text, err = "Задача ещё не создана в Polygon.", True
         else:
-            asyncio.create_task(run_build_with_repair(session.id))
-            text, err = ("Запустил сборку пакета с авто-починкой. "
-                         "Прогресс — на вкладке «Пакеты».", False)
+            await _start_build(db, session.id)
+            text, err = _BUILD_STARTED, False
         await append_chat_log(db, session.id, [
             chat_message("assistant", text, action="answer",
                          context=request.context.model_dump(), is_error=err),
@@ -166,7 +185,7 @@ async def unified_chat(
     # user message is already persisted; the worker appends the assistant reply
     # to chat_log when done, and the client polls for it.
     if action in _HEAVY_ACTIONS:
-        asyncio.create_task(_run_generation_bg(
+        _spawn(_run_generation_bg(
             session.id, action, file_key, request.message,
             request.context.model_dump(),
         ))
@@ -216,9 +235,8 @@ async def unified_chat(
             technical_data = result["technical_data"]
             synced = result["synced"]
             if result.get("build") and session.polygon_problem_id:
-                asyncio.create_task(run_build_with_repair(session.id))
-                response_text += ("\n\nЗапустил сборку пакета с авто-починкой — "
-                                  "прогресс на вкладке «Пакеты».")
+                await _start_build(db, session.id)
+                response_text += "\n\n" + _BUILD_STARTED
     except Exception as e:
         logger.exception(f"[{session.id}] chat executor failed: {e}")
         is_error = True

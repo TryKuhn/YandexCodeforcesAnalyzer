@@ -27,6 +27,19 @@ async def test_update_merges_settings(db, user, task_session):
 
 
 @pytest.mark.asyncio
+async def test_update_one_flag_keeps_other_settings(db, user, task_session):
+    # the UI sends a single toggle; schema defaults must not overwrite the rest
+    task_session.problem_settings = {"time_limit": 1000, "tags": ["dp"]}
+    await db.commit()
+
+    req = UpdateProblemSettingsRequest(settings=ProblemSettings(enable_groups=True))
+    res = await update_problem_settings(task_session.id, req, user_id=user.id, db=db)
+    assert res["problem_settings"] == {
+        "time_limit": 1000, "tags": ["dp"], "enable_groups": True,
+    }
+
+
+@pytest.mark.asyncio
 async def test_update_problem_settings_404(db, user):
     req = UpdateProblemSettingsRequest(settings=ProblemSettings())
     with pytest.raises(HTTPException) as exc:

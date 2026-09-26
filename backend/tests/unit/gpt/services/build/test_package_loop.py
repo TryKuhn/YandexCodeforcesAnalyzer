@@ -356,3 +356,52 @@ async def test_build_and_poll_passes_companions_for_generator(
     out = await pl.build_and_poll(db, task_session)
     assert out["status"] == "done"
     assert captured["related"] == {"script": "script code"}
+
+
+@pytest.mark.asyncio
+async def test_build_and_poll_polygon_rejecting_fix_retries(
+    task_session, db, monkeypatch
+):
+    """Regression: Polygon rejects an uncompilable fix on upload. That must count
+    as one failed attempt and feed the compiler output into the next one - not
+    abort the whole repair after attempt 1/3."""
+    builds = iter([
+        ("FAILED", "ml_sol got TL, expected ML", 1),
+        ("READY", "", 60),
+    ])
+
+    async def fake_build_once(*a, **k):
+        return next(builds)
+
+    async def fake_resolve(comment, applicable):
+        return "ml_sol"
+
+    async def fake_get_contents(db_, sid):
+        return {"ml_sol": "old"}
+
+    errors_seen = []
+
+    async def fake_fix(offender, code, error, statement, model,
+                       previous_errors=None, related_files=None):
+        errors_seen.append(error)
+        return "garbage" if len(errors_seen) == 1 else "good code"
+
+    async def fake_sync_file(db_, session, ft, content):
+        if content == "garbage":
+            raise pl.PolygonAPIError("ml.cpp(1): error C4430")
+
+    async def fake_finalize(*a, **k):
+        return {}
+
+    monkeypatch.setattr(pl, "_build_once", fake_build_once)
+    monkeypatch.setattr(pl, "resolve_offending_file", fake_resolve)
+    monkeypatch.setattr(pl, "get_all_file_contents", fake_get_contents)
+    monkeypatch.setattr(pl.fix_gen, "fix", fake_fix)
+    monkeypatch.setattr(pl, "sync_file", fake_sync_file)
+    monkeypatch.setattr(pl, "_finalize", fake_finalize)
+
+    out = await pl.build_and_poll(db, task_session)
+    assert out == {"status": "done", "package_id": 60}
+    # the second attempt was told why Polygon refused the first one
+    assert len(errors_seen) == 2
+    assert "C4430" in errors_seen[1]

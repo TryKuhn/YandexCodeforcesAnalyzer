@@ -41,6 +41,24 @@ def test_groups_enabled(task_session):
 
 
 # ── helpers to stub collaborators ────────────────────────────────────────────
+@pytest.fixture(autouse=True)
+def _no_tags(monkeypatch):
+    """Statement regeneration re-tags the problem; by default suggest nothing
+    so no test reaches the LLM or Polygon. Tag tests re-stub these."""
+    async def fake_suggest(statement, model):
+        return []
+    monkeypatch.setattr(f"{MOD}.tags_gen.suggest", fake_suggest)
+
+
+def _stub_sync_tags(monkeypatch):
+    calls = []
+
+    async def fake(db, session, tags):
+        calls.append(tags)
+    monkeypatch.setattr(f"{MOD}.settings_sync.sync_tags", fake)
+    return calls
+
+
 def _stub_statement_gen(monkeypatch, result):
     async def fake(**kwargs):
         return result
@@ -140,6 +158,92 @@ async def test_modify_statement_essence_cascade(db, task_session, monkeypatch):
     assert out["updated_files"] == ["validator"]
     assert "зависимые файлы" in out["response"]
     assert captured["items"] == [("validator", "new-validator")]
+
+
+# ── _regenerate_tags (runs after every statement regeneration) ───────────────
+@pytest.mark.asyncio
+async def test_modify_statement_replaces_tags(db, task_session, monkeypatch):
+    task_session.statement = {"name": "old"}
+    task_session.problem_settings = {"time_limit": 1000, "tags": ["stale"]}
+    await db.commit()
+
+    _stub_statement_gen(monkeypatch, {"name": "new"})
+    _stub_statement_sync(monkeypatch)
+    tag_calls = _stub_sync_tags(monkeypatch)
+
+    seen = {}
+
+    async def fake_suggest(statement, model):
+        seen["statement"] = statement
+        return ["binary search", "greedy"]
+    monkeypatch.setattr(f"{MOD}.tags_gen.suggest", fake_suggest)
+
+    async def fake_essence(old, new):
+        return {"essence_changed": False, "dependents": [], "reason": ""}
+    monkeypatch.setattr(f"{MOD}.essence_checker.check", fake_essence)
+
+    await me.execute(db, task_session, "rewrite", ResolvedContext(scope="statement"))
+
+    # tagged from the NEW statement, old tags replaced, other settings kept
+    assert seen["statement"] == {"name": "new"}
+    assert tag_calls == [["binary search", "greedy"]]
+    assert task_session.problem_settings == {
+        "time_limit": 1000, "tags": ["binary search", "greedy"],
+    }
+
+
+@pytest.mark.asyncio
+async def test_generate_from_scratch_tags_problem(db, task_session, monkeypatch):
+    task_session.statement = None
+    await db.commit()
+
+    _stub_statement_gen(monkeypatch, {"name": "Brand New"})
+    _stub_statement_sync(monkeypatch)
+    _stub_sync_files(monkeypatch)
+    tag_calls = _stub_sync_tags(monkeypatch)
+
+    async def fake_suggest(statement, model):
+        return ["dp"]
+    monkeypatch.setattr(f"{MOD}.tags_gen.suggest", fake_suggest)
+
+    async def fake_pack(problem_type, stmt, model, subtasks=None):
+        return {"checker": "c"}, {}
+    monkeypatch.setattr(f"{MOD}.file_gen.generate_pack", fake_pack)
+
+    await me.execute(db, task_session, "make a task", ResolvedContext(scope="task"))
+    assert tag_calls == [["dp"]]
+
+
+@pytest.mark.asyncio
+async def test_regenerate_tags_empty_keeps_old_tags(db, task_session, monkeypatch):
+    task_session.problem_settings = {"tags": ["kept"]}
+    await db.commit()
+    tag_calls = _stub_sync_tags(monkeypatch)
+
+    await me._regenerate_tags(db, task_session, {"name": "x"})  # autouse: []
+    assert tag_calls == []
+    assert task_session.problem_settings == {"tags": ["kept"]}
+
+
+@pytest.mark.asyncio
+async def test_regenerate_tags_failure_does_not_break_edit(db, task_session, monkeypatch):
+    task_session.statement = {"name": "old"}
+    await db.commit()
+
+    _stub_statement_gen(monkeypatch, {"name": "new"})
+    _stub_statement_sync(monkeypatch)
+
+    async def boom(statement, model):
+        raise RuntimeError("llm down")
+    monkeypatch.setattr(f"{MOD}.tags_gen.suggest", boom)
+
+    async def fake_essence(old, new):
+        return {"essence_changed": False, "dependents": [], "reason": ""}
+    monkeypatch.setattr(f"{MOD}.essence_checker.check", fake_essence)
+
+    out = await me.execute(db, task_session, "fix", ResolvedContext(scope="statement"))
+    assert out["synced"] is True
+    assert out["statement"] == {"name": "new"}
 
 
 # ── _modify_file (file scope) ────────────────────────────────────────────────

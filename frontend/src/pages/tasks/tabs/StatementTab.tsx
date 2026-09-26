@@ -40,6 +40,7 @@ interface ProblemInfo {
 interface SampleTest {
     index: number;
     input: string;
+    output: string;
     loading?: boolean;
 }
 
@@ -211,7 +212,6 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
     const [tags, setTags]                 = useState<string[]>([]);
     const [tagInput, setTagInput]         = useState('');
     const [savingTags, setSavingTags]     = useState(false);
-    const [suggestingTags, setSuggesting] = useState(false);
     const [loading, setLoading]           = useState(true);
     const [syncing, setSyncing]           = useState(false);
     const [savingStatement, setSavingStatement] = useState(false);
@@ -295,11 +295,10 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
                 setSampleTests(samples.map((t: any) => ({
                     index: t.index,
                     input: t.input || '',
-                    loading: !t.input,
+                    output: '',
+                    loading: true,
                 })));
-                for (const t of samples) {
-                    if (!t.input) loadSampleInput(t.index);
-                }
+                for (const t of samples) loadSample(t.index, t.input);
             }
         } catch (e: any) {
             setError(e?.response?.data?.detail || 'Ошибка загрузки');
@@ -308,18 +307,22 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
         }
     };
 
-    const loadSampleInput = async (index: number) => {
-        try {
-            const res = await api.get(`/polygon/problems/${polygonId}/tests/tests/${index}/input`);
-            const input = res.data.content ?? res.data ?? '';
-            setSampleTests(prev => prev.map(t =>
-                t.index === index ? { ...t, input, loading: false } : t
-            ));
-        } catch {
-            setSampleTests(prev => prev.map(t =>
-                t.index === index ? { ...t, input: '(не удалось загрузить)', loading: false } : t
-            ));
-        }
+    // The test list carries only the input (and not always): the answer is a
+    // separate request, and Polygon has none until the main solution produced it.
+    const loadSample = async (index: number, knownInput?: string) => {
+        const base = `/polygon/problems/${polygonId}/tests/tests/${index}`;
+        const [inRes, outRes] = await Promise.allSettled([
+            knownInput ? Promise.resolve({ data: knownInput }) : api.get(`${base}/input`),
+            api.get(`${base}/answer`),
+        ]);
+        const text = (r: PromiseSettledResult<any>, fallback: string) =>
+            r.status === 'fulfilled' ? (r.value.data?.content ?? r.value.data ?? '') : fallback;
+        setSampleTests(prev => prev.map(t => t.index === index ? {
+            ...t,
+            input: text(inRes, '(не удалось загрузить)'),
+            output: text(outRes, '(ответ ещё не сгенерирован)'),
+            loading: false,
+        } : t));
     };
 
     useEffect(() => { load(); }, [polygonId]);
@@ -388,6 +391,12 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
         setSavingTags(true);
         try {
             await api.patch(`/polygon/problems/${polygonId}/tags`, { tags: next });
+            // the package build re-pushes the session's tags, keep them in step
+            if (sessionId) {
+                await api.patch(`/ai/session/${sessionId}/problem-settings`, {
+                    settings: { tags: next },
+                });
+            }
         } catch (e: any) {
             setError(e?.response?.data?.detail || 'Ошибка сохранения тегов');
         } finally {
@@ -416,19 +425,6 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
         if (e.key === 'Enter' || e.key === ',') {
             e.preventDefault();
             if (tagInput.trim()) { addTags([tagInput]); setTagInput(''); }
-        }
-    };
-
-    const suggestTags = async () => {
-        if (!sessionId) return;
-        setSuggesting(true);
-        try {
-            const res = await api.post('/ai/suggest-tags', { session_id: sessionId });
-            addTags(res.data?.suggested_tags ?? []);
-        } catch (e: any) {
-            setError(e?.response?.data?.detail || 'Не удалось получить теги от ИИ');
-        } finally {
-            setSuggesting(false);
         }
     };
 
@@ -675,17 +671,6 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
                     <Tag size={13} className="text-slate-400" />
                     <span className="text-xs font-bold text-slate-600 dark:text-slate-300 flex-1">Теги</span>
                     {savingTags && <Loader2 size={12} className="animate-spin text-slate-400" />}
-                    <button
-                        onClick={suggestTags}
-                        disabled={suggestingTags || !sessionId}
-                        title={sessionId ? 'Предложить теги через ИИ' : 'Нет активной сессии'}
-                        className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg
-                                   bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400
-                                   hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all disabled:opacity-50"
-                    >
-                        {suggestingTags ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
-                        ИИ-теги
-                    </button>
                 </div>
                 <div className="p-3 flex flex-wrap items-center gap-1.5">
                     {tags.map(tag => (
@@ -829,15 +814,22 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
                                 <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/50 text-[11px] font-bold text-slate-500">
                                     Пример {test.index}
                                 </div>
-                                <div className="p-3">
-                                    {test.loading ? (
+                                {test.loading ? (
+                                    <div className="p-3">
                                         <Loader2 size={14} className="animate-spin text-slate-400" />
-                                    ) : (
-                                        <pre className="text-xs font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-                                            {test.input || '(нет данных)'}
-                                        </pre>
-                                    )}
-                                </div>
+                                    </div>
+                                ) : (
+                                    <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                                        {([['Ввод', test.input], ['Вывод', test.output]] as const).map(([label, text]) => (
+                                            <div key={label} className="p-3">
+                                                <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">{label}</div>
+                                                <pre className="text-xs font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                                                    {text || '(пусто)'}
+                                                </pre>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>

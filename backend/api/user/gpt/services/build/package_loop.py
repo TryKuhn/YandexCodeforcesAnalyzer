@@ -18,6 +18,7 @@ from api.user.gpt.services.build.scoring_groups import assign_tests_to_groups
 from api.user.gpt.services.generation.solution_skip import parse_skip
 from api.user.gpt.services.files.file_registry import applicable_types
 from api.user.gpt.services.sync.file_sync import sync_file
+from api.user.polygon.get_response import PolygonAPIError
 from api.user.polygon.problem.get.packages import get_packages
 from api.user.polygon.problem.post.commit import commit_changes
 from api.user.polygon.problem.post.package import build_package
@@ -202,7 +203,16 @@ async def build_and_poll(
                               f"вердиктом его тега ({skip_reason}). Удалите это решение "
                               f"или смените его тег в Polygon вручную.")}
 
-        await sync_file(db, session, offender, fixed)
+        try:
+            await sync_file(db, session, offender, fixed)
+        except PolygonAPIError as e:
+            # Polygon compiles a solution on upload and rejects broken code. That
+            # is a failed attempt of THIS file, not the end of the repair: feed
+            # the compiler output to the next attempt instead of aborting.
+            logger.warning(f"[{session.id}] Polygon rejected fixed {offender}: {e}")
+            comment = f"Polygon rejected the uploaded file: {e}"
+            prev_errors.append(comment)
+            continue
         state, comment, package_id = await _build_once(
             problem_id, session.user_id, db, set_step
         )
