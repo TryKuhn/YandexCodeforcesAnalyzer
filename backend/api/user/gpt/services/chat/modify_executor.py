@@ -20,13 +20,14 @@ from api.user.gpt.services.chat import essence_checker
 from api.user.gpt.services.chat.context_resolver import ResolvedContext
 from api.user.gpt.services.generation import (file_gen, samples_gen, statement_gen,
                                               subtask_plan_gen,
-                                              subtask_solutions_gen)
+                                              subtask_solutions_gen, tags_gen)
 from api.user.gpt.services.llm.client import llm, strip_code_fences
 from api.user.gpt.services.llm.models import SCAFFOLD_MODEL
 from api.user.gpt.services.prompts import problem_type as problem_type_guide
 from api.user.gpt.services.prompts import task_modify
 from api.user.gpt.services.sessions import is_interactive, now_utc, update_session
-from api.user.gpt.services.sync import file_sync, samples_sync, statement_sync
+from api.user.gpt.services.sync import (file_sync, samples_sync, settings_sync,
+                                        statement_sync)
 from models.task.session import ProblemType, TaskSession
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,27 @@ async def execute(
     return await _modify_task(db, session, message)
 
 
+async def _regenerate_tags(db: AsyncSession, session: TaskSession, statement: dict) -> None:
+    """Re-tag the problem from a freshly generated statement.
+
+    The new tags replace the old ones: they described the previous statement.
+    They go to problem_settings too, since the package build re-pushes the
+    tags from there. Best effort: a failed tag call must not fail the edit.
+    """
+    try:
+        tags = await tags_gen.suggest(statement, session.model)
+        if not tags:
+            return
+        settings = dict(session.problem_settings or {})
+        settings["tags"] = tags
+        session.problem_settings = settings
+        flag_modified(session, "problem_settings")
+        await db.commit()
+        await settings_sync.sync_tags(db, session, tags)
+    except Exception as e:
+        logger.warning(f"[{session.id}] Tag regeneration failed: {e}")
+
+
 async def _modify_statement(db: AsyncSession, session: TaskSession, message: str) -> dict:
     """Regenerate + push the statement, then cascade-regenerate dependents.
 
@@ -91,6 +113,7 @@ async def _modify_statement(db: AsyncSession, session: TaskSession, message: str
     await db.commit()
 
     await statement_sync.sync_statement(db, session, new_stmt)
+    await _regenerate_tags(db, session, new_stmt)
 
     updated_files: list[str] = []
     essence = await essence_checker.check(old_statement, new_stmt)
@@ -315,6 +338,7 @@ async def _generate_from_scratch(db: AsyncSession, session: TaskSession,
     session.updated_at = now_utc()
     await db.commit()
     await statement_sync.sync_statement(db, session, stmt)
+    await _regenerate_tags(db, session, stmt)
 
     stmt = await _prepare_subtasks(db, session, stmt)
 

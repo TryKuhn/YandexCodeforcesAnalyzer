@@ -186,6 +186,48 @@ export const ChatPanel = ({ sessionId, model, onModelChange, polygonId, initialM
         return () => clearInterval(timer);
     }, [resuming, sessionId]);
 
+    // A package build keeps running in the background after the chat replied
+    // (and may be started from the Packages tab). Watch it here so its live
+    // status and the final result show up in the chat, not only on that tab.
+    const [buildStep, setBuildStep] = useState<string | null>(null);
+    const buildWatch = buildStep !== null;
+    // TaskPage passes a fresh arrow each render; a ref keeps the poller from
+    // restarting on every render while still calling the latest callback
+    const onModifiedRef = useRef(onModified);
+    useEffect(() => { onModifiedRef.current = onModified; });
+    const lastRole = messages[messages.length - 1]?.role;
+
+    // After every reply (and on load): is a build running right now?
+    useEffect(() => {
+        if (!sessionId || buildWatch || lastRole === 'user') return;
+        api.get(`/ai/upload-progress/${sessionId}`)
+            .then(res => {
+                const d = res.data || {};
+                if (d.status === 'building') setBuildStep(d.current_step || 'Сборка пакета…');
+            })
+            .catch(() => { /* no status - nothing to watch */ });
+    }, [sessionId, buildWatch, lastRole, messages.length]);
+
+    // While it runs, mirror its step; when it ends, pull the result message the
+    // backend appended to the chat log and refresh the tabs (new package).
+    useEffect(() => {
+        if (!buildWatch || !sessionId) return;
+        const timer = setInterval(async () => {
+            try {
+                const d = (await api.get(`/ai/upload-progress/${sessionId}`)).data || {};
+                if (d.status === 'building') {
+                    setBuildStep(d.current_step || 'Сборка пакета…');
+                    return;
+                }
+                const res = await api.get(`/polygon/problems/${polygonId}/session`);
+                setMessages(res.data?.chat_log || []);
+                setBuildStep(null);
+                onModifiedRef.current?.([]);
+            } catch { /* transient - keep polling */ }
+        }, 2000);
+        return () => clearInterval(timer);
+    }, [buildWatch, sessionId, polygonId]);
+
     // Percentage for a determinate bar (generation stages); null → indeterminate.
     const progressPct = progress?.total
         ? Math.round(((progress.step || 0) / progress.total) * 100)
@@ -381,7 +423,7 @@ export const ChatPanel = ({ sessionId, model, onModelChange, polygonId, initialM
                         </div>
                     ))
                 )}
-                {busy && (
+                {(busy || buildWatch) && (
                     <div className="flex gap-2">
                         <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shrink-0">
                             <Bot size={12} className="text-blue-500" />
@@ -390,9 +432,9 @@ export const ChatPanel = ({ sessionId, model, onModelChange, polygonId, initialM
                             <div className="flex items-center gap-2">
                                 <Loader2 size={12} className="animate-spin text-slate-400 shrink-0" />
                                 <span className="text-[10px] text-slate-500 dark:text-slate-300 break-words">
-                                    {stepText}
+                                    {busy ? stepText : buildStep}
                                 </span>
-                                {progressPct !== null && (
+                                {busy && progressPct !== null && (
                                     <span className="ml-auto text-[9px] font-bold text-slate-400 shrink-0">
                                         {progress?.step}/{progress?.total}
                                     </span>
@@ -401,7 +443,7 @@ export const ChatPanel = ({ sessionId, model, onModelChange, polygonId, initialM
                             {/* Progress bar: determinate for generation stages,
                                 animated/indeterminate while the package builds. */}
                             <div className="h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                                {progressPct !== null ? (
+                                {busy && progressPct !== null ? (
                                     <div
                                         className="h-full bg-blue-500 transition-all duration-500"
                                         style={{ width: `${progressPct}%` }}

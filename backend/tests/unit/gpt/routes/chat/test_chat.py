@@ -160,6 +160,10 @@ async def test_chat_build_action_kicks_off_build(db, user, task_session, monkeyp
     assert res.is_error is False
     # build branch taken: confirmation text references the package build
     assert "сборку" in res.response
+    # marked as running BEFORE the reply, so the chat's first status poll
+    # sees "building" instead of the previous run's result
+    s = await get_session_or_404(db, task_session.id)
+    assert s.progress["status"] == "building"
 
 
 @pytest.mark.asyncio

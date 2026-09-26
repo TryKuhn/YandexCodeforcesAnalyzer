@@ -234,4 +234,4 @@ async def _apply_build_result(db: AsyncSession, session_id: str, problem_id: int
     )
     msg = (f"Не удалось собрать пакет после автоматических попыток. "
            f"Ошибка: {error}")
-    await append_chat_log(db, session_id, [chat_message("system", msg)])
+    await append_chat_log(db, session_id, [chat_message("system", msg, is_error=True)])

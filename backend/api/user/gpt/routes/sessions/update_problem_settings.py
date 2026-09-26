@@ -19,13 +19,17 @@ async def update_problem_settings(
 ):
     """Merge new TL/ML/IO/tags/groups into the session's problem_settings.
 
+    Only the fields the client actually sent are merged: the schema has
+    defaults for every field, so dumping them all would reset e.g. the time
+    limit to 2000 whenever the UI toggles one flag.
+
     Reassigns a fresh dict because in-place mutation of a JSON column is not
     tracked by SQLAlchemy; flag_modified marks it dirty for the commit.
     """
     session = await get_session_or_404(db, session_id, user_id)
     session.problem_settings = {
         **(session.problem_settings or {}),
-        **request.settings.model_dump(exclude_none=False),
+        **request.settings.model_dump(exclude_unset=True),
     }
     flag_modified(session, "problem_settings")
     session.updated_at = now_utc()

@@ -195,12 +195,17 @@ export const FileEditorPage = () => {
                         <Loader2 size={28} className="animate-spin text-blue-500" />
                     </div>
                 ) : (
+                    {/* The editor has to be exactly as tall as the page, or it grows to
+                        fit the code and the clipping wrapper leaves nothing to scroll
+                        (only the arrow keys "scroll", via the cursor). The CodeMirror
+                        wrapper is `cm-theme-dark`/`cm-theme-light`, never plain
+                        `cm-theme`, hence the child selector. */}
                     <CodeEditor
                         value={content}
                         onChange={setContent}
                         fileName={name}
                         height="100%"
-                        className="flex-1 min-h-0 [&_.cm-theme]:h-full [&_.cm-editor]:h-full [&_.cm-scroller]:overflow-auto"
+                        className="flex-1 min-h-0 [&>div]:h-full [&_.cm-editor]:h-full [&_.cm-scroller]:overflow-auto"
                     />
                 )}
             </div>

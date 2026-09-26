@@ -18,10 +18,13 @@ def parse_skip(text: str) -> str | None:
     optional ``:``/dash separator before the reason. Real source files never
     start with this marker, so false positives are not a concern.
     """
-    stripped = (text or "").strip()
+    # The prompt shows the marker as `SKIP: ...` and models tend to copy the
+    # backticks (or bold it) - such a reply must still count as a skip, not be
+    # uploaded as source code.
+    stripped = (text or "").strip().strip("`*\"' ").strip()
     if not stripped.upper().startswith(SKIP_MARKER.upper()):
         return None
     reason = stripped[len(SKIP_MARKER):].lstrip(" :\t—-").strip()
     # Keep it to the first line — the model may add stray trailing text.
-    reason = reason.splitlines()[0].strip() if reason else ""
+    reason = reason.splitlines()[0].strip().strip("`*\"' ") if reason else ""
     return reason or _DEFAULT_REASON

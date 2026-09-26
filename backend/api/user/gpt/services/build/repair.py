@@ -9,18 +9,35 @@ attempts to fix it (build/package_loop).
 import logging
 import traceback
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.user.gpt.services.build import package_loop
 from api.user.gpt.services.build.pipeline import _apply_build_result
 from api.user.gpt.services.build.scoring_groups import (parse_scoring_groups,
                                                         setup_groups_and_points)
 from api.user.gpt.services.chat.file_context import ensure_files_loaded
 from api.user.gpt.services.generation import subtask_plan_gen
-from api.user.gpt.services.sessions import update_session
+from api.user.gpt.services.sessions import (append_chat_log, chat_message,
+                                            update_session)
 from api.user.gpt.services.sync.samples_sync import upload_examples
 from app.database import Session
 from models.task.session import PipelineStage, TaskSession
 
 logger = logging.getLogger(__name__)
+
+
+async def mark_build_started(db: AsyncSession, session_id: str) -> None:
+    """Flag the build as running BEFORE it is spawned in the background.
+
+    The chat replies right after spawning it, and a client that polls the
+    progress at that moment must see "building", not the previous run's status
+    (which would read as "already finished").
+    """
+    await update_session(db, session_id, {
+        "progress": {"status": "building", "current_step": "Запуск сборки пакета...",
+                     "error": None},
+        "stage": PipelineStage.BUILDING_PACKAGE,
+    })
 
 
 async def run_build_with_repair(session_id: str) -> None:
@@ -96,8 +113,13 @@ async def run_build_with_repair(session_id: str) -> None:
         except Exception as e:
             logger.exception(f"[{session_id}] build-with-repair failed: {e}")
             progress["status"] = "failed"
+            # the step would otherwise freeze on e.g. "attempt 1/3" and read as hung
+            progress["current_step"] = "Сборка остановлена из-за ошибки"
             progress["error"] = str(e)
             progress["traceback"] = traceback.format_exc()
             await update_session(
                 db, session_id, {"progress": progress, "stage": PipelineStage.FAILED}
             )
+            await append_chat_log(db, session_id, [chat_message(
+                "system", f"Сборка пакета остановлена из-за ошибки: {e}", is_error=True,
+            )])

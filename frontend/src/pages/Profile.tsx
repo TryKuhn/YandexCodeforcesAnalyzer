@@ -333,7 +333,7 @@ export const Profile = () => {
                             </button>
                         ) : (
                             <button onClick={() => setShowPolyModal(true)}
-                                    className="w-full bg-orange-600 text-white py-2 rounded-xl text-sm font-bold hover:bg-orange-700 transition-colors">
+                                    className="w-full bg-blue-600 text-white py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors">
                                 Привязать Polygon API
                             </button>
                         )}
@@ -393,7 +393,7 @@ export const Profile = () => {
                     className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
                     <div
                         className="bg-white dark:bg-slate-900 p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
-                        <h3 className="text-xl font-bold mb-2 dark:text-white text-orange-600">Polygon API Ключи</h3>
+                        <h3 className="text-xl font-bold mb-2 dark:text-white">Polygon API Ключи</h3>
                         <p className="text-sm text-slate-500 mb-6">Создайте ключи в настройках профиля Polygon</p>
 
                         <div className="space-y-4">
@@ -401,7 +401,7 @@ export const Profile = () => {
                                 <label className="text-xs font-bold text-slate-400 ml-1">API KEY</label>
                                 <input
                                     type="text"
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 mt-1 outline-none focus:ring-2 focus:ring-orange-500 dark:text-white"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 mt-1 outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
                                     value={polyData.key}
                                     onChange={e => setPolyData({...polyData, key: e.target.value})}
                                 />
@@ -410,7 +410,7 @@ export const Profile = () => {
                                 <label className="text-xs font-bold text-slate-400 ml-1">API SECRET</label>
                                 <input
                                     type="password"
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 mt-1 outline-none focus:ring-2 focus:ring-orange-500 dark:text-white"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 mt-1 outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
                                     value={polyData.secret}
                                     onChange={e => setPolyData({...polyData, secret: e.target.value})}
                                 />
@@ -419,7 +419,7 @@ export const Profile = () => {
                             <button
                                 onClick={handlePolyLink}
                                 disabled={isLinkingPoly || !polyData.key || !polyData.secret}
-                                className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold hover:bg-orange-700 disabled:opacity-50 transition-all flex justify-center"
+                                className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 transition-all flex justify-center"
                             >
                                 {isLinkingPoly ? <Loader2 className="animate-spin" size={20}/> : 'Сохранить ключи'}
                             </button>
