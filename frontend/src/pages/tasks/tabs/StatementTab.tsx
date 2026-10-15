@@ -8,6 +8,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { api } from '../../../api/instance';
+import { aiApi } from '../../../api/ai';
 
 interface Props {
     polygonId: number;
@@ -395,12 +396,6 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
         setSavingTags(true);
         try {
             await api.patch(`/polygon/problems/${polygonId}/tags`, { tags: next });
-            // the package build re-pushes the session's tags, keep them in step
-            if (sessionId) {
-                await api.patch(`/ai/session/${sessionId}/problem-settings`, {
-                    settings: { tags: next },
-                });
-            }
         } catch (e: any) {
             setError(e?.response?.data?.detail || 'Ошибка сохранения тегов');
         } finally {
@@ -464,24 +459,12 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
 
     // ── Settings toggles ─────────────────────────────────────────────────────
 
-    // Persist a flag both on Polygon (immediate effect) and on the AI session
-    // (so the toggle state survives a page reload).
-    const persistSetting = async (key: 'enable_groups' | 'enable_points', value: boolean) => {
-        if (sessionId) {
-            await api.patch(`/ai/session/${sessionId}/problem-settings`, {
-                settings: { [key]: value },
-            }).catch(() => {});
-        }
-    };
-
     const handleToggleGroups = async () => {
         const next = !hasGroups;
         setHasGroups(next);
         setTogglingGroups(true);
         try {
             await api.post(`/polygon/problems/${polygonId}/settings/enable-groups`, { enable: next });
-            await persistSetting('enable_groups', next);
-            if (next && !currentStatement.scoring && currentStatement.legend) await generateScoring();
         } catch { setHasGroups(!next); }
         finally { setTogglingGroups(false); }
     };
@@ -492,19 +475,16 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
         setTogglingPoints(true);
         try {
             await api.post(`/polygon/problems/${polygonId}/settings/enable-points`, { enable: next });
-            await persistSetting('enable_points', next);
-            if (next && !currentStatement.scoring && currentStatement.legend) await generateScoring();
         } catch { setHasPoints(!next); }
         finally { setTogglingPoints(false); }
     };
 
-    // Generate the scoring table (subtask plan) via the AI session and show it.
+    // The scoring table built from the groups plan (the "Тесты" tab) — no model call.
     const generateScoring = async () => {
         if (!sessionId) return;
         setGeneratingScoring(true);
         try {
-            const res = await api.post('/ai/generate-scoring', { session_id: sessionId });
-            const scoring = res.data?.scoring ?? '';
+            const scoring = (await aiApi.scoring(sessionId)).scoring ?? '';
             setStatements(prev => ({
                 ...prev,
                 [activeLang]: { ...(prev[activeLang] || {} as Statement), scoring },
@@ -725,7 +705,7 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
                                         <button
                                             onClick={generateScoring}
                                             disabled={generatingScoring || !sessionId}
-                                            title={sessionId ? 'Сгенерировать систему оценивания (подзадачи)' : 'Нет активной сессии'}
+                                            title={sessionId ? 'Таблица «Система оценки» из плана групп (вкладка «Тесты»)' : 'Нет активной сессии'}
                                             className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg
                                                        bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400
                                                        hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all disabled:opacity-50"

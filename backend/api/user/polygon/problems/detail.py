@@ -5,9 +5,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.crypt import get_current_user
-from api.user.polygon.problem.get.info import get_problem_info
-from api.user.polygon.problem.get.list import list_problems
-from api.user.polygon.statement.get.setatement import get_statements
+from api.user.polygon.cache import (refresh_problem_info, refresh_problem_list,
+                                    refresh_statements)
 from app.database import get_db
 from models.task.problem import PolygonProblem
 from models.task.test_group import PolygonTestGroup
@@ -31,7 +30,7 @@ async def route_get_problem(
     problem = result.scalars().first()
 
     if problem is None:
-        await list_problems(user_id=user_id, db=db)
+        await refresh_problem_list(user_id, db)
         result = await db.execute(
             select(PolygonProblem).where(
                 PolygonProblem.user_id == user_id,
@@ -80,6 +79,6 @@ async def route_sync_problem(
     db: AsyncSession = Depends(get_db),
 ):
     """Refresh cached info and statements for the problem from Polygon."""
-    await get_problem_info(problem_id=polygon_id, user_id=user_id, db=db)
-    await get_statements(problem_id=polygon_id, user_id=user_id, db=db)
+    await refresh_problem_info(polygon_id, user_id, db)
+    await refresh_statements(polygon_id, user_id, db)
     return {"ok": True}

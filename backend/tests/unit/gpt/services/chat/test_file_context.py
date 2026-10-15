@@ -86,7 +86,7 @@ async def test_ensure_statement_lazy_loads(db, task_session, monkeypatch):
     def fake_extract(raw):
         return {"name": "Loaded", "legend": "L"}
 
-    monkeypatch.setattr(f"{MOD}.get_statements", fake_get_statements)
+    monkeypatch.setattr(f"{MOD}.refresh_statements", fake_get_statements)
     monkeypatch.setattr(f"{MOD}._extract_statement", fake_extract)
     # prevent the file path from running real polygon calls
     async def fake_load_all(*a, **k):
@@ -116,7 +116,7 @@ async def test_reload_from_polygon_loads_statement_and_files(db, task_session, m
     async def fake_load_all(db_, session):
         return 3
 
-    monkeypatch.setattr(f"{MOD}.get_statements", fake_get_statements)
+    monkeypatch.setattr(f"{MOD}.refresh_statements", fake_get_statements)
     monkeypatch.setattr(f"{MOD}._extract_statement", fake_extract)
     monkeypatch.setattr(f"{MOD}._load_all", fake_load_all)
 

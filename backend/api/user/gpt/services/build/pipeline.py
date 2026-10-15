@@ -20,8 +20,7 @@ from api.user.gpt.services.sessions import (append_chat_log, chat_message,
 from api.user.gpt.services.sync.file_sync import ensure_problem, sync_file
 from api.user.gpt.services.sync.settings_sync import sync_settings, sync_tags
 from api.user.gpt.services.sync.statement_sync import sync_statement
-from api.user.polygon.files.test.post.save_test import save_test
-from api.user.polygon.problem.post.commit import commit_changes
+from api.user.polygon.methods import commit_changes, save_test
 from app.database import Session
 from models.task.session import PipelineStage, ProblemType, TaskSession
 

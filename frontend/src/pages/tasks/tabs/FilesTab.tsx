@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, RefreshCw, AlertCircle, Plus, X, FileText, Upload, ChevronRight, DownloadCloud, Sparkles } from 'lucide-react';
 import { api } from '../../../api/instance';
+import { aiApi } from '../../../api/ai';
 import { CodeEditor } from '../../../components/CodeEditor';
 import { SOLUTION_TAGS } from '../FileEditorPage';
 
@@ -82,17 +83,17 @@ const AddFileForm = ({ polygonId, section, sessionId, onUploaded, onClose }: Add
         setGenerating(true);
         setError(null);
         try {
-            const res = await api.post('/ai/generate-solution-code', {
-                session_id: sessionId,
+            if (!sessionId) return;
+            const draft = await aiApi.solutionDraft(sessionId, {
                 tag,
                 name: name.trim() || 'solution.cpp',
                 instruction: instruction.trim() || undefined,
             });
-            if (res.data?.skipped) {
+            if (draft.skipped) {
                 setError(`Не удалось создать решение с гарантированным вердиктом «${tag}»: `
-                    + (res.data.reason || 'нет надёжного алгоритма под этот тег для данной задачи.'));
-            } else if (res.data?.code) {
-                setContent(res.data.code);
+                    + (draft.reason || 'нет надёжного алгоритма под этот тег для данной задачи.'));
+            } else if (draft.code) {
+                setContent(draft.code);
             }
         } catch (e: any) {
             setError(e?.response?.data?.detail || 'Не удалось сгенерировать решение');
@@ -143,12 +144,10 @@ const AddFileForm = ({ polygonId, section, sessionId, onUploaded, onClose }: Add
                     content,
                 });
             }
-            // Pull the just-uploaded file into the AI session so it's part of
-            // the chat/generation context (best-effort — never blocks the add).
+            // Refresh the AI snapshot so the new file is in the chat context at once
+            // (best-effort: the service re-reads the problem before every answer anyway).
             if (sessionId) {
-                try {
-                    await api.post(`/ai/session/${sessionId}/sync-from-polygon`);
-                } catch { /* non-fatal: file is on Polygon regardless */ }
+                aiApi.sync(sessionId).catch(() => { /* non-fatal */ });
             }
             await onUploaded();
             onClose();
@@ -329,8 +328,10 @@ export const FilesTab = ({ polygonId, sessionId }: Props) => {
         setSyncMsg(null);
         setError(null);
         try {
-            const res = await api.post(`/ai/session/${sessionId}/sync-from-polygon`);
-            setSyncMsg(`Загружено в сессию: ${res.data.files ?? 0} файлов${res.data.statement ? ' + условие' : ''}`);
+            const res = await aiApi.sync(sessionId);
+            setSyncMsg(res.skipped
+                ? 'ИИ сейчас работает с задачей — синхронизация после завершения'
+                : res.event ? `Обновлено: ${res.event.title}` : 'Задача прочитана из Polygon, изменений нет');
             await load();
             setTimeout(() => setSyncMsg(null), 4000);
         } catch (e: any) {
@@ -438,7 +439,7 @@ export const FilesTab = ({ polygonId, sessionId }: Props) => {
                     <button
                         onClick={handlePullToSession}
                         disabled={pulling}
-                        title="Загрузить условие и все файлы с Polygon в сессию ИИ и обновить список"
+                        title="Перечитать задачу из Polygon (ИИ увидит актуальные файлы) и обновить список"
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold
                                    bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50
                                    shadow-lg shadow-blue-500/20"

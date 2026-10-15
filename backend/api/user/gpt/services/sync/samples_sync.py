@@ -8,8 +8,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user.polygon.files.test.post.delete_tests import delete_tests
-from api.user.polygon.files.test.post.save_test import save_test
+from api.user.polygon.methods import delete_tests, save_test
 
 logger = logging.getLogger(__name__)
 

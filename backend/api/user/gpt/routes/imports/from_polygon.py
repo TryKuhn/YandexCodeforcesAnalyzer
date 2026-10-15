@@ -7,7 +7,7 @@ from api.pydantic_schemas.user.ai_task import ImportFromPolygonRequest
 from api.user.gpt.base_gpt import gpt_router
 from api.user.gpt.services.llm.models import normalize_model
 from api.user.gpt.services.sessions import new_id, now_utc
-from api.user.polygon.statement.get.setatement import get_statements
+from api.user.polygon.cache import refresh_statements
 from app.database import get_db
 from models.task.session import PipelineStage, ProblemType, TaskSession
 
@@ -35,7 +35,7 @@ async def import_from_polygon(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new task session seeded from an existing Polygon statement."""
-    raw = await get_statements(request.polygon_problem_id, user_id, db)
+    raw = await refresh_statements(request.polygon_problem_id, user_id, db)
     statement = _extract_statement(raw)
 
     ts = now_utc()

@@ -9,12 +9,12 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.crypt import get_current_user
-from api.user.gpt.services.llm.models import DEFAULT_MODEL
 from api.user.polygon.archive.jobs import create_job, get_job
 from api.user.polygon.archive.parser import polygon_prefix_from_archive
 from api.user.polygon.archive.uploader import run_import
 from api.user.polygon.client import get_user
 from app.database import get_db
+from settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ async def route_import_archive(
     file: UploadFile,
     prefix: str | None = Form(None),
     generate_ai: bool = Form(True),
-    ai_model: str = Form(DEFAULT_MODEL),
+    ai_model: str = Form(settings.AI_DEFAULT_MODEL),
     build_package: bool = Form(True),
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -78,6 +78,7 @@ async def route_import_archive(
             api_key=user.polygon_api_key or "",
             api_secret=user.polygon_api_secret or "",
             prefix=resolved_prefix,
+            user_id=user_id,
             generate_ai=generate_ai,
             ai_model=ai_model,
             build_pkg=build_package,

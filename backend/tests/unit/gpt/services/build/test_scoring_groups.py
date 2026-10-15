@@ -18,8 +18,9 @@ def test_parse_scoring_groups_extracts_rows_skipping_zero():
     groups = sg.parse_scoring_groups(_TABLE)
     assert [g["group"] for g in groups] == ["1", "2"]
     assert groups[0]["points"] == 30
-    assert groups[0]["feedback_policy"] == "icpc"
-    assert groups[1]["feedback_policy"] == "complete"
+    # Polygon expects upper-case enum values (feedbackPolicy=ICPC/COMPLETE).
+    assert groups[0]["feedback_policy"] == "ICPC"
+    assert groups[1]["feedback_policy"] == "COMPLETE"
 
 
 def test_parse_scoring_groups_no_table():
@@ -31,7 +32,7 @@ def test_subtasks_to_groups_maps_fields():
     subs = [{"group": "1", "points": 40, "depends_on": ["0"], "num_tests": 6}]
     assert sg.subtasks_to_groups(subs) == [{
         "group": "1", "points": 40, "dependencies": ["0"],
-        "feedback_policy": "icpc", "num_tests": 6,
+        "feedback_policy": "ICPC", "num_tests": 6,
     }]
 
 
@@ -68,7 +69,12 @@ async def test_setup_groups_and_points_enables_and_configures(monkeypatch):
         subtasks=subs,
     )
     assert calls["groups"] == 1 and calls["points"] == 1
-    assert calls["save"][0]["points_policy"] == "complete-group"
+    save = calls["save"][0]
+    # Was "complete-group" — Polygon only accepts COMPLETE_GROUP / EACH_TEST.
+    assert save["points_policy"] == "COMPLETE_GROUP"
+    assert save["feedback_policy"] == "ICPC"
+    # saveTestGroup has no `points` param: group points live on its tests.
+    assert "points" not in save
     assert groups[0]["points"] == 100
 
 
@@ -109,6 +115,7 @@ async def test_assign_tests_to_groups_sets_ranges_and_points(monkeypatch):
     mapping = await sg.assign_tests_to_groups("s", 1, 2, groups, None)
 
     assert mapping == {"1": [2, 3], "2": [4, 5]}
+    assert set_calls == [("1", [2, 3]), ("2", [4, 5])]
     assert points_calls[0]["test_index"] == 2
     assert points_calls[0]["test_points"] == 40.0
     assert points_calls[0]["test_input"] is None

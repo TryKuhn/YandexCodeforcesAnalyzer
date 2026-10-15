@@ -3,7 +3,6 @@ from datetime import datetime
 
 import pytest
 
-import api.user.polygon.problems.list as mod
 from api.user.polygon.problems.list import (
     _get_statement_names,
     _serialize,
@@ -72,19 +71,15 @@ async def test_route_list_problems_no_refresh(db, user):
 
 
 @pytest.mark.asyncio
-async def test_route_list_problems_refresh_calls_list(monkeypatch, db, user):
-    called = {}
-
-    async def fake_list_problems(user_id, db, show_deleted):
-        called["yes"] = (user_id, show_deleted)
-
-    monkeypatch.setattr(mod, "list_problems", fake_list_problems)
+async def test_route_list_problems_refresh_calls_list(polygon_api, db, user):
+    polygon_api.respond("problems.list", [{"id": 77, "owner": "o", "name": "fresh"}])
     result = await route_list_problems(
         refresh=True, show_deleted=False, page=1, per_page=20,
         search="", user_id=user.id, db=db,
     )
-    assert called["yes"] == (user.id, False)
-    assert result["total"] == 0
+    assert polygon_api.methods == ["problems.list"]
+    assert result["total"] == 1
+    assert result["items"][0]["polygon_id"] == 77
 
 
 @pytest.mark.asyncio

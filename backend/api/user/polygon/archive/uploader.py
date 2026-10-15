@@ -10,15 +10,12 @@ job status for the frontend to poll.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import time
 from pathlib import Path
 
 import aiohttp
 
-from api.user.gpt.services.generation.checker_validator_gen import \
-    generate_checker_validator
+from api.user.ai.client import generate_checker_validator
 from api.user.polygon.archive.jobs import ImportJob, ProblemStatus
 from api.user.polygon.archive.parser import (
     SOURCE_EXTENSIONS,
@@ -26,8 +23,8 @@ from api.user.polygon.archive.parser import (
     parse_archive,
     render_section,
 )
-from api.user.polygon.create_signature import create_signature
-from settings import settings
+from api.user.polygon.client import (REQUEST_TIMEOUT, PolygonAPIError,
+                                     decode_text, request)
 
 logger = logging.getLogger(__name__)
 
@@ -38,26 +35,19 @@ archives with hundreds of tests."""
 TESTLIB_PATH = Path(__file__).parent / "assets" / "testlib.h"
 
 
-class PolygonError(Exception):
-    """Raised when a Polygon API call fails after retries."""
+# Former import-specific error; now the shared Polygon client error.
+PolygonError = PolygonAPIError
 
-
-def decode_text(data: bytes) -> str:
-    """Decode bytes to str, trying utf-8 then cp1251, falling back to latin-1.
-
-    Polygon requires every parameter (including file contents) to participate
-    in the request signature as a string.
-    """
-    for enc in ("utf-8", "cp1251"):
-        try:
-            return data.decode(enc)
-        except UnicodeDecodeError:
-            continue
-    return data.decode("latin-1")
+# Methods whose bytes are real binary (statement images): do not decode them
+# to text, the core sends them as a multipart field outside the signature.
+_BINARY_METHODS = frozenset({"problem.saveStatementResource"})
 
 
 class PolygonImportClient:
-    """Polygon API client with a shared session, retries and a concurrency semaphore."""
+    """Import client: a shared HTTP session + a cap on concurrent requests.
+
+    Signing, response parsing and retries live in ``api.user.polygon.client``.
+    """
 
     def __init__(self, api_key: str, api_secret: str):
         """Store credentials and create the request semaphore (session opens on enter)."""
@@ -68,9 +58,7 @@ class PolygonImportClient:
 
     async def __aenter__(self) -> "PolygonImportClient":
         """Open the shared aiohttp session with a 5-minute total timeout."""
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=300)
-        )
+        self.session = aiohttp.ClientSession(timeout=REQUEST_TIMEOUT)
         return self
 
     async def __aexit__(self, *exc) -> None:
@@ -79,60 +67,25 @@ class PolygonImportClient:
             await self.session.close()
 
     async def call(self, method: str, **params):
-        """Call a Polygon API method, signing the request and retrying on failure.
+        """Call a Polygon method over the shared session; return ``result``.
 
-        ``None`` params are dropped and ``bytes`` values decoded to str. Up to
-        three attempts handle transient failures: network/timeout errors, HTTP
-        5xx, an expired timestamp (the time and signature are recomputed inside
-        the semaphore so a queued request's timestamp stays within Polygon's
-        5-minute window), and rate-limit responses, each with a backoff.
-        Returns the ``result`` field on success, ``{}`` for non-JSON HTTP 200,
-        and raises ``PolygonError`` otherwise.
+        Archive sources and tests may be cp1251, so ``bytes`` (except images)
+        are decoded to text -- Polygon signs them as strings.
         """
         if self.session is None:
-            raise PolygonError(f"{method}: HTTP-сессия не инициализирована")
-        text = {
-            k: decode_text(v) if isinstance(v, bytes) else str(v)
-            for k, v in params.items()
-            if v is not None
-        }
-        last_err: Exception = PolygonError(f"{method}: неизвестная ошибка")
-        for attempt in range(1, 4):
-            try:
-                async with self.semaphore:
-                    full = {"apiKey": self.api_key, "time": str(int(time.time())), **text}
-                    full["apiSig"] = create_signature(method, full, self.api_secret)
-                    async with self.session.post(
-                        f"{settings.POLYGON_HOST.rstrip('/')}/{method}", data=full
-                    ) as resp:
-                        body = await resp.text()
-                        status = resp.status
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                last_err = PolygonError(f"{method}: {e!r}")
-                await asyncio.sleep(2 * attempt)
-                continue
-            try:
-                result = json.loads(body)
-            except ValueError:
-                if status >= 500:
-                    last_err = PolygonError(f"{method}: HTTP {status}: {body[:200]}")
-                    await asyncio.sleep(2 * attempt)
-                    continue
-                if status != 200:
-                    raise PolygonError(f"{method}: HTTP {status}: {body[:300]}")
-                return {}
-            if result.get("status") == "OK":
-                return result.get("result")
-            comment = result.get("comment", body[:300])
-            if "not within 5 minutes" in comment:
-                last_err = PolygonError(f"{method}: {comment}")
-                continue
-            if any(s in comment.lower() for s in ("too many", "try again later", "limit exceeded")):
-                last_err = PolygonError(f"{method}: {comment}")
-                await asyncio.sleep(3 * attempt)
-                continue
-            raise PolygonError(f"{method}: {comment}")
-        raise last_err
+            raise PolygonError(f"{method}: HTTP-сессия не инициализирована", method=method)
+        if method not in _BINARY_METHODS:
+            params = {
+                k: decode_text(v) if isinstance(v, bytes) else v for k, v in params.items()
+            }
+        async with self.semaphore:
+            return await request(
+                method,
+                params,
+                api_key=self.api_key,
+                api_secret=self.api_secret,
+                session=self.session,
+            )
 
 
 async def save_source_with_testlib_retry(
@@ -179,6 +132,7 @@ async def upload_task(
     generate_ai: bool,
     ai_model: str,
     build_pkg: bool,
+    user_id: int | None = None,
 ) -> None:
     """Upload one parsed problem to Polygon through the strict stage order.
 
@@ -205,101 +159,107 @@ async def upload_task(
     status.polygon_id = problem_id
 
     ai_task: asyncio.Task | None = None
-    if generate_ai and st is not None:
-        ai_task = asyncio.create_task(generate_checker_validator(st, ai_model))
+    if generate_ai and st is not None and user_id is not None:
+        ai_task = asyncio.create_task(generate_checker_validator(st, ai_model, user_id=user_id))
 
-    status.stage = "statement"
-    if st:
-        await client.call(
-            "problem.updateInfo",
-            problemId=problem_id,
-            inputFile=st.input_file,
-            outputFile=st.output_file,
-            timeLimit=st.time_limit_ms or 1000,
-            memoryLimit=st.memory_limit_mb or 256,
-        )
-        await client.call(
-            "problem.saveStatement",
-            problemId=problem_id,
-            lang="russian",
-            encoding="utf-8",
-            name=st.title or f"Задача {task.name}",
-            legend=render_section(st.legend),
-            input=render_section(st.input_format),
-            output=render_section(st.output_format),
-            scoring=render_section(st.scoring) or None,
-            notes=render_section(st.notes) or None,
-        )
-        status.images_total = len(st.images)
-        for img_name, img_data in st.images:
+    try:
+        status.stage = "statement"
+        if st:
             await client.call(
-                "problem.saveStatementResource",
+                "problem.updateInfo",
                 problemId=problem_id,
-                name=img_name,
-                file=img_data,
+                inputFile=st.input_file,
+                outputFile=st.output_file,
+                timeLimit=st.time_limit_ms or 1000,
+                memoryLimit=st.memory_limit_mb or 256,
             )
-        status.note(
-            f"условие загружено (картинок: {len(st.images)}), "
-            f"лимиты {st.time_limit_ms or 1000} мс / {st.memory_limit_mb or 256} МБ"
-        )
+            await client.call(
+                "problem.saveStatement",
+                problemId=problem_id,
+                lang="russian",
+                encoding="utf-8",
+                name=st.title or f"Задача {task.name}",
+                legend=render_section(st.legend),
+                input=render_section(st.input_format),
+                output=render_section(st.output_format),
+                scoring=render_section(st.scoring) or None,
+                notes=render_section(st.notes) or None,
+            )
+            status.images_total = len(st.images)
+            for img_name, img_data in st.images:
+                await client.call(
+                    "problem.saveStatementResource",
+                    problemId=problem_id,
+                    name=img_name,
+                    file=img_data,
+                )
+            status.note(
+                f"условие загружено (картинок: {len(st.images)}), "
+                f"лимиты {st.time_limit_ms or 1000} мс / {st.memory_limit_mb or 256} МБ"
+            )
 
-    if task.groups:
-        await client.call("problem.enablePoints", problemId=problem_id, enable="true")
-        await client.call(
-            "problem.enableGroups", problemId=problem_id, testset=TESTSET, enable="true"
-        )
+        if task.groups:
+            await client.call("problem.enablePoints", problemId=problem_id, enable=True)
+            await client.call(
+                "problem.enableGroups", problemId=problem_id, testset=TESTSET, enable=True
+            )
 
-    status.stage = "files"
-    uploadable = [
-        s for s in task.solutions
-        if ("." + s.name.rsplit(".", 1)[-1].lower() if "." in s.name else "")
-        in SOURCE_EXTENSIONS
-    ]
-    skipped = [s.name for s in task.solutions if s not in uploadable]
+        status.stage = "files"
+        uploadable = [
+            s for s in task.solutions
+            if ("." + s.name.rsplit(".", 1)[-1].lower() if "." in s.name else "")
+            in SOURCE_EXTENSIONS
+        ]
+        skipped = [s.name for s in task.solutions if s not in uploadable]
 
-    if uploadable and not any(s.tag == "MA" for s in uploadable):
-        cand = next((s for s in uploadable if s.tag == "OK"), uploadable[0])
-        cand.tag = "MA"
-        status.note(f"{cand.name} назначено главным решением (MA)")
-    status.solutions_total = len(uploadable) or 1
+        if uploadable and not any(s.tag == "MA" for s in uploadable):
+            cand = next((s for s in uploadable if s.tag == "OK"), uploadable[0])
+            cand.tag = "MA"
+            status.note(f"{cand.name} назначено главным решением (MA)")
+        status.solutions_total = len(uploadable) or 1
 
-    async def upload_solution(sol) -> None:
-        """Save one solution and bump the done counter."""
-        await client.call(
-            "problem.saveSolution",
-            problemId=problem_id,
-            name=sol.name,
-            file=sol.data,
-            tag=sol.tag,
-            checkExisting="false",
-        )
-        status.solutions_done += 1
+        async def upload_solution(sol) -> None:
+            """Save one solution and bump the done counter."""
+            await client.call(
+                "problem.saveSolution",
+                problemId=problem_id,
+                name=sol.name,
+                file=sol.data,
+                tag=sol.tag,
+                checkExisting=False,
+            )
+            status.solutions_done += 1
 
-    if uploadable:
-        results = await asyncio.gather(
-            *(upload_solution(s) for s in uploadable), return_exceptions=True
-        )
-        errors = [r for r in results if isinstance(r, Exception)]
-        if errors:
-            raise PolygonError(f"решения: {errors[0]}")
-    else:
-        await client.call(
-            "problem.saveSolution",
-            problemId=problem_id,
-            name="empty.py",
-            file=b"",
-            tag="MA",
-            checkExisting="false",
-        )
-        status.solutions_done = 1
-        status.note("исходников нет — добавлено пустое empty.py (MAIN) для задачи с открытыми тестами")
-    if skipped:
-        status.note(f"пропущено (не исходник): {', '.join(skipped)}")
-    if task.dropped_tests:
-        status.note(
-            f"пропущены дубликаты тестов ({len(task.dropped_tests)}): "
-            + ", ".join(task.dropped_tests)
-        )
+        if uploadable:
+            results = await asyncio.gather(
+                *(upload_solution(s) for s in uploadable), return_exceptions=True
+            )
+            errors = [r for r in results if isinstance(r, Exception)]
+            if errors:
+                raise PolygonError(f"решения: {errors[0]}")
+        else:
+            await client.call(
+                "problem.saveSolution",
+                problemId=problem_id,
+                name="empty.py",
+                file=b"",
+                tag="MA",
+                checkExisting=False,
+            )
+            status.solutions_done = 1
+            status.note("исходников нет — добавлено пустое empty.py (MAIN) для задачи с открытыми тестами")
+        if skipped:
+            status.note(f"пропущено (не исходник): {', '.join(skipped)}")
+        if task.dropped_tests:
+            status.note(
+                f"пропущены дубликаты тестов ({len(task.dropped_tests)}): "
+                + ", ".join(task.dropped_tests)
+            )
+    except BaseException:
+        # the upload failed or was cancelled: do not leave the AI call running (and billing)
+        if ai_task is not None:
+            ai_task.cancel()
+        raise
 
     if ai_task is not None:
         try:
@@ -353,8 +313,8 @@ async def upload_task(
             testInput=tst.data,
             testGroup=tst.group,
             testPoints=tst.points,
-            testUseInStatements="true" if tst.is_sample else None,
-            checkExisting="false",
+            testUseInStatements=True if tst.is_sample else None,
+            checkExisting=False,
         )
         status.tests_done += 1
 
@@ -386,14 +346,14 @@ async def upload_task(
     await client.call(
         "problem.commitChanges",
         problemId=problem_id,
-        minorChanges="true",
+        minorChanges=True,
         message="Импорт из архива",
     )
 
     if build_pkg:
         status.stage = "build"
         await client.call(
-            "problem.buildPackage", problemId=problem_id, full="true", verify="true"
+            "problem.buildPackage", problemId=problem_id, full=True, verify=True
         )
         status.note("пакет отправлен на сборку")
 
@@ -410,6 +370,7 @@ async def run_import(
     generate_ai: bool,
     ai_model: str,
     build_pkg: bool,
+    user_id: int | None = None,
 ) -> None:
     """Background entry point: parse the archive and upload every problem.
 
@@ -446,6 +407,7 @@ async def run_import(
                         generate_ai=generate_ai,
                         ai_model=ai_model,
                         build_pkg=build_pkg,
+                        user_id=user_id if user_id is not None else job.user_id,
                     )
                     for task, st in zip(tasks, job.problems)
                 ),

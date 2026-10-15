@@ -4,8 +4,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user.gpt.services.sync.file_sync import ensure_problem
-from api.user.polygon.problem.post.commit import commit_changes
-from api.user.polygon.statement.post.statement import save_statement
+from api.user.polygon.methods import commit_changes, save_statement
 from models.task.session import ProblemType, TaskSession
 
 logger = logging.getLogger(__name__)
@@ -33,16 +32,17 @@ async def sync_statement(
     await save_statement(
         problem_id=problem_id,
         lang=lang,
-        name=statement.get("name", ""),
-        legend=statement.get("legend", ""),
-        input_legend=statement.get("input", ""),
-        output_legend=statement.get("output", ""),
-        notes=statement.get("notes"),
-        tutorial=statement.get("tutorial"),
-        scoring=statement.get("scoring", ""),
-        interaction=interaction_text,
         user_id=session.user_id,
         db=db,
+        encoding="utf-8",
+        name=statement.get("name", ""),
+        legend=statement.get("legend", ""),
+        input=statement.get("input", ""),
+        output=statement.get("output", ""),
+        notes=statement.get("notes") or None,
+        tutorial=statement.get("tutorial") or None,
+        scoring=statement.get("scoring") or None,
+        interaction=interaction_text or None,
     )
 
     if polygon_commit:

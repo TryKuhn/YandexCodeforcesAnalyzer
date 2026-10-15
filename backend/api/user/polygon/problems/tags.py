@@ -5,8 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.crypt import get_current_user
 from api.pydantic_schemas.user.polygon_task import UpdateTagsRequest
-from api.user.polygon.problem.get.tags import view_tags
-from api.user.polygon.problem.settings.set_tags import set_tags
+from api.user.polygon.methods import save_tags, view_tags
 from app.database import get_db
 
 router = APIRouter()
@@ -19,8 +18,7 @@ async def route_get_tags(
     db: AsyncSession = Depends(get_db),
 ):
     """Return the problem's tags from Polygon."""
-    tags = await view_tags(problem_id=polygon_id, user_id=user_id, db=db)
-    return {"tags": tags}
+    return {"tags": await view_tags(polygon_id, user_id, db)}
 
 
 @router.patch("/{polygon_id}/tags")
@@ -30,11 +28,6 @@ async def route_set_tags(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Set the problem's tags on Polygon (sent as a comma-separated string)."""
-    await set_tags(
-        problem_id=polygon_id,
-        tags=",".join(body.tags),
-        user_id=user_id,
-        db=db,
-    )
+    """Replace the problem's tags on Polygon."""
+    await save_tags(polygon_id, body.tags, user_id, db)
     return {"ok": True}

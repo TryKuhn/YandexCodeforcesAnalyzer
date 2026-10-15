@@ -15,7 +15,7 @@ async def test_import_from_polygon_creates_session(db, user, monkeypatch):
         return {"russian": {"name": "Имя", "legend": "Лег", "input": "in",
                             "output": "out", "notes": "n", "tutorial": "t"}}
 
-    monkeypatch.setattr(mod, "get_statements", fake_get_statements)
+    monkeypatch.setattr(mod, "refresh_statements", fake_get_statements)
     monkeypatch.setattr(mod, "normalize_model", lambda m: m)
 
     req = ImportFromPolygonRequest(polygon_problem_id=42, model="m")

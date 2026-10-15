@@ -57,12 +57,12 @@ def _patch(monkeypatch, **overrides):
         return _f
 
     defaults = {
-        "get_statements": {"russian": {"name": "P", "legend": "L"}},
-        "get_problem_info": {},
+        "refresh_statements": {"russian": {"name": "P", "legend": "L"}},
+        "refresh_problem_info": {},
         "view_tags": [],
         "get_files": {"sourceFiles": []},
         "view_file": "",
-        "get_solutions": [],
+        "refresh_solutions": [],
         "view_solution": "",
         "get_script": "",
         "get_tests": [],
@@ -78,7 +78,7 @@ def _patch(monkeypatch, **overrides):
 @pytest.mark.asyncio
 async def test_import_full_regular_mapping(db, user, monkeypatch):
     _patch(monkeypatch,
-           get_problem_info={"inputFile": "in.txt", "outputFile": "out.txt",
+           refresh_problem_info={"inputFile": "in.txt", "outputFile": "out.txt",
                              "interactive": False, "timeLimit": 1000,
                              "memoryLimit": 512},
            view_tags=["dp", "math"])
@@ -105,7 +105,7 @@ async def test_import_full_regular_mapping(db, user, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_import_full_interactive_maps_problem_type(db, user, monkeypatch):
-    _patch(monkeypatch, get_problem_info={"interactive": True})
+    _patch(monkeypatch, refresh_problem_info={"interactive": True})
     res = await imp.import_full(db, user.id, 1, "m", load_files=False)
     assert res["problem_type"] == ProblemType.INTERACTIVE
     assert res["problem_settings"]["interactive"] is True
@@ -118,7 +118,7 @@ async def test_import_full_defaults_when_info_fails(db, user, monkeypatch):
     async def boom(*a, **kw):
         raise RuntimeError("polygon down")
 
-    monkeypatch.setattr(imp, "get_problem_info", boom)
+    monkeypatch.setattr(imp, "refresh_problem_info", boom)
     res = await imp.import_full(db, user.id, 1, "m", load_files=False)
     ps = res["problem_settings"]
     assert ps["input_file"] == "stdin"
@@ -168,7 +168,7 @@ async def test_import_full_loads_source_files(db, user, monkeypatch):
 @pytest.mark.asyncio
 async def test_import_full_loads_solutions_by_tag_and_custom(db, user, monkeypatch):
     _patch(monkeypatch,
-           get_solutions=[
+           refresh_solutions=[
                {"name": "main.cpp", "tag": "MA"},
                {"name": "slow.cpp", "tag": "TL"},
                {"name": "weird.cpp", "tag": "XYZ"},  # unknown → custom
@@ -193,7 +193,7 @@ async def test_import_full_loads_solutions_by_tag_and_custom(db, user, monkeypat
 async def test_import_full_solution_default_tag_ok(db, user, monkeypatch):
     # missing/empty tag defaults to OK → which is unknown in _TAG_TO_TYPE → custom
     _patch(monkeypatch,
-           get_solutions=[{"name": "s.cpp"}],
+           refresh_solutions=[{"name": "s.cpp"}],
            view_solution=lambda *a, **kw: "code")
     res = await imp.import_full(db, user.id, 3, "m", load_files=True)
     assert any(k.startswith("sol_custom_") for k in res["technical_data"])

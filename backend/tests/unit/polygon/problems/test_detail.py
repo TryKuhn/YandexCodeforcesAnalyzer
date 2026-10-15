@@ -2,7 +2,6 @@
 import pytest
 from fastapi import HTTPException
 
-import api.user.polygon.problems.detail as mod
 from api.user.polygon.problems.detail import route_get_problem, route_sync_problem
 from models.task.problem import PolygonProblem
 from models.task.test_group import PolygonTestGroup
@@ -42,41 +41,30 @@ async def test_route_get_problem_with_test_groups(db, user):
 
 
 @pytest.mark.asyncio
-async def test_route_get_problem_populates_via_list(monkeypatch, db, user):
-    # No cache initially; list_problems seeds it so the second lookup succeeds.
-    async def fake_list_problems(user_id, db):
-        await _seed_problem(db, user, polygon_id=999)
-
-    monkeypatch.setattr(mod, "list_problems", fake_list_problems)
+async def test_route_get_problem_populates_via_list(polygon_api, db, user):
+    # No cache initially; problems.list seeds it so the second lookup succeeds.
+    polygon_api.respond("problems.list", [{"id": 999, "owner": "o", "name": "new"}])
     result = await route_get_problem(polygon_id=999, user_id=user.id, db=db)
     assert result["polygon_id"] == 999
+    assert result["name"] == "new"
 
 
 @pytest.mark.asyncio
-async def test_route_get_problem_404(monkeypatch, db, user):
-    async def fake_list_problems(user_id, db):
-        return None  # does not seed anything
-
-    monkeypatch.setattr(mod, "list_problems", fake_list_problems)
+async def test_route_get_problem_404(polygon_api, db, user):
+    polygon_api.respond("problems.list", [])
     with pytest.raises(HTTPException) as exc:
         await route_get_problem(polygon_id=12345, user_id=user.id, db=db)
     assert exc.value.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_route_sync_problem(monkeypatch, db, user):
-    calls = {}
-
-    async def fake_get_problem_info(problem_id, user_id, db):
-        calls["info"] = (problem_id, user_id)
-
-    async def fake_get_statements(problem_id, user_id, db):
-        calls["stmt"] = (problem_id, user_id)
-
-    monkeypatch.setattr(mod, "get_problem_info", fake_get_problem_info)
-    monkeypatch.setattr(mod, "get_statements", fake_get_statements)
+async def test_route_sync_problem_refreshes_info_and_statements(polygon_api, db, user):
+    p = await _seed_problem(db, user)
+    polygon_api.respond("problem.info", {"timeLimit": 3000, "memoryLimit": 64})
+    polygon_api.respond("problem.statements", {"russian": {"name": "Имя"}})
 
     result = await route_sync_problem(polygon_id=555, user_id=user.id, db=db)
     assert result == {"ok": True}
-    assert calls["info"] == (555, user.id)
-    assert calls["stmt"] == (555, user.id)
+    assert polygon_api.methods == ["problem.info", "problem.statements"]
+    await db.refresh(p)
+    assert (p.time_limit, p.memory_limit) == (3000, 64)

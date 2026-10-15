@@ -4,9 +4,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user.gpt.services.sync.file_sync import ensure_problem
-from api.user.polygon.problem.post.commit import commit_changes
-from api.user.polygon.problem.settings.set_tags import set_tags
-from api.user.polygon.problem.settings.update_info import update_info
+from api.user.polygon.methods import commit_changes, save_tags, update_info
 from models.task.session import ProblemType, TaskSession
 
 logger = logging.getLogger(__name__)
@@ -27,15 +25,16 @@ async def sync_settings(
     problem_id = await ensure_problem(db, session)
     is_interactive = session.problem_type == ProblemType.INTERACTIVE
 
+    # Empty / zero settings mean "not set" — leave those fields as they are.
     await update_info(
-        problem_id=problem_id,
-        input_file_name=problem_settings.get("input_file", ""),
-        output_file_name=problem_settings.get("output_file", ""),
+        problem_id,
+        session.user_id,
+        db,
+        input_file=problem_settings.get("input_file") or None,
+        output_file=problem_settings.get("output_file") or None,
         interactive=is_interactive,
-        time_limit=problem_settings.get("time_limit", 0),
-        memory_limit=problem_settings.get("memory_limit", 0),
-        user_id=session.user_id,
-        db=db,
+        time_limit=problem_settings.get("time_limit") or None,
+        memory_limit=problem_settings.get("memory_limit") or None,
     )
 
     if polygon_commit:
@@ -57,7 +56,7 @@ async def sync_tags(
     """Push the problem tag list (comma-joined) to Polygon."""
     problem_id = await ensure_problem(db, session)
     if tags:
-        await set_tags(problem_id, ",".join(tags), session.user_id, db)
+        await save_tags(problem_id, tags, session.user_id, db)
         if polygon_commit:
             await commit_changes(
                 problem_id, session.user_id, db,

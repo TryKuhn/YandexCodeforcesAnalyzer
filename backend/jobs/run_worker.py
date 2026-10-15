@@ -6,6 +6,8 @@ from redis.asyncio import Redis
 
 from api.judge.grading import JOB_TYPE as JUDGE_JOB
 from api.judge.grading import make_handler as make_judge_handler
+from api.user.ejudge.export import JOB_TYPE as EJUDGE_EXPORT_JOB
+from api.user.ejudge.export import make_handler as make_ejudge_handler
 from app.database import Session
 from blobs import BlobStore
 from jobs.transport import RedisStreamTransport
@@ -15,7 +17,10 @@ from settings import settings
 
 def build_handlers() -> dict[str, Handler]:
     """Job types this worker knows how to run."""
-    return {JUDGE_JOB: make_judge_handler(Session, BlobStore())}
+    return {
+        JUDGE_JOB: make_judge_handler(Session, BlobStore()),
+        EJUDGE_EXPORT_JOB: make_ejudge_handler(Session),
+    }
 
 
 async def main() -> None:

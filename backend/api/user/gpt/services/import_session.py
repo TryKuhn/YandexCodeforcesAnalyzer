@@ -12,16 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user.gpt.services.ai_file_helpers import upsert_ai_file
 from api.user.gpt.services.sessions import new_id, now_utc
-from api.user.polygon.files.get.files import get_files
-from api.user.polygon.files.get.view_file import view_file
-from api.user.polygon.files.script.get.script import get_script
-from api.user.polygon.files.solution.get.solutions import get_solutions
-from api.user.polygon.files.solution.get.view_solution import view_solution
-from api.user.polygon.files.test.get.test_input import get_test_input
-from api.user.polygon.files.test.get.tests import get_tests
-from api.user.polygon.problem.get.info import get_problem_info
-from api.user.polygon.problem.get.tags import view_tags
-from api.user.polygon.statement.get.setatement import get_statements
+from api.user.polygon.cache import (refresh_problem_info, refresh_solutions,
+                                    refresh_statements)
+from api.user.polygon.methods import (get_files, get_script, get_test_input,
+                                      get_tests, view_file, view_solution,
+                                      view_tags)
 from models.task.session import PipelineStage, ProblemType, TaskSession
 
 logger = logging.getLogger(__name__)
@@ -83,7 +78,7 @@ async def _load_solutions(db, session, problem_id, user_id, tech_data) -> None:
     Unknown tags get a ``sol_custom_<hex>`` type recorded in ``solution_meta``.
     """
     try:
-        solutions = await get_solutions(problem_id, user_id, db)
+        solutions = await refresh_solutions(problem_id, user_id, db)
         solution_meta = {}
         for sol in solutions:
             name = sol.get("name", "")
@@ -107,11 +102,11 @@ async def _load_solutions(db, session, problem_id, user_id, tech_data) -> None:
 async def import_full(db: AsyncSession, user_id: int, problem_id: int,
                       model: str, load_files: bool) -> dict:
     """Build and persist a session from a Polygon problem. Returns the response."""
-    raw_stmts = await get_statements(problem_id, user_id, db)
+    raw_stmts = await refresh_statements(problem_id, user_id, db)
     statement = _extract_statement(raw_stmts)
 
     try:
-        info = await get_problem_info(problem_id, user_id, db)
+        info = await refresh_problem_info(problem_id, user_id, db)
     except Exception:
         info = {}
 

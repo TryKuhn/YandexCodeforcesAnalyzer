@@ -3,7 +3,7 @@
 The agent talks to OpenRouter via httpx directly (not the llm client), so we
 replace httpx.AsyncClient in the module with a fake that returns a scripted
 sequence of chat-completion responses. Live-read tools (get_file / get_solutions
-/ get_solution_content) go through ``get_user`` + ``polygon_call`` which we patch
+/ get_solution_content) go through the ``methods`` wrappers which we patch
 in the module namespace; cache-backed tools use the real ``db`` fixture.
 """
 import base64
@@ -218,15 +218,11 @@ async def test_execute_tool_get_tests_empty(db, user):
 
 @pytest.mark.asyncio
 async def test_execute_tool_get_file_live(db, user, monkeypatch):
-    async def fake_get_user(uid, db):
-        return object()
+    async def fake_view_file(problem_id, file_type, name, user_id, db_):
+        assert (problem_id, file_type, name, user_id) == (555, "source", "a.cpp", user.id)
+        return "file-content"
 
-    async def fake_polygon_call(method, params, user):
-        assert method == "problem.viewFile"
-        return {"message": "file-content"}
-
-    monkeypatch.setattr(pa, "get_user", fake_get_user)
-    monkeypatch.setattr(pa, "polygon_call", fake_polygon_call)
+    monkeypatch.setattr(pa, "view_file", fake_view_file)
     out = await pa._execute_tool("get_file", {"file_type": "source", "name": "a.cpp"},
                                  555, db, user.id)
     assert out == "file-content"
@@ -234,14 +230,10 @@ async def test_execute_tool_get_file_live(db, user, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_execute_tool_get_solutions_live(db, user, monkeypatch):
-    async def fake_get_user(uid, db):
-        return object()
-
-    async def fake_polygon_call(method, params, user):
+    async def fake_get_solutions(problem_id, user_id, db_):
         return [{"name": "main.cpp", "tag": "MA"}, {"name": "bad.cpp", "tag": "WA"}]
 
-    monkeypatch.setattr(pa, "get_user", fake_get_user)
-    monkeypatch.setattr(pa, "polygon_call", fake_polygon_call)
+    monkeypatch.setattr(pa, "get_solutions", fake_get_solutions)
     out = await pa._execute_tool("get_solutions", {}, 555, db, user.id)
     data = json.loads(out)
     assert {"name": "main.cpp", "tag": "MA"} in data
@@ -249,14 +241,11 @@ async def test_execute_tool_get_solutions_live(db, user, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_execute_tool_get_solution_content_live(db, user, monkeypatch):
-    async def fake_get_user(uid, db):
-        return object()
+    async def fake_view_solution(problem_id, name, user_id, db_):
+        assert name == "main.cpp"
+        return "int main(){}"
 
-    async def fake_polygon_call(method, params, user):
-        return {"message": "int main(){}"}
-
-    monkeypatch.setattr(pa, "get_user", fake_get_user)
-    monkeypatch.setattr(pa, "polygon_call", fake_polygon_call)
+    monkeypatch.setattr(pa, "view_solution", fake_view_solution)
     out = await pa._execute_tool("get_solution_content", {"name": "main.cpp"},
                                  555, db, user.id)
     assert out == "int main(){}"
@@ -264,10 +253,10 @@ async def test_execute_tool_get_solution_content_live(db, user, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_execute_tool_error_is_caught(db, user, monkeypatch):
-    async def boom(uid, db):
+    async def boom(*a, **kw):
         raise RuntimeError("network")
 
-    monkeypatch.setattr(pa, "get_user", boom)
+    monkeypatch.setattr(pa, "view_file", boom)
     out = await pa._execute_tool("get_file", {"file_type": "source", "name": "a"},
                                  555, db, user.id)
     assert out.startswith("Tool error:")

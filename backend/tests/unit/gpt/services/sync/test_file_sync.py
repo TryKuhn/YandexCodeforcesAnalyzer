@@ -19,7 +19,7 @@ def _patch_setters(monkeypatch):
     """
     calls = []
     for name in (
-        "set_validator", "set_generator", "set_checker", "set_interactor",
+        "upload_validator", "save_file", "upload_checker", "upload_interactor",
         "save_script", "save_solution", "commit_changes",
     ):
         monkeypatch.setattr(f"api.user.gpt.services.sync.file_sync.{name}",
@@ -83,10 +83,10 @@ async def test_ensure_problem_creates_when_missing(db, task_session, monkeypatch
 @pytest.mark.parametrize(
     "category,expected",
     [
-        ("validator", "set_validator"),
-        ("generator", "set_generator"),
-        ("checker", "set_checker"),
-        ("interactor", "set_interactor"),
+        ("validator", "upload_validator"),
+        ("generator", "save_file"),
+        ("checker", "upload_checker"),
+        ("interactor", "upload_interactor"),
         ("script", "save_script"),
         ("solution", "save_solution"),
     ],
@@ -110,9 +110,19 @@ async def test_push_to_polygon_script_uses_tests_testset(monkeypatch):
 async def test_push_to_polygon_solution_forwards_tag(monkeypatch):
     calls = _patch_setters(monkeypatch)
     await fs._push_to_polygon("solution", 1, "wa.cpp", "code", "WA", 7, None)
+    name, args, kwargs = calls[0]
+    # save_solution(problem_id, filename, content, user_id, db, tag=..., source_type=...)
+    assert args[:3] == (1, "wa.cpp", "code")
+    assert kwargs["tag"] == "WA"
+
+
+@pytest.mark.asyncio
+async def test_push_to_polygon_generator_saved_as_source(monkeypatch):
+    calls = _patch_setters(monkeypatch)
+    await fs._push_to_polygon("generator", 1, "gen.cpp", "code", None, 7, None)
     name, args, _ = calls[0]
-    # save_solution(problem_id, filename, content, tag, user_id, db)
-    assert args[3] == "WA"
+    # save_file(problem_id, "source", filename, content, user_id, db)
+    assert name == "save_file" and args[:4] == (1, "source", "gen.cpp", "code")
 
 
 @pytest.mark.asyncio
@@ -132,9 +142,9 @@ async def test_sync_file_upserts_marks_uploaded_and_routes(db, task_session, mon
     filename = await fs.sync_file(db, task_session, "validator", "int main(){}")
     assert filename == "validator.cpp"
 
-    # routed to set_validator + committed Polygon working copy
+    # routed to upload_validator + committed Polygon working copy
     names = [c[0] for c in calls]
-    assert "set_validator" in names
+    assert "upload_validator" in names
     assert "commit_changes" in names
 
     # local row persisted + marked uploaded
@@ -148,7 +158,7 @@ async def test_sync_file_no_commit_skips_commit_changes(db, task_session, monkey
     calls = _patch_setters(monkeypatch)
     await fs.sync_file(db, task_session, "checker", "chk", polygon_commit=False)
     names = [c[0] for c in calls]
-    assert "set_checker" in names
+    assert "upload_checker" in names
     assert "commit_changes" not in names
 
 
@@ -163,8 +173,8 @@ async def test_sync_file_custom_solution_uses_solution_meta(db, task_session, mo
 
     # not in registry -> routed as solution with the meta tag
     save = [c for c in calls if c[0] == "save_solution"][0]
-    # save_solution(problem_id, filename, content, tag, user_id, db)
-    assert save[1][3] == "TL"
+    # save_solution(problem_id, filename, content, user_id, db, tag=...)
+    assert save[2]["tag"] == "TL"
 
 
 # --------------------------------------------------------------------------- #

@@ -16,8 +16,8 @@ from api.user.gpt.services.ai_file_helpers import (get_session_files,
 from api.user.gpt.services.import_session import (_extract_statement,
                                                   _load_solutions,
                                                   _load_source_files)
-from api.user.polygon.files.script.get.script import get_script
-from api.user.polygon.statement.get.setatement import get_statements
+from api.user.polygon.cache import refresh_statements
+from api.user.polygon.methods import get_script
 from models.task.session import TaskSession
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ async def _ensure_statement(db: AsyncSession, session: TaskSession) -> None:
     if session.statement or not session.polygon_problem_id:
         return
     try:
-        raw = await get_statements(session.polygon_problem_id, session.user_id, db)
+        raw = await refresh_statements(session.polygon_problem_id, session.user_id, db)
         statement = _extract_statement(raw)
         if any(statement.values()):
             session.statement = statement
@@ -84,7 +84,7 @@ async def reload_from_polygon(db: AsyncSession, session: TaskSession) -> dict:
 
     statement_loaded = False
     try:
-        raw = await get_statements(session.polygon_problem_id, session.user_id, db)
+        raw = await refresh_statements(session.polygon_problem_id, session.user_id, db)
         statement = _extract_statement(raw)
         if any(statement.values()):
             session.statement = statement

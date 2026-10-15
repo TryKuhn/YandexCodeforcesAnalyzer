@@ -38,8 +38,10 @@ class Settings(BaseSettings):
 
     POLYGON_HOST: str = "https://polygon.codeforces.com/api"
 
+    # LLM settings of the retired api/user/gpt package; the AI authoring service
+    # has its own copy, the backend itself no longer calls models
     OPENAI_HOST: str = "https://openrouter.ai/api/v1"
-    OPENAI_API_KEY: str
+    OPENAI_API_KEY: str = ""
 
     # Hard cap on output tokens per LLM call. OpenRouter runs a pre-flight
     # affordability check on (prompt + max_tokens); with no cap it reserves the
@@ -75,6 +77,31 @@ class Settings(BaseSettings):
             block["allow_fallbacks"] = self.OPENROUTER_ALLOW_FALLBACKS
         return block
 
+    # the AI authoring service (services/ai-authoring); /api/ai/* is proxied there
+    AI_SERVICE_URL: str = "http://ai-authoring:8100"
+    AI_PROXY_TIMEOUT_SECONDS: float = 900.0
+    # model for the archive importer's checker/validator (see the service's registry)
+    AI_DEFAULT_MODEL: str = "anthropic/claude-opus-5.5"
+
+    # export to ejudge (api/user/ejudge): SSH/SFTP into the judges directory,
+    # then "reload config" through the web interface
+    EJUDGE_URL: str = ""  # e.g. https://ejudge.example.org/cgi-bin
+    EJUDGE_LOGIN: str = ""
+    EJUDGE_PASSWORD: str = ""
+    EJUDGE_SSH_HOST: str = ""
+    EJUDGE_SSH_PORT: int = 22
+    EJUDGE_SSH_USER: str = "ejudge"
+    EJUDGE_SSH_KEY_PATH: str = "/run/secrets/ejudge/id_ed25519"
+    EJUDGE_SSH_KNOWN_HOSTS: str = ""  # e.g. /run/secrets/ejudge/known_hosts
+    EJUDGE_SSH_INSECURE: bool = False  # skip host key verification (explicit opt-in)
+    EJUDGE_JUDGES_DIR: str = "/home/judges"
+    EJUDGE_CXX: str = "g++ -O2 -std=gnu++20"
+    # an already built gvaluer on the ejudge host; empty = compile ours per problem
+    EJUDGE_GVALUER_PATH: str = ""
+    EJUDGE_PACKAGE_TYPE: str = "linux"
+    # comma-separated contest ids the export may write to; empty = any contest
+    EJUDGE_ALLOWED_CONTESTS: str = ""
+
     POSTGRES_DB: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
@@ -83,6 +110,10 @@ class Settings(BaseSettings):
 
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
+
+    @property
+    def ejudge_allowed_contests(self) -> set[int]:
+        return {int(x) for x in self.EJUDGE_ALLOWED_CONTESTS.replace(";", ",").split(",") if x.strip().isdigit()}
 
     @property
     def redis_url(self) -> str:

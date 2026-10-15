@@ -36,14 +36,14 @@ async def test_sync_statement_forwards_fields_and_commits(db, task_session, monk
     kwargs = save[2]
     assert kwargs["name"] == "Sum"
     assert kwargs["legend"] == "Add two numbers"
-    assert kwargs["input_legend"] == "two ints"
-    assert kwargs["output_legend"] == "their sum"
+    assert kwargs["input"] == "two ints"
+    assert kwargs["output"] == "their sum"
     assert kwargs["notes"] == "n"
     assert kwargs["tutorial"] == "t"
     assert kwargs["scoring"] == "100 pts"
     assert kwargs["lang"] == "russian"
-    # REGULAR -> interaction suppressed
-    assert kwargs["interaction"] == ""
+    # REGULAR -> interaction suppressed (None = not sent to Polygon)
+    assert kwargs["interaction"] is None
     assert [c[0] for c in calls].count("commit_changes") == 1
 
 
@@ -68,7 +68,18 @@ async def test_sync_statement_regular_drops_interaction(db, task_session, monkey
         db, task_session, {"interaction": "should be ignored"}
     )
     save = [c for c in calls if c[0] == "save_statement"][0]
-    assert save[2]["interaction"] == ""
+    assert save[2]["interaction"] is None
+
+
+@pytest.mark.asyncio
+async def test_sync_statement_missing_sections_not_sent(db, task_session, monkeypatch):
+    calls = _patch(monkeypatch)
+    await st.sync_statement(db, task_session, {"name": "X", "scoring": ""})
+    kwargs = [c for c in calls if c[0] == "save_statement"][0][2]
+    # Absent / empty optional sections stay None so Polygon keeps its values.
+    assert kwargs["scoring"] is None
+    assert kwargs["notes"] is None
+    assert kwargs["tutorial"] is None
 
 
 @pytest.mark.asyncio

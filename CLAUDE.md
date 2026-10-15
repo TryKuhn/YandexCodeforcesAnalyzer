@@ -16,9 +16,12 @@
 - Пересчёт локальных рейтингов, пометки/раскраска участников.
 - **Проверка решений на плагиат** (нативный C++-модуль на Clang/LLVM через pybind11).
 - **Проверка решений на схожесть с ИИ**.
-- **ИИ-создание задач в Polygon** — крупная подсистема: чат-агент генерирует условие,
-  файлы (валидатор/генератор/чекер/интерактор/скорер/решения/скрипт тестов), настраивает
-  группы и баллы, собирает пакет и авто-чинит ошибки сборки. Это самая сложная часть проекта.
+- **ИИ-создание задач в Polygon** — отдельный сервис `services/ai-authoring`: чат (вопрос/правка),
+  генерация задачи целиком по идее, группы тестов и баллы (генератор на группу, FreeMarker-скрипт,
+  COMPLETE_GROUP + first-failed), автосборка пакета с авто-починкой (3 попытки), синхронизация
+  с Polygon и уведомления об изменениях. Это самая сложная часть проекта.
+- **Экспорт задачи из Polygon в ejudge** (`backend/api/user/ejudge/`): SSH/SFTP + перезагрузка
+  конфигурации через веб-интерфейс, группы/баллы → `valuer.cfg` для gvaluer.
 
 ---
 
@@ -34,14 +37,15 @@
 | Плагиат   | C++ (Clang/LLVM), собирается в образ backend через CMake + pybind11 (`plagiarism_cpp*.so`) |
 | Judge     | Python 3.11 (stdlib), песочница на **isolate** v2.6, `testlib.h`, отдельный контейнер |
 | Прокси    | Caddy (только prod, `Caddyfile`) |
-| LLM       | OpenRouter (`settings.OPENAI_HOST`); модели Claude/Gemini/GPT |
+| AI-сервис | `services/ai-authoring`: FastAPI + свой воркер, таблицы `authoring_*` в той же БД |
+| LLM       | OpenRouter; Claude Opus 5.5 (по умолчанию), Sonnet 5.5, GPT-6.1 Sol; роутер — Haiku 5.5 (фолбэк Sonnet 5.5) |
 
 ### Backend (`backend/`)
 - `app/` — `server.py` (сборка FastAPI, middleware, подключение роутеров), `database.py` (async engine/`Session`).
 - `api/` — роуты и логика по доменам:
   - `crypt/` — JWT/аутентификация (`get_current_user`).
-  - `user/auth/`, `user/codeforces/`, `user/yandex/`, `user/polygon/`, `user/gpt/`,
-    `user/plagiarism/`, `user/contests.py`, `user/merge_*.py`.
+  - `user/auth/`, `user/codeforces/`, `user/yandex/`, `user/polygon/`, `user/ai/` (прокси в
+    AI-сервис), `user/ejudge/`, `user/plagiarism/`, `user/contests.py`, `user/merge_*.py`.
 - `models/` — SQLAlchemy-модели по доменам; `models/judge/` — домен своей тестирующей
   системы (problem/test/submission/run + contest/participant): вход/ответ теста и исходник
   посылки — это sha256-ссылки на блобы (см. `blobs/`), одинаковые тесты между задачами
@@ -67,7 +71,7 @@
 
 Роутеры (`app/server.py`), все кроме health/auth требуют `get_current_user`:
 `/api/health`, `/api/auth`, `/api/contests`, `/api/codeforces`, `/api/polygon`,
-`/api/ai` (gpt), `/api/yandex`, `/api/analytics` (плагиат).
+`/api/ai` (прокси в AI-сервис), `/api/ejudge`, `/api/yandex`, `/api/analytics` (плагиат).
 
 ### Frontend (`frontend/src/`)
 `App.tsx` (роутинг), `api/` (axios-инстанс, `VITE_API_URL=http://localhost:8000/api`),
@@ -127,22 +131,45 @@
 
 ## 3. Подсистема ИИ-создания задач (важно, строгие правила)
 
-Строгое разделение слоёв — **не нарушать**:
+Три части, строго разделённые — **не нарушать**:
+
 - **`backend/api/user/polygon/`** — ТОЛЬКО вызовы Polygon API и работа с БД. Никакой логики ИИ.
-- **`backend/api/user/gpt/`** — ВСЯ логика ИИ. Внутри слои:
-  - `services/llm/` — единственный низкоуровневый клиент OpenRouter (`client.ask`/`ask_text`) + реестр моделей.
-  - `services/prompts/` — по одному промпту на тип файла.
-  - `services/generation/` — генерация условия и файлов (`file_gen.generate_pack` и др.).
-  - `services/chat/` — чат-агент: `intent_router` (классификатор действия), `context_resolver`,
-    `modify_executor`, `answer_executor`, `file_context`.
-  - `services/sync/` — синхронизация сгенерированного в Polygon (через `polygon/`-обёртки).
-  - `services/build/` — сборка пакета и авто-починка (`package_loop`, `fix_gen`, `error_parser`, `scoring_groups`).
-  - `routes/` — по ОДНОМУ эндпоинту на файл; регистрируются на `gpt_router` (`base_gpt`).
+  - `client.py` — ядро: сериализация параметров (`None` не шлётся, `bool`→`true/false`, списки→через запятую),
+    подпись (подписываются ВСЕ параметры, бинарь — побайтно), разбор ответа, ретраи 5xx/таймаутов/rate limit
+    (кроме `problem.create`/`buildPackage`/`addIssue`/`updateIssue` — их после 5xx не повторяем). Ошибки —
+    `PolygonAPIError` (`http_status`, `result`), неверный параметр — `PolygonParamError` (422).
+  - `methods/` — по одной функции на КАЖДЫЙ метод API, сигнатура `(problem_id, <обязательные>, user_id, db, *, <необязательные>)`,
+    перечислимые значения проверяются по `constants.py`. Новые обёртки — только сюда, через `client.call`.
+  - `cache.py` — `refresh_*`: запрос к API + upsert кэша (`PolygonProblem/Statement/Solution`). `methods` в БД не пишут.
+  - `problems/`, `contests.py`, `archive/`, `auth/` — HTTP-роуты (`/api/polygon/...`).
+- **`services/ai-authoring/`** — ВСЯ логика ИИ, отдельный сервис (контейнеры `ai-authoring` и `ai-worker`).
+  С Polygon работает ТОЛЬКО через ручки бэкенда `/api/polygon/*` (`authoring/polygon/client.py`),
+  подписывая короткоживущий JWT от имени пользователя (`auth.mint_user_token`, общий `SECRET_KEY`) —
+  поэтому фоновая работа (синк, сборки) не зависит от живого запроса. Бэкенд проксирует `/api/ai/*`
+  в сервис (`backend/api/user/ai/proxy.py`), фронт ходит на один origin.
+  - `llm/models.py` — реестр моделей; `llm/client.py` — единственный клиент OpenRouter (ретраи,
+    фолбэк при региональной блокировке, `cache_control` для материалов задачи у Anthropic).
+  - `llm/prompts.py` — все промпты; `llm/protocol.py` — **теговый формат ответа** (`<file role=.. name=..>`,
+    `<statement field=..>`, `<script>`, `<limits/>`, ...): код и LaTeX берутся дословно, без JSON-экранирования.
+    JSON — только для маленьких структур (роутер, план тестов).
+  - `sync/` — снимок задачи (инкрементально: содержимое файла перечитывается только при смене mtime/длины),
+    дифф снимков → уведомления (`Event`), `dossier.py` — материалы задачи, которые получает КАЖДАЯ модель.
+  - `pipeline/` — «прогоны» (`Run`), их выполняет воркер (`runner.py`, по одному на задачу одновременно):
+    `chat` (Haiku-роутер → ответ или правки Opus строго в пределах целей), `generate` (задача целиком),
+    `groups` (план групп → генераторы, скрипт, группы/баллы, «Система оценки»), `build` (сборка + до 3 починок).
+    Прогон с результатом `build: True` автоматически получает следом прогон сборки.
+  - `pipeline/groups.py` — план тестов. Скрипт FreeMarker строит КОД, не модель: примеры — ручные тесты 1..k,
+    затем строки скрипта по порядку групп, в конце каждой строки уникальный номер. Группы:
+    `COMPLETE_GROUP` + `ICPC` (first-failed), зависимости, все баллы группы на ОДНОМ тесте (остальные 0).
+  - `api/routes.py` — HTTP (`/api/ai/...`): UI шлёт сообщение/запуск и опрашивает `/sessions/{id}/state`.
+- **`backend/api/user/ejudge/`** — экспорт полного пакета Polygon в контест ejudge (job `ejudge.export`
+  в общем воркере): `package.py` (разбор `problem.xml`), `convert.py` (каталог задачи, `[problem]`,
+  `valuer.cfg`), `servecfg.py` (точечная правка `serve.cfg`), `remote.py` (SSH/SFTP), `web.py` (reload
+  через serve-control/new-master), `export.py` (оркестрация), `router.py` (`/api/ejudge/...`).
+  `assets/gvaluer.cpp` — валюер из ejudge (GPLv2+, самодостаточный), компилируется в каталоге задачи.
 
-Соглашения: `gpt/` может импортировать `polygon/`-обёртки (это разрешено), но не наоборот.
-Один тип файла = один промпт = один генератор.
-
----
+Старый пакет `backend/api/user/gpt/` выведен из использования (роутер не подключён) и подлежит удалению
+вместе с `backend/tests/unit/gpt/`; таблица `ai_sessions` (`models/task/session.py`) больше не пишется.
 
 ## 4. Запуск проекта (dev)
 
@@ -154,28 +181,40 @@ make dev.down
 make dev.logs.be       # логи backend;  make dev.logs.fe — логи frontend
 make dev.logs.worker   # логи воркера очереди;  make dev.logs.judge — логи судьи
 make dev.restart.worker  # воркер БЕЗ авто-релоада: после правок jobs/ и api/judge/grading.py
+make dev.restart.ai-worker  # воркер AI-сервиса тоже без авто-релоада
+make dev.logs.ai       # логи AI-сервиса и его воркера
 make judge.test        # тесты judge локально (+ make judge.lint)
+make ai.test           # тесты AI-сервиса локально (+ make ai.lint)
 ```
 
 Порты и URL:
 - Backend API: **http://localhost:8000/api** (uvicorn `--reload`, код примонтирован volume — правки подхватываются).
 - Frontend: **http://localhost:5173** (Vite HMR).
 - Postgres: **localhost:5432**.
+- AI-сервис: **http://localhost:8100/api/ai** (напрямую; фронт ходит через прокси бэкенда).
 
-Контейнеры: `yandexcodeforcesanalyzer-backend-1`, `-worker-1`, `-judge-1`, `-frontend-1`,
+Контейнеры: `yandexcodeforcesanalyzer-backend-1`, `-worker-1`, `-ai-authoring-1`, `-ai-worker-1`, `-judge-1`, `-frontend-1`,
 `-frontend-participant-1`, `-postgres-1`, `-redis-1`, `-s3-1`.
 `worker` — тот же образ backend с командой `python -m jobs.run_worker`; без него посылки
 навсегда остаются `queued`.
-Миграции применяются автоматически при старте backend (`alembic upgrade head` в CMD).
+Миграции применяются автоматически при старте backend (`alembic upgrade head` в CMD); у AI-сервиса
+свои миграции (`services/ai-authoring/alembic`, таблица версий `alembic_version_ai_authoring`),
+они применяются при старте контейнера `ai-authoring`. Без `ai-worker` сообщения в чате навсегда «в очереди».
 
 ### `.env` (корень репозитория) — НЕОЧЕВИДНО
 `.env` пробрасывается в контейнеры через `env_file:` в compose. Значит:
 - **`docker restart` НЕ перечитывает `.env`.** После правки `.env` нужно пересоздать сервис:
   `docker compose -f docker-compose.dev.yml up -d backend`.
 - Новые Python-файлы/правки `.py` подхватываются авто-релоадом uvicorn без пересоздания.
-- Ключевые переменные: `OPENAI_API_KEY` (OpenRouter), `SECRET_KEY`, `POSTGRES_*`,
+- Ключевые переменные: `OPENAI_API_KEY` (OpenRouter, нужен AI-сервису), `SECRET_KEY` (общий для бэкенда и AI-сервиса), `POSTGRES_*`,
   Yandex/CF client id/secret; опционально `LLM_MAX_TOKENS`, `OPENROUTER_PROVIDER_ORDER/IGNORE/ALLOW_FALLBACKS`,
   `REDIS_HOST`/`REDIS_PORT` (дефолты `redis`/6379 подходят для compose).
+
+- AI-сервис: `SYNC_INTERVAL_MINUTES` (5), `SYNC_ACTIVE_WINDOW_HOURS` (24), `LLM_MAX_TOKENS` (32000),
+  `MAX_REPAIR_ATTEMPTS` (3), `BUILD_TIMEOUT_SECONDS`; бэкенд: `AI_SERVICE_URL`, `AI_DEFAULT_MODEL`.
+- Экспорт в ejudge (необязательно): `EJUDGE_SSH_HOST/PORT/USER`, ключ и `known_hosts` в `./secrets/ejudge/`
+  (монтируется в backend/worker как `/run/secrets/ejudge`), `EJUDGE_JUDGES_DIR`, `EJUDGE_URL/LOGIN/PASSWORD`
+  (для reload), `EJUDGE_GVALUER_PATH` (готовый gvaluer на хосте — иначе компилируем свой).
 
 ### Windows-нюанс
 Node/npm не в PATH. Вызывай явно: `& "C:\Program Files\nodejs\npx.cmd"` / `npm.cmd`.
@@ -194,13 +233,17 @@ make dev.test
 docker exec yandexcodeforcesanalyzer-backend-1 python -m pytest -q
 
 # один файл / каталог:
-docker exec yandexcodeforcesanalyzer-backend-1 sh -c "cd /app && python -m pytest tests/unit/gpt/services/build -q"
+docker exec yandexcodeforcesanalyzer-backend-1 sh -c "cd /app && python -m pytest tests/unit/ejudge -q"
 ```
 
 - `pytest.ini`: `testpaths=tests`, `asyncio_mode=auto`. Тесты зеркалят `api/` (папка `tests/unit/...`).
   Есть переопределённый `norecursedirs`, чтобы собирался пакет `.../build` (иначе pytest его пропускает).
-- Фикстуры (`conftest.py`): async `db`, `user`, `task_session`, `stub_llm` и т.п. LLM в тестах всегда мокается.
+- Фикстуры (`conftest.py`): async `db`, `user`, `polygon_api` (фейковый транспорт Polygon) и т.п. LLM в тестах всегда мокается.
 - Набор большой (~1000+ тестов), должен быть полностью зелёным.
+
+AI-сервис тестируется локально, без Docker и внешних сервисов (sqlite + фейковые backend/LLM в
+`services/ai-authoring/tests/fakes.py`): `cd services/ai-authoring && pytest -q` (или `make ai.test`).
+`FakeBackend` моделирует Polygon (скрипт FreeMarker, группы, пакеты), `FakeLLM` отвечает по маркерам промптов.
 
 Фронтенд отдельного тест-раннера не имеет — гейт качества там это type-check (`tsc`, см. ниже).
 
@@ -287,7 +330,7 @@ make dev.lint.fix   # black .  +  isort .  +  ruff check . --fix
   провайдер-роутингом (`settings.openrouter_provider` → `payload["provider"]`, env
   `OPENROUTER_PROVIDER_IGNORE=OpenAI` и т.п.). Ошибки LLM превращаются в понятный текст в `_friendly_error`.
 - **Polygon API НЕ умеет удалять** решения/файлы (только add/edit/view). Удаление — только в веб-интерфейсе Polygon.
-  **Тесты удалять МОЖНО:** `problem.deleteTest` (обёртка `polygon/files/test/post/delete_tests.py`). Он
+  **Тесты удалять МОЖНО:** `problem.deleteTest` (обёртка `polygon.methods.delete_tests`). Он
   атомарный: если хоть один тест не проходит пред-проверку (например, сгенерирован скриптом) — не удаляет ничего.
 - **Некорректные решения (WA/TL/ML/RE) должны ЧЕСТНО получать свой вердикт настоящим алгоритмом.**
   Никаких бесконечных циклов / `assert(false)` / искусственных задержек. Если гарантировать вердикт
@@ -298,8 +341,20 @@ make dev.lint.fix   # black .  +  isort .  +  ruff check . --fix
 - **Время сервера — наивный UTC** (без tz). На фронте всегда парси через `parseServerDate`, иначе время «плывёт».
 - **`problem.saveTest`: `testInput` опционален** — можно обновить только `testPoints`/`testGroup`
   существующего (в т.ч. сгенерированного скриптом) теста по индексу, вход слать не нужно.
-- **Два поля диалога в сессии:** `session.chat_log` (UI-транскрипт) и `session.history`
-  (сообщения для генерации). Не путать — унифицированный чат читает контекст из `chat_log`.
+- **Две alembic-цепочки в одной БД.** Бэкенд и AI-сервис мигрируют независимо (разные таблицы версий).
+  `backend/alembic/env.py` фильтрует чужие таблицы (`authoring_*`) — без фильтра автогенерация бэкенда
+  предлагает их ДРОПНУТЬ. Сервис, наоборот, видит только `authoring_*`.
+- **AI-сервис ходит в Polygon только через бэкенд.** Ключи Polygon и подпись живут в бэкенде; сервис
+  подписывает JWT пользователя сам (claim `svc=ai-authoring`). Сменили `SECRET_KEY` — меняйте в обоих.
+- **Прогоны одной задачи не пересекаются**, а синхронизация пропускается, пока идёт прогон (иначе
+  собственные правки ИИ показались бы пользователю «изменениями в Polygon»). Воркер AI — один экземпляр.
+- **Ответы моделей — теговый протокол, а не JSON.** Код с кавычками/бэкслешами в JSON ломается.
+  `#include <testlib.h>` нормализуется в `"testlib.h"` (иначе Polygon не находит testlib).
+- **Правка вне целей отбрасывается.** Роутер даёт минимальный набор целей; `apply_edits(allowed=...)`
+  отбрасывает остальное и показывает это пользователю («Не применено (вне запроса)»).
+- **Экспорт в ejudge требует `advanced_layout`** в контесте и ПОЛНОГО пакета (с тестами и ответами;
+  качаем `linux`, фолбэк `windows`/`standard`). gvaluer читает `valuer.cfg` из СВОЕГО каталога, поэтому
+  он компилируется в каталог каждой задачи; группы должны идти подряд — тесты перенумеровываются.
 - **LaTeX в условиях** — ограниченный набор команд Polygon (код через `lstlisting`, не `verbatim`).
 - **CI ничего не проверяет, если не тронуты нужные пути.** В `ci.yml` стоит `dorny/paths-filter`:
   джобы бэка/фронта/judge запускаются только при изменениях в `backend/**`, `frontend/**`,
@@ -339,9 +394,9 @@ make dev.lint.fix   # black .  +  isort .  +  ruff check . --fix
 - `make dev.db.shell` — psql в контейнере. `make dev.clean` — снести всё (образы/volume).
 - Prod: `docker-compose.prod.yml` + Caddy; команды `make prod.*`. Локальная разработка — только `dev.*`.
 - **Автодеплой** (`.github/workflows/cd.yml`): после зелёного CI на `main` собираются только
-  изменившиеся образы (`backend`, `frontend`, `frontend-participant`, `judge`), а неизменённые
+  изменившиеся образы (`backend`, `ai-authoring`, `frontend`, `frontend-participant`, `judge`), а неизменённые
   получают тег коммита ретегом `:latest` без пересборки — весь стек всегда на одном `IMAGE_TAG`.
-  Деплой ждёт здоровья `backend`, `judge` и `worker`, иначе откатывает все app-сервисы на
+  Деплой ждёт здоровья `backend`, `judge`, `worker`, `ai-authoring` и `ai-worker`, иначе откатывает все app-сервисы на
   предыдущий тег. Caddyfile подхватывается через `caddy reload` (`make prod.caddy.reload`).
 - Память Claude по проекту (кросс-сессионная) лежит в `~/.claude/projects/.../memory/` — там же
   детальные заметки по подсистеме ИИ-задач и подводным камням.

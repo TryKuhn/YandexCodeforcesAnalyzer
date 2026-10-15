@@ -95,3 +95,20 @@ def test_method_name_changes_signature(monkeypatch):
     s1 = create_signature("problem.info", {"a": "1"}, "s")
     s2 = create_signature("problem.tests", {"a": "1"}, "s")
     assert s1 != s2
+
+
+def test_signature_includes_binary_values_bytewise(monkeypatch):
+    _patch_rand(monkeypatch, 7)
+    blob = b"\x89PNG\xff\x00"
+    sig = create_signature("problem.saveStatementResource",
+                           {"name": "a.png", "file": blob}, "s")
+    expected = sha512(b"000007/problem.saveStatementResource?file=" + blob
+                      + b"&name=a.png#s").hexdigest()
+    assert sig == "000007" + expected
+
+
+def test_signature_utf8_text_equals_bytes(monkeypatch):
+    _patch_rand(monkeypatch, 1)
+    a = create_signature("m", {"x": "тест"}, "s")
+    b = create_signature("m", {"x": "тест".encode()}, "s")
+    assert a == b

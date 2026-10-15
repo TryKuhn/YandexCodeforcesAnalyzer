@@ -9,12 +9,9 @@ import re
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user.polygon.files.test.get.tests import get_tests
-from api.user.polygon.files.test.post.save_test import save_test
-from api.user.polygon.problem.settings.enable_groups import enable_groups
-from api.user.polygon.problem.settings.enable_points import enable_points
-from api.user.polygon.problem.settings.save_test_group import save_test_group
-from api.user.polygon.problem.settings.set_test_group import set_test_group
+from api.user.polygon.methods import (enable_groups, enable_points, get_tests,
+                                      save_test, save_test_group,
+                                      set_test_group)
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +20,7 @@ def subtasks_to_groups(subtasks: list[dict] | None) -> list[dict]:
     """Convert a structured subtask plan into group config dicts.
 
     Returns list of {group, points, dependencies, feedback_policy, num_tests}.
-    Uses ``icpc`` feedback (stop on first failed test) for every subtask.
+    Uses ``ICPC`` feedback (stop on first failed test) for every subtask.
     """
     if not subtasks:
         return []
@@ -33,7 +30,7 @@ def subtasks_to_groups(subtasks: list[dict] | None) -> list[dict]:
             "group": str(st.get("group")),
             "points": int(st.get("points", 0)),
             "dependencies": [str(d) for d in (st.get("depends_on") or [])],
-            "feedback_policy": "icpc",
+            "feedback_policy": "ICPC",
             "num_tests": int(st.get("num_tests", 0)),
         })
     return groups
@@ -99,9 +96,9 @@ def parse_scoring_groups(scoring_latex: str | None) -> list[dict]:
                     deps.append(d)
 
         feedback = (
-            "icpc"
+            "ICPC"
             if ("первая" in feedback_str.lower() or "first" in feedback_str.lower())
-            else "complete"
+            else "COMPLETE"
         )
 
         groups.append(
@@ -155,16 +152,17 @@ async def setup_groups_and_points(
 
     for group_cfg in groups:
         try:
+            # Group points come from the points of its tests (see
+            # assign_tests_to_groups); saveTestGroup only sets the policies.
             await save_test_group(
                 problem_id=problem_id,
-                test_set="tests",
+                testset="tests",
                 group=group_cfg["group"],
-                points=group_cfg["points"],
-                points_policy="complete-group",
-                feedback_policy=group_cfg["feedback_policy"],
-                dependencies=group_cfg["dependencies"],
                 user_id=user_id,
                 db=db,
+                points_policy="COMPLETE_GROUP",
+                feedback_policy=group_cfg["feedback_policy"],
+                dependencies=group_cfg["dependencies"],
             )
             logger.info(
                 f"[{session_id}] Configured group {group_cfg['group']} "
@@ -245,7 +243,7 @@ async def assign_tests_to_groups(
             indices_str = ",".join(str(idx) for idx in slice_indices)
             try:
                 await set_test_group(
-                    problem_id, "tests", group_cfg["group"], indices_str, user_id, db,
+                    problem_id, "tests", group_cfg["group"], slice_indices, user_id, db,
                 )
             except Exception as e:
                 logger.warning(
