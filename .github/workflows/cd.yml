@@ -24,6 +24,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       judge: ${{ steps.filter.outputs.judge }}
+      ai: ${{ steps.filter.outputs.ai }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,6 +41,8 @@ jobs:
             judge:
               - 'backend/judge/**'
               - 'backend/api/user/polygon/archive/assets/testlib.h'
+            ai:
+              - 'services/ai-authoring/**'
 
   # Every image gets the commit tag on every deploy: changed ones are rebuilt,
   # unchanged ones just get the tag added to their current :latest (no rebuild).
@@ -73,6 +76,12 @@ jobs:
             build_args: |
               VITE_API_URL=https://contest.createmanager.duckdns.org/api
               VITE_PORTAL=participant
+          # the AI authoring service (its worker runs on the same image)
+          - image: ai-authoring
+            component: ai
+            context: ./services/ai-authoring
+            file: ./services/ai-authoring/Dockerfile
+            build_args: ""
           # shares the backend build context for testlib.h
           - image: judge
             component: judge
@@ -168,7 +177,7 @@ jobs:
 
           # our own images; postgres/redis/s3/caddy are never pulled here,
           # so a deploy can't silently upgrade them
-          APP_SERVICES="backend worker judge frontend frontend-participant"
+          APP_SERVICES="backend worker ai-authoring ai-worker judge frontend frontend-participant"
 
           echo "Pulling latest compose/config changes..."
           git fetch origin main
@@ -247,7 +256,7 @@ jobs:
           sleep 30
 
           HEALTHY=true
-          for svc in backend judge worker; do
+          for svc in backend judge worker ai-authoring ai-worker; do
             if ! wait_ready "$svc"; then
               HEALTHY=false
               break
@@ -264,7 +273,7 @@ jobs:
 
           echo "Health check failed!"
           $DC ps
-          $DC logs --tail=100 backend worker judge postgres caddy
+          $DC logs --tail=100 backend worker ai-authoring ai-worker judge postgres caddy
 
           if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$IMAGE_TAG" ]; then
             echo "Rolling back to previous tag: $PREV_TAG"

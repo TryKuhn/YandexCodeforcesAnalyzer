@@ -7,7 +7,7 @@ IMAGE_TAG ?= latest
 
 # our own images (worker runs on the backend image); postgres/redis/s3/caddy
 # are left alone so a pull can't silently upgrade them
-APP_SERVICES := backend worker judge frontend frontend-participant
+APP_SERVICES := backend worker ai-authoring ai-worker judge frontend frontend-participant
 
 # Startup and shutdown
 
@@ -32,6 +32,9 @@ prod.restart:
 # the worker has no auto-reload, even in dev
 dev.restart.worker:
 	$(DOCKER_COMPOSE) -f $(DEV) restart worker
+
+dev.restart.ai-worker:
+	$(DOCKER_COMPOSE) -f $(DEV) restart ai-worker
 
 # the Caddyfile is bind-mounted, `up` does not pick up edits to it
 prod.caddy.reload:
@@ -75,6 +78,12 @@ dev.logs.judge:
 prod.logs.judge:
 	$(DOCKER_COMPOSE) -f $(PROD) logs -f judge
 
+dev.logs.ai:
+	$(DOCKER_COMPOSE) -f $(DEV) logs -f ai-authoring ai-worker
+
+prod.logs.ai:
+	$(DOCKER_COMPOSE) -f $(PROD) logs -f ai-authoring ai-worker
+
 prod.logs.caddy:
 	$(DOCKER_COMPOSE) -f $(PROD) logs -f caddy
 
@@ -91,6 +100,16 @@ dev.lint.fix:
 	$(DOCKER_COMPOSE) -f $(DEV) exec backend black .
 	$(DOCKER_COMPOSE) -f $(DEV) exec backend isort .
 	$(DOCKER_COMPOSE) -f $(DEV) exec backend ruff check . --fix
+
+# the AI authoring service has its own venv-free test suite (sqlite, fakes)
+ai.test:
+	cd services/ai-authoring && pytest -q --tb=short
+
+ai.lint:
+	cd services/ai-authoring && ruff check . && mypy authoring alembic
+
+dev.ai.migrate.upgrade:
+	$(DOCKER_COMPOSE) -f $(DEV) exec -T ai-authoring alembic upgrade head
 
 # judge has no runtime deps, so its checks run locally, without Docker
 judge.test:

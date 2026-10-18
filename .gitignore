@@ -1,0 +1,2 @@
+# local secrets (ejudge SSH key, known_hosts) are mounted from here; never commit them
+secrets/

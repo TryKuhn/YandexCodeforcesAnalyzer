@@ -17,6 +17,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       judge: ${{ steps.filter.outputs.judge }}
+      ai: ${{ steps.filter.outputs.ai }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -30,6 +31,8 @@ jobs:
               - 'frontend/**'
             judge:
               - 'backend/judge/**'
+            ai:
+              - 'services/ai-authoring/**'
 
   backend-lint:
     needs: changes
@@ -207,6 +210,56 @@ jobs:
           echo "participant bundle is clean"
 
 
+  # the AI authoring service: no external services needed (sqlite + fakes)
+  ai-authoring:
+    needs: changes
+    if: needs.changes.outputs.ai == 'true'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./services/ai-authoring
+
+    env:
+      SECRET_KEY: test-secret-key-for-ai-authoring-0123
+      POSTGRES_DB: test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      OPENAI_API_KEY: test
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ./services/ai-authoring/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run ruff
+        run: ruff check .
+
+      - name: Run mypy
+        run: mypy authoring alembic
+
+      - name: Run tests
+        run: pytest -q --tb=short
+
+      # migrations must match the models (autogenerate finds nothing)
+      - name: Check migrations
+        env:
+          DATABASE_URL: "sqlite+aiosqlite:///./migrations-check.db"
+        run: |
+          alembic upgrade head
+          alembic check
+          alembic downgrade base
+
   judge-test:
     needs: changes
     if: needs.changes.outputs.judge == 'true'
@@ -302,7 +355,7 @@ jobs:
         run: docker logs judge || true
 
   all-checks-passed:
-    needs: [backend-lint, backend-test, frontend-build, judge-test, judge-e2e]
+    needs: [backend-lint, backend-test, frontend-build, ai-authoring, judge-test, judge-e2e]
     runs-on: ubuntu-latest
     if: always()
 
@@ -312,6 +365,7 @@ jobs:
           if [[ "${{ needs.backend-lint.result }}" == "failure" ]] || \
              [[ "${{ needs.backend-test.result }}" == "failure" ]] || \
              [[ "${{ needs.frontend-build.result }}" == "failure" ]] || \
+             [[ "${{ needs.ai-authoring.result }}" == "failure" ]] || \
              [[ "${{ needs.judge-test.result }}" == "failure" ]] || \
              [[ "${{ needs.judge-e2e.result }}" == "failure" ]]; then
             echo "Some checks failed"
