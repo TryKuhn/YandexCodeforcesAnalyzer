@@ -2,209 +2,159 @@
 import pytest
 from fastapi import HTTPException
 
-import api.user.polygon.problems.files as mod
 from api.pydantic_schemas.user.polygon_task import (
-    SaveFileRequest,
-    SaveScriptRequest,
-    SaveSolutionRequest,
-    SetCheckerRequest,
-    SetValidatorRequest,
-)
-from api.user.polygon.get_response import PolygonAPIError
-from api.user.polygon.problems.files import (
-    route_get_checker,
-    route_get_files,
-    route_get_script,
-    route_get_validator,
-    route_save_file,
-    route_save_script,
-    route_save_solution,
-    route_set_checker,
-    route_set_validator,
-    route_view_file,
-    route_view_solution,
-)
+    EditSolutionExtraTagsRequest, SaveCheckerTestRequest, SaveFileRequest,
+    SaveScriptRequest, SaveSolutionRequest, SaveValidatorTestRequest,
+    SetCheckerRequest, SetInteractorRequest, SetValidatorRequest)
+from api.user.polygon.client import PolygonAPIError, PolygonParamError
+from api.user.polygon.problems import files as r
+
+P = {"problemId": "555"}
 
 
-@pytest.mark.asyncio
-async def test_route_get_files_merges_solutions(monkeypatch, db, user):
-    async def fake_get_files(problem_id, user_id, db):
-        return {"resource": ["a"], "source": ["b"]}
+async def test_route_get_files_merges_solutions(polygon_api, db, user):
+    polygon_api.respond("problem.files", {"resourceFiles": [{"name": "a"}], "sourceFiles": []})
+    polygon_api.respond("problem.solutions", [{"name": "sol.cpp", "tag": "MA"}])
 
-    async def fake_get_solutions(problem_id, user_id, db):
-        return [{"name": "sol.cpp"}]
-
-    monkeypatch.setattr(mod, "get_files", fake_get_files)
-    monkeypatch.setattr(mod, "get_solutions", fake_get_solutions)
-
-    result = await route_get_files(polygon_id=555, user_id=user.id, db=db)
-    assert result["resource"] == ["a"]
-    assert result["solutions"] == [{"name": "sol.cpp"}]
+    result = await r.route_get_files(polygon_id=555, user_id=user.id, db=db)
+    assert result["resourceFiles"] == [{"name": "a"}]
+    assert result["solutions"] == [{"name": "sol.cpp", "tag": "MA"}]
 
 
-@pytest.mark.asyncio
-async def test_route_get_files_non_dict_non_list(monkeypatch, db, user):
-    async def fake_get_files(problem_id, user_id, db):
-        return "oops"
-
-    async def fake_get_solutions(problem_id, user_id, db):
-        return {"not": "a list"}
-
-    monkeypatch.setattr(mod, "get_files", fake_get_files)
-    monkeypatch.setattr(mod, "get_solutions", fake_get_solutions)
-
-    result = await route_get_files(polygon_id=555, user_id=user.id, db=db)
+async def test_route_get_files_empty_results(polygon_api, db, user):
+    result = await r.route_get_files(polygon_id=555, user_id=user.id, db=db)
     assert result == {"solutions": []}
 
 
-@pytest.mark.asyncio
-async def test_route_view_file_ok(monkeypatch, db, user):
-    async def fake_view_file(problem_id, file_type, name, user_id, db):
-        return "content-here"
-
-    monkeypatch.setattr(mod, "view_file", fake_view_file)
-    result = await route_view_file(
+async def test_route_view_file_ok(polygon_api, db, user):
+    polygon_api.respond("problem.viewFile", "content-here")
+    result = await r.route_view_file(
         polygon_id=555, type="source", name="a.cpp", user_id=user.id, db=db
     )
     assert result == {"content": "content-here"}
+    assert polygon_api.last().kind == "text"
 
 
-@pytest.mark.asyncio
-async def test_route_view_file_404(monkeypatch, db, user):
-    async def fake_view_file(problem_id, file_type, name, user_id, db):
-        raise PolygonAPIError("missing")
-
-    monkeypatch.setattr(mod, "view_file", fake_view_file)
+async def test_route_view_file_polygon_error_is_404(polygon_api, db, user):
+    polygon_api.respond("problem.viewFile", PolygonAPIError("name: file not found"))
     with pytest.raises(HTTPException) as exc:
-        await route_view_file(
-            polygon_id=555, type="source", name="x", user_id=user.id, db=db
-        )
+        await r.route_view_file(polygon_id=555, type="source", name="x", user_id=user.id, db=db)
     assert exc.value.status_code == 404
-    assert "missing" in exc.value.detail
+    assert "file not found" in exc.value.detail
 
 
-@pytest.mark.asyncio
-async def test_route_save_file(monkeypatch, db, user):
-    captured = {}
-
-    async def fake_save_file(**kwargs):
-        captured.update(kwargs)
-
-    monkeypatch.setattr(mod, "save_file", fake_save_file)
-    body = SaveFileRequest(type="source", name="a.cpp", content="int main(){}")
-    result = await route_save_file(polygon_id=555, body=body, user_id=user.id, db=db)
-    assert result == {"ok": True}
-    assert captured["file_type"] == "source"
-    assert captured["name"] == "a.cpp"
-    assert captured["file_content"] == "int main(){}"
+async def test_route_view_file_bad_type_is_param_error(polygon_api, db, user):
+    with pytest.raises(PolygonParamError):
+        await r.route_view_file(polygon_id=555, type="exe", name="x", user_id=user.id, db=db)
+    assert polygon_api.calls == []
 
 
-@pytest.mark.asyncio
-async def test_route_view_solution_ok(monkeypatch, db, user):
-    async def fake_view_solution(problem_id, name, user_id, db):
-        return "sol"
+async def test_route_save_file(polygon_api, db, user):
+    body = SaveFileRequest(type="source", name="gen.cpp", content="int main(){}",
+                           source_type="cpp.g++17", check_existing=False)
+    assert await r.route_save_file(polygon_id=555, body=body, user_id=user.id, db=db) == {
+        "ok": True}
+    assert polygon_api.last().params == {
+        **P, "type": "source", "name": "gen.cpp", "file": "int main(){}",
+        "sourceType": "cpp.g++17", "checkExisting": "false",
+    }
 
-    monkeypatch.setattr(mod, "view_solution", fake_view_solution)
-    result = await route_view_solution(
-        polygon_id=555, name="sol.cpp", user_id=user.id, db=db
-    )
-    assert result == {"content": "sol"}
 
+async def test_route_view_solution_ok_and_404(polygon_api, db, user):
+    polygon_api.respond("problem.viewSolution", "int main(){}")
+    assert await r.route_view_solution(
+        polygon_id=555, name="m.cpp", user_id=user.id, db=db) == {"content": "int main(){}"}
 
-@pytest.mark.asyncio
-async def test_route_view_solution_404(monkeypatch, db, user):
-    async def fake_view_solution(problem_id, name, user_id, db):
-        raise PolygonAPIError("nope")
-
-    monkeypatch.setattr(mod, "view_solution", fake_view_solution)
+    polygon_api.respond("problem.viewSolution", PolygonAPIError("no such solution"))
     with pytest.raises(HTTPException) as exc:
-        await route_view_solution(
-            polygon_id=555, name="sol.cpp", user_id=user.id, db=db
-        )
+        await r.route_view_solution(polygon_id=555, name="x", user_id=user.id, db=db)
     assert exc.value.status_code == 404
 
 
-@pytest.mark.asyncio
-async def test_route_save_solution(monkeypatch, db, user):
-    captured = {}
-
-    async def fake_save_solution(**kwargs):
-        captured.update(kwargs)
-
-    monkeypatch.setattr(mod, "save_solution", fake_save_solution)
-    body = SaveSolutionRequest(name="sol.cpp", content="code", tag="MA")
-    result = await route_save_solution(polygon_id=555, body=body, user_id=user.id, db=db)
-    assert result == {"ok": True}
-    assert captured["tag"] == "MA"
-    assert captured["file_content"] == "code"
+async def test_route_save_solution(polygon_api, db, user):
+    body = SaveSolutionRequest(name="wa.cpp", content="code", tag="WA")
+    await r.route_save_solution(polygon_id=555, body=body, user_id=user.id, db=db)
+    assert polygon_api.last().params == {**P, "name": "wa.cpp", "file": "code", "tag": "WA"}
 
 
-@pytest.mark.asyncio
-async def test_route_get_and_set_checker(monkeypatch, db, user):
-    async def fake_get_checker(problem_id, user_id, db):
-        return "std::check"
-
-    captured = {}
-
-    async def fake_set_checker(**kwargs):
-        captured.update(kwargs)
-
-    monkeypatch.setattr(mod, "get_checker", fake_get_checker)
-    monkeypatch.setattr(mod, "set_checker", fake_set_checker)
-
-    got = await route_get_checker(polygon_id=555, user_id=user.id, db=db)
-    assert got == {"checker": "std::check"}
-
-    body = SetCheckerRequest(name="chk.cpp", content="x")
-    res = await route_set_checker(polygon_id=555, body=body, user_id=user.id, db=db)
-    assert res == {"ok": True}
-    assert captured["name"] == "chk.cpp"
-
-
-@pytest.mark.asyncio
-async def test_route_get_and_set_validator(monkeypatch, db, user):
-    async def fake_get_validator(problem_id, user_id, db):
-        return "val"
-
-    captured = {}
-
-    async def fake_set_validator(**kwargs):
-        captured.update(kwargs)
-
-    monkeypatch.setattr(mod, "get_validator", fake_get_validator)
-    monkeypatch.setattr(mod, "set_validator", fake_set_validator)
-
-    got = await route_get_validator(polygon_id=555, user_id=user.id, db=db)
-    assert got == {"validator": "val"}
-
-    body = SetValidatorRequest(name="val.cpp", content="y")
-    res = await route_set_validator(polygon_id=555, body=body, user_id=user.id, db=db)
-    assert res == {"ok": True}
-    assert captured["file_content"] == "y"
-
-
-@pytest.mark.asyncio
-async def test_route_get_and_save_script(monkeypatch, db, user):
-    async def fake_get_script(problem_id, testset, user_id, db):
-        return "gen 1 > 1"
-
-    captured = {}
-
-    async def fake_save_script(**kwargs):
-        captured.update(kwargs)
-
-    monkeypatch.setattr(mod, "get_script", fake_get_script)
-    monkeypatch.setattr(mod, "save_script", fake_save_script)
-
-    got = await route_get_script(
-        polygon_id=555, testset="tests", user_id=user.id, db=db
+async def test_route_edit_solution_extra_tags(polygon_api, db, user):
+    body = EditSolutionExtraTagsRequest(remove=False, test_group="1", tag="TL")
+    await r.route_edit_solution_extra_tags(
+        polygon_id=555, name="tl.cpp", body=body, user_id=user.id, db=db
     )
-    assert got == {"content": "gen 1 > 1"}
+    assert polygon_api.last().params == {
+        **P, "name": "tl.cpp", "remove": "false", "testGroup": "1", "tag": "TL"}
 
-    body = SaveScriptRequest(source="gen 2 > 2")
-    res = await route_save_script(
-        polygon_id=555, testset="tests", body=body, user_id=user.id, db=db
+
+@pytest.mark.parametrize("route,body_cls,setter,param", [
+    (r.route_set_checker, SetCheckerRequest, "problem.setChecker", "checker"),
+    (r.route_set_validator, SetValidatorRequest, "problem.setValidator", "validator"),
+    (r.route_set_interactor, SetInteractorRequest, "problem.setInteractor", "interactor"),
+])
+async def test_route_upload_and_set(polygon_api, db, user, route, body_cls, setter, param):
+    body = body_cls(name="x.cpp", content="code")
+    assert await route(polygon_id=555, body=body, user_id=user.id, db=db) == {"ok": True}
+    assert polygon_api.methods == ["problem.saveFile", setter]
+    assert polygon_api.calls[1].params == {**P, param: "x.cpp"}
+
+
+async def test_route_set_standard_checker_without_upload(polygon_api, db, user):
+    body = SetCheckerRequest(name="std::ncmp.cpp")
+    assert await r.route_set_checker(polygon_id=555, body=body, user_id=user.id, db=db) == {"ok": True}
+    assert polygon_api.methods == ["problem.setChecker"]
+    assert polygon_api.last().params == {**P, "checker": "std::ncmp.cpp"}
+
+
+@pytest.mark.parametrize("route,method,key", [
+    (r.route_get_checker, "problem.checker", "checker"),
+    (r.route_get_validator, "problem.validator", "validator"),
+    (r.route_get_interactor, "problem.interactor", "interactor"),
+    (r.route_get_extra_validators, "problem.extraValidators", "extra_validators"),
+])
+async def test_route_getters(polygon_api, db, user, route, method, key):
+    value = ["v2.cpp"] if key == "extra_validators" else "x.cpp"
+    polygon_api.respond(method, value)
+    assert await route(polygon_id=555, user_id=user.id, db=db) == {key: value}
+
+
+async def test_route_checker_and_validator_tests(polygon_api, db, user):
+    polygon_api.respond("problem.checkerTests", [{"index": 1}])
+    polygon_api.respond("problem.validatorTests", [{"index": 2}])
+    assert await r.route_get_checker_tests(polygon_id=555, user_id=user.id, db=db) == [
+        {"index": 1}]
+    assert await r.route_get_validator_tests(polygon_id=555, user_id=user.id, db=db) == [
+        {"index": 2}]
+
+    await r.route_save_checker_test(
+        polygon_id=555, user_id=user.id, db=db,
+        body=SaveCheckerTestRequest(test_index=1, test_input="1", test_output="1",
+                                    test_answer="2", test_verdict="WRONG_ANSWER"),
     )
-    assert res == {"ok": True}
-    assert captured["source"] == "gen 2 > 2"
-    assert captured["testset"] == "tests"
+    assert polygon_api.last().params["testVerdict"] == "WRONG_ANSWER"
+
+    await r.route_save_validator_test(
+        polygon_id=555, user_id=user.id, db=db,
+        body=SaveValidatorTestRequest(test_index=3, test_input="-1", test_verdict="INVALID"),
+    )
+    assert polygon_api.last().params == {
+        **P, "testIndex": "3", "testInput": "-1", "testVerdict": "INVALID"}
+
+
+async def test_route_script_get_save_clear(polygon_api, db, user):
+    polygon_api.respond("problem.script", "gen 1 > $")
+    assert await r.route_get_script(
+        polygon_id=555, testset="tests", user_id=user.id, db=db) == {"content": "gen 1 > $"}
+
+    await r.route_save_script(polygon_id=555, testset="tests",
+                              body=SaveScriptRequest(source="gen 2 > $"),
+                              user_id=user.id, db=db)
+    assert polygon_api.last().params == {**P, "testset": "tests", "source": "gen 2 > $"}
+
+    await r.route_clear_script(polygon_id=555, testset="tests", user_id=user.id, db=db)
+    assert polygon_api.last().method == "problem.clearScript"
+
+
+async def test_route_save_solution_empty_tag_is_skipped(polygon_api, db, user):
+    body = SaveSolutionRequest(name="a.cpp", content="x", tag="", source_type="")
+    await r.route_save_solution(polygon_id=555, body=body, user_id=user.id, db=db)
+    assert polygon_api.last().params == {"problemId": "555", "name": "a.cpp", "file": "x"}

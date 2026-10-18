@@ -5,7 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.crypt import get_current_user
-from api.user.polygon.problem.get.list import list_problems
+from api.user.polygon.cache import refresh_problem_list
 from app.database import get_db
 from models.task.problem import PolygonProblem
 from models.task.statement import PolygonStatement
@@ -72,7 +72,7 @@ async def route_list_problems(
     search filters by technical name or statement name (case-insensitive).
     """
     if refresh:
-        await list_problems(user_id=user_id, db=db, show_deleted=show_deleted)
+        await refresh_problem_list(user_id, db, show_deleted=show_deleted)
 
     base_filter = [PolygonProblem.user_id == user_id]
     if not show_deleted:

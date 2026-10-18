@@ -27,7 +27,7 @@ from api.user.gpt.services.chat.context_resolver import ResolvedContext
 from api.user.gpt.services.chat.file_context import ensure_files_loaded
 from api.user.gpt.services.sessions import (append_chat_log, chat_message,
                                             get_session_or_404)
-from api.user.polygon.get_response import PolygonAPIError
+from api.user.polygon.client import PolygonAPIError
 from app.database import Session, get_db
 from models.task.session import TaskSession
 

@@ -56,6 +56,9 @@ services:
     env_file: .env
     environment:
       PYTHONUNBUFFERED: 1
+    volumes:
+      # SSH key + known_hosts for the ejudge export (optional)
+      - ./secrets/ejudge:/run/secrets/ejudge:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,13 +79,15 @@ services:
       timeout: 5s
       retries: 6
 
-  # runs queued jobs (submission judging); same image as the backend
+  # runs queued jobs (submission judging, ejudge export); same image as the backend
   worker:
     image: ghcr.io/trykuhn/yandexcodeforcesanalyzer-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
     environment:
       PYTHONUNBUFFERED: 1
+    volumes:
+      - ./secrets/ejudge:/run/secrets/ejudge:ro
     command: ["python", "-m", "jobs.run_worker"]
     # a healthy backend means the migrations the jobs table needs are applied
     depends_on:
@@ -90,6 +95,46 @@ services:
         condition: service_healthy
       judge:
         condition: service_started
+
+  # AI authoring service (services/ai-authoring): the backend proxies /api/ai/* here.
+  # Applies its own migrations (authoring_* tables) on start.
+  ai-authoring:
+    image: ghcr.io/trykuhn/yandexcodeforcesanalyzer-ai-authoring:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: 1
+      BACKEND_API_URL: http://backend:8000/api
+    expose:
+      - "8100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8100/api/ai/health')\"",
+        ]
+      start_period: 60s
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # executes AI runs (chat, generation, builds with repair) and syncs open problems
+  ai-worker:
+    image: ghcr.io/trykuhn/yandexcodeforcesanalyzer-ai-authoring:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: 1
+      BACKEND_API_URL: http://backend:8000/api
+    command: ["python", "-m", "authoring.worker"]
+    depends_on:
+      ai-authoring:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
 
   frontend:
     image: ghcr.io/trykuhn/yandexcodeforcesanalyzer-frontend:${IMAGE_TAG:-latest}
@@ -148,4 +193,4 @@ volumes:
   redis_data:
   s3_data:
   caddy_data:
-  caddy_config:
+  caddy_config:

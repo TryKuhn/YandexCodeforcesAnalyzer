@@ -17,8 +17,7 @@ from api.crypt import get_current_user
 from api.pydantic_schemas.user.ai_task import UpdateProblemTypeRequest
 from api.user.gpt.base_gpt import gpt_router
 from api.user.gpt.services.sessions import get_session_or_404, now_utc
-from api.user.polygon.problem.post.commit import commit_changes
-from api.user.polygon.problem.settings.update_info import update_info
+from api.user.polygon.methods import commit_changes, update_info
 from app.database import get_db
 from models.task.problem import PolygonProblem
 from models.task.session import ProblemType

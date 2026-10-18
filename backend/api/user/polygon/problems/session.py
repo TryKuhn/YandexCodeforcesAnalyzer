@@ -16,6 +16,48 @@ from models.task.session import PipelineStage, TaskSession
 router = APIRouter()
 
 
+DEFAULT_MODEL = "anthropic/claude-opus-4.8"
+
+
+def default_problem_settings() -> dict:
+    """Problem settings a fresh session starts with."""
+    return {
+        "input_file": "stdin",
+        "output_file": "stdout",
+        "interactive": False,
+        "time_limit": 2000,
+        "memory_limit": 256,
+        "tags": [],
+        "enable_groups": False,
+        "enable_points": False,
+    }
+
+
+def new_task_session(
+    user_id: int,
+    polygon_id: int,
+    *,
+    model: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+) -> TaskSession:
+    """Build (not persist) a TaskSession for the problem with default settings."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    return TaskSession(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        model=model or DEFAULT_MODEL,
+        system_prompt=system_prompt or "",
+        history=[],
+        stage=PipelineStage.STATEMENT,
+        progress={"status": "idle"},
+        statement=None,
+        problem_settings=default_problem_settings(),
+        polygon_problem_id=polygon_id,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 class UpdateSessionRequest(BaseModel):
     """Request body for updating a session's model and/or system prompt."""
 
@@ -56,30 +98,7 @@ async def route_get_session(
     session = result.scalars().first()
 
     if session is None:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        session = TaskSession(
-            id=str(uuid.uuid4()),
-            user_id=user_id,
-            model="anthropic/claude-opus-4.8",
-            system_prompt="",
-            history=[],
-            stage=PipelineStage.STATEMENT,
-            progress={"status": "idle"},
-            statement=None,
-            problem_settings={
-                "input_file": "stdin",
-                "output_file": "stdout",
-                "interactive": False,
-                "time_limit": 2000,
-                "memory_limit": 256,
-                "tags": [],
-                "enable_groups": False,
-                "enable_points": False,
-            },
-            polygon_problem_id=polygon_id,
-            created_at=now,
-            updated_at=now,
-        )
+        session = new_task_session(user_id, polygon_id)
         db.add(session)
         await db.commit()
         await db.refresh(session)
@@ -104,29 +123,8 @@ async def route_update_session_settings(
     session = result.scalars().first()
 
     if session is None:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        session = TaskSession(
-            id=str(uuid.uuid4()),
-            user_id=user_id,
-            model=body.model or "anthropic/claude-opus-4.8",
-            system_prompt=body.system_prompt or "",
-            history=[],
-            stage=PipelineStage.STATEMENT,
-            progress={"status": "idle"},
-            statement=None,
-            problem_settings={
-                "input_file": "stdin",
-                "output_file": "stdout",
-                "interactive": False,
-                "time_limit": 2000,
-                "memory_limit": 256,
-                "tags": [],
-                "enable_groups": False,
-                "enable_points": False,
-            },
-            polygon_problem_id=polygon_id,
-            created_at=now,
-            updated_at=now,
+        session = new_task_session(
+            user_id, polygon_id, model=body.model, system_prompt=body.system_prompt
         )
         db.add(session)
     else:

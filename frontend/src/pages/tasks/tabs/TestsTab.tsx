@@ -5,9 +5,14 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, RefreshCw, AlertCircle, Code2, Edit2, Save, X, ChevronRight } from 'lucide-react';
 import { api } from '../../../api/instance';
 import { CodeEditor } from '../../../components/CodeEditor';
+import { GroupsPlanEditor } from '../components/GroupsPlanEditor';
+import type { AiRun } from '../../../api/ai';
 
 interface Props {
     polygonId: number;
+    sessionId?: string | null;
+    busy?: boolean;
+    onRunStarted?: (run: AiRun) => void;
 }
 
 interface Test {
@@ -29,7 +34,7 @@ interface TestPreview {
     error?: string;
 }
 
-export const TestsTab = ({ polygonId }: Props) => {
+export const TestsTab = ({ polygonId, sessionId = null, busy, onRunStarted }: Props) => {
     const navigate = useNavigate();
     const [tests, setTests] = useState<Test[]>([]);
     const [loading, setLoading] = useState(true);
@@ -134,6 +139,8 @@ export const TestsTab = ({ polygonId }: Props) => {
                     {error}
                 </div>
             )}
+
+            <GroupsPlanEditor sessionId={sessionId} disabled={busy} onRunStarted={onRunStarted} />
 
             {/* FreeMarker generation script */}
             <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">

@@ -94,6 +94,8 @@ async def test_build_once_commits_builds_and_polls(monkeypatch):
 
     async def fake_build_package(**k):
         calls["build"] += 1
+        # The build loop always asks for a full, verified build.
+        assert k["full"] is True and k["verify"] is True
 
     monkeypatch.setattr(pl, "commit_changes", fake_commit)
     monkeypatch.setattr(pl, "build_package", fake_build_package)

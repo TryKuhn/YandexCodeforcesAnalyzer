@@ -4,7 +4,7 @@ import json
 import pytest
 
 import app.server as server
-from api.user.polygon.get_response import PolygonAPIError
+from api.user.polygon.client import PolygonAPIError
 
 
 class _FakeValidationError:

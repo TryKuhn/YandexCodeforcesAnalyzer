@@ -18,10 +18,9 @@ from api.user.gpt.services.build.scoring_groups import assign_tests_to_groups
 from api.user.gpt.services.generation.solution_skip import parse_skip
 from api.user.gpt.services.files.file_registry import applicable_types
 from api.user.gpt.services.sync.file_sync import sync_file
-from api.user.polygon.get_response import PolygonAPIError
-from api.user.polygon.problem.get.packages import get_packages
-from api.user.polygon.problem.post.commit import commit_changes
-from api.user.polygon.problem.post.package import build_package
+from api.user.polygon.client import PolygonAPIError
+from api.user.polygon.methods import (build_package, commit_changes,
+                                      get_packages)
 from models.task.session import TaskSession
 
 logger = logging.getLogger(__name__)
@@ -90,7 +89,9 @@ async def _build_once(problem_id: int, user_id: int, db: AsyncSession,
     before_ids = await _package_ids(problem_id, user_id, db)
     await commit_changes(problem_id, user_id, db, minor_changes=True, message="ai-build")
     await set_step("Запуск сборки пакета...")
-    await build_package(problem_id=problem_id, user_id=user_id, db=db)
+    await build_package(
+        problem_id=problem_id, user_id=user_id, db=db, full=True, verify=True
+    )
     return await _poll(problem_id, user_id, db, set_step, before_ids)
 
 

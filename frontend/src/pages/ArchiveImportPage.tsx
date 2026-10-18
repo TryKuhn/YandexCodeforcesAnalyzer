@@ -9,7 +9,7 @@ import {
     FileArchive, ChevronRight, Sparkles, Package,
 } from 'lucide-react';
 import { api } from '../api/instance';
-import { AI_MODELS } from '../constants/aiModels';
+import { AI_MODELS, DEFAULT_AI_MODEL } from '../constants/aiModels';
 
 const POLL_MS = 2000;
 
@@ -76,7 +76,7 @@ export const ArchiveImportPage = () => {
     const [prefix, setPrefix] = useState('');
     const [prefixTouched, setPrefixTouched] = useState(false);
     const [generateAi, setGenerateAi] = useState(true);
-    const [aiModel, setAiModel] = useState(AI_MODELS[1].id);
+    const [aiModel, setAiModel] = useState(DEFAULT_AI_MODEL);
     const [buildPackage, setBuildPackage] = useState(true);
 
     const [uploading, setUploading] = useState(false);

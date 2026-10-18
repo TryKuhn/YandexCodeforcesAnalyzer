@@ -24,10 +24,13 @@ from jobs.transport import RedisStreamTransport
 from api.user import contest_router
 from api.user.auth import auth_router
 from api.user.codeforces import codeforces_router
-from api.user.gpt import gpt_router
+from api.user.ejudge import ejudge_router
+from api.user.ejudge import router as ejudge_routes
+from api.user.ai import ai_proxy_router
+from api.user.ai.proxy import close_client as close_ai_proxy_client
 from api.user.plagiarism import plagiarism_router
 from api.user.polygon.base_polygon import polygon_router
-from api.user.polygon.get_response import PolygonAPIError
+from api.user.polygon.client import PolygonAPIError
 from api.user.yandex import yandex_router
 from app.database import Session, engine
 from app.logging_config import get_logger, setup_logging
@@ -83,6 +86,11 @@ async def lifespan(app: FastAPI):
             db, transport, job_type, payload, user_id=user_id
         )
     )
+    ejudge_routes.set_enqueue(
+        lambda db, job_type, payload, user_id=None: enqueue(
+            db, transport, job_type, payload, user_id=user_id
+        )
+    )
 
     for _ in range(5):
         try:
@@ -104,6 +112,7 @@ async def lifespan(app: FastAPI):
     yield
 
     cleanup_task.cancel()
+    await close_ai_proxy_client()
     await engine.dispose()
 
     logger.info("=" * 60)
@@ -218,8 +227,15 @@ app.include_router(
     tags=["polygon"],
     dependencies=[Depends(get_current_user)],
 )
+# the AI authoring service (services/ai-authoring) behind the same origin
 app.include_router(
-    gpt_router, prefix="/api/ai", tags=["gpt"], dependencies=[Depends(get_current_user)]
+    ai_proxy_router, prefix="/api/ai", tags=["ai"], dependencies=[Depends(get_current_user)]
+)
+app.include_router(
+    ejudge_router,
+    prefix="/api/ejudge",
+    tags=["ejudge"],
+    dependencies=[Depends(get_current_user)],
 )
 app.include_router(
     yandex_router,

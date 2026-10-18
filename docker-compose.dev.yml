@@ -63,6 +63,7 @@ services:
       PYTHONPATH: /app
     volumes:
       - ./backend:/app
+      - ./secrets/ejudge:/run/secrets/ejudge:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,8 +76,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-  # runs queued jobs (submission judging); no auto-reload - after editing
-  # job/grading code run `make dev.restart.worker`
+  # runs queued jobs (submission judging, ejudge export); no auto-reload - after
+  # editing job/grading code run `make dev.restart.worker`
   worker:
     build:
       context: ./backend
@@ -88,12 +89,51 @@ services:
       PYTHONPATH: /app
     volumes:
       - ./backend:/app
+      - ./secrets/ejudge:/run/secrets/ejudge:ro
     # a healthy backend means the migrations the jobs table needs are applied
     depends_on:
       backend:
         condition: service_healthy
       judge:
         condition: service_started
+  # AI authoring service: chat, generation, groups, builds (/api/ai/* via the backend)
+  ai-authoring:
+    build:
+      context: ./services/ai-authoring
+    command: ["sh", "-c", "alembic upgrade head && uvicorn authoring.main:app --host 0.0.0.0 --port 8100 --reload"]
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: 1
+      BACKEND_API_URL: http://backend:8000/api
+    volumes:
+      - ./services/ai-authoring:/app
+    ports:
+      - "8100:8100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8100/api/ai/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+  # background runs of the AI service + periodic sync; no auto-reload:
+  # `make dev.restart.ai-worker` after editing the pipeline
+  ai-worker:
+    build:
+      context: ./services/ai-authoring
+    command: ["python", "-m", "authoring.worker"]
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: 1
+      BACKEND_API_URL: http://backend:8000/api
+    volumes:
+      - ./services/ai-authoring:/app
+    depends_on:
+      ai-authoring:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
   judge:
     build:
       context: ./backend

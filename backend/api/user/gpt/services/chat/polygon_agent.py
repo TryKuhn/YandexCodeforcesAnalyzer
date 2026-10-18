@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from api.user.gpt.services.sessions import chat_message, now_utc
-from api.user.polygon.client import get_user, polygon_call
+from api.user.polygon.methods import get_solutions, view_file, view_solution
 from models.task.problem import PolygonProblem
 from models.task.session import TaskSession
 from models.task.statement import PolygonStatement
@@ -120,26 +120,17 @@ async def _execute_tool(name: str, args: dict, polygon_id: int,
             return json.dumps(result, ensure_ascii=False)
 
         if name == "get_file":
-            user = await get_user(user_id, db)
-            content = await polygon_call("problem.viewFile", {
-                "problemId": str(polygon_id), "type": args.get("file_type", "source"),
-                "name": args.get("name", "")}, user)
-            text = content.get("message", "") if isinstance(content, dict) else str(content)
+            text = await view_file(polygon_id, args.get("file_type", "source"),
+                                   args.get("name", ""), user_id, db)
             return text[:8000]
 
         if name == "get_solutions":
-            user = await get_user(user_id, db)
-            sols = await polygon_call("problem.solutions", {"problemId": str(polygon_id)}, user)
-            if isinstance(sols, list):
-                return json.dumps([{"name": s.get("name"), "tag": s.get("tag")} for s in sols],
-                                  ensure_ascii=False)
-            return json.dumps(sols, ensure_ascii=False)
+            sols = await get_solutions(polygon_id, user_id, db)
+            return json.dumps([{"name": s.get("name"), "tag": s.get("tag")} for s in sols],
+                              ensure_ascii=False)
 
         if name == "get_solution_content":
-            user = await get_user(user_id, db)
-            content = await polygon_call("problem.viewSolution", {
-                "problemId": str(polygon_id), "name": args.get("name", "")}, user)
-            text = content.get("message", "") if isinstance(content, dict) else str(content)
+            text = await view_solution(polygon_id, args.get("name", ""), user_id, db)
             return text[:8000]
 
     except Exception as exc:

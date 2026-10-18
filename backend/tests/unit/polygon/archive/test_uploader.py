@@ -3,8 +3,8 @@
 Every Polygon API call goes through ``PolygonImportClient.call``; in the
 orchestration tests we replace the client with a fake that records calls and
 returns scripted results, and we monkeypatch ``generate_checker_validator``.
-The ``call`` retry/parse logic is tested directly against a fake aiohttp
-session. No real network or aiohttp session is created.
+``call`` (which delegates to the shared core in ``api.user.polygon.client``)
+is tested against a fake aiohttp session. No real network or aiohttp session is created.
 """
 from __future__ import annotations
 
@@ -66,9 +66,9 @@ async def test_decode_text_latin1_last_resort():
 class _FakeResp:
     def __init__(self, status, body):
         self.status = status
-        self._body = body
+        self._body = body.encode() if isinstance(body, str) else body
 
-    async def text(self):
+    async def read(self):
         return self._body
 
     async def __aenter__(self):
@@ -79,7 +79,7 @@ class _FakeResp:
 
 
 class _FakeSession:
-    """Returns scripted responses; raises if asked to send too many."""
+    """Returns scripted responses (or raises scripted exceptions) in order."""
 
     def __init__(self, responses, raises=None):
         self._responses = list(responses)
@@ -111,48 +111,70 @@ def _client_with(session):
     return c
 
 
-async def test_call_returns_result_on_ok(monkeypatch):
-    monkeypatch.setattr(U, "create_signature", lambda *a, **k: "sig")
+@pytest.fixture
+def core(monkeypatch):
+    """Neutralise signing and back-off in the shared Polygon client core."""
+    import api.user.polygon.client as C
+
+    monkeypatch.setattr(C, "create_signature", lambda *a, **k: "sig")
+    monkeypatch.setattr(C, "_sleep", _no_sleep)
+    return C
+
+
+async def test_call_returns_result_on_ok(core):
     sess = _FakeSession([_FakeResp(200, '{"status": "OK", "result": {"id": 7}}')])
     c = _client_with(sess)
-    out = await c.call("problem.create", name="x")
+    out = await c.call("problem.create", name="x", skip=None)
     assert out == {"id": 7}
-    # bytes params are decoded; None params dropped; apiKey/time/apiSig added
+    # None params dropped; apiKey/time/apiSig added
     _, data = sess.calls[0]
     assert data["apiKey"] == "key"
-    assert "apiSig" in data and "time" in data
-    assert data["name"] == "x"
+    assert data["apiSig"] == "sig" and "time" in data
+    assert data["name"] == "x" and "skip" not in data
 
 
-async def test_call_raises_on_failed_status(monkeypatch):
-    monkeypatch.setattr(U, "create_signature", lambda *a, **k: "sig")
-    sess = _FakeSession([_FakeResp(200, '{"status": "FAILED", "comment": "bad thing"}')])
+async def test_call_decodes_cp1251_bytes_and_serializes_bools(core):
+    sess = _FakeSession([_FakeResp(200, '{"status": "OK"}')])
+    c = _client_with(sess)
+    await c.call("problem.saveSolution", file="тест".encode("cp1251"), checkExisting=False)
+    _, data = sess.calls[0]
+    assert data["file"] == "тест"
+    assert data["checkExisting"] == "false"
+
+
+async def test_call_keeps_statement_images_binary(core):
+    # Images used to be decoded as latin-1 text and re-encoded as UTF-8 — corrupt.
+    png = b"\x89PNG\r\n\x1a\n\xff\x00"
+    sess = _FakeSession([_FakeResp(200, '{"status": "OK"}')])
+    c = _client_with(sess)
+    await c.call("problem.saveStatementResource", problemId=1, name="a.png", file=png)
+    _, data = sess.calls[0]
+    assert data["file"] == png
+
+
+async def test_call_raises_on_failed_status(core):
+    sess = _FakeSession([_FakeResp(400, '{"status": "FAILED", "comment": "bad thing"}')])
     c = _client_with(sess)
     with pytest.raises(PolygonError, match="bad thing"):
         await c.call("problem.x")
 
 
-async def test_call_retries_on_rate_limit_then_succeeds(monkeypatch):
-    monkeypatch.setattr(U, "create_signature", lambda *a, **k: "sig")
-    monkeypatch.setattr(U.asyncio, "sleep", _no_sleep)
+async def test_call_retries_on_rate_limit_then_succeeds(core):
     sess = _FakeSession(
         [
-            _FakeResp(200, '{"status": "FAILED", "comment": "Too many requests"}'),
+            _FakeResp(400, '{"status": "FAILED", "comment": "Too many requests"}'),
             _FakeResp(200, '{"status": "OK", "result": "done"}'),
         ]
     )
     c = _client_with(sess)
-    out = await c.call("problem.x")
-    assert out == "done"
+    assert await c.call("problem.x") == "done"
     assert len(sess.calls) == 2
 
 
-async def test_call_retries_on_stale_time(monkeypatch):
-    monkeypatch.setattr(U, "create_signature", lambda *a, **k: "sig")
-    monkeypatch.setattr(U.asyncio, "sleep", _no_sleep)
+async def test_call_retries_on_stale_time(core):
     sess = _FakeSession(
         [
-            _FakeResp(200, '{"status": "FAILED", "comment": "time is not within 5 minutes"}'),
+            _FakeResp(400, '{"status": "FAILED", "comment": "time is not within 5 minutes"}'),
             _FakeResp(200, '{"status": "OK", "result": 1}'),
         ]
     )
@@ -161,24 +183,21 @@ async def test_call_retries_on_stale_time(monkeypatch):
     assert len(sess.calls) == 2
 
 
-async def test_call_non_json_2xx_returns_empty_dict(monkeypatch):
-    monkeypatch.setattr(U, "create_signature", lambda *a, **k: "sig")
+async def test_call_non_json_2xx_raises(core):
     sess = _FakeSession([_FakeResp(200, "not json")])
     c = _client_with(sess)
-    assert await c.call("m") == {}
+    with pytest.raises(PolygonError, match="неожиданный ответ"):
+        await c.call("m")
 
 
-async def test_call_non_json_4xx_raises(monkeypatch):
-    monkeypatch.setattr(U, "create_signature", lambda *a, **k: "sig")
+async def test_call_non_json_4xx_raises(core):
     sess = _FakeSession([_FakeResp(403, "Forbidden")])
     c = _client_with(sess)
     with pytest.raises(PolygonError, match="HTTP 403"):
         await c.call("m")
 
 
-async def test_call_5xx_retries(monkeypatch):
-    monkeypatch.setattr(U, "create_signature", lambda *a, **k: "sig")
-    monkeypatch.setattr(U.asyncio, "sleep", _no_sleep)
+async def test_call_5xx_retries(core):
     sess = _FakeSession(
         [_FakeResp(500, "boom"), _FakeResp(200, '{"status":"OK","result":42}')]
     )
@@ -186,17 +205,22 @@ async def test_call_5xx_retries(monkeypatch):
     assert await c.call("m") == 42
 
 
-async def test_call_client_error_retried_then_exhausted(monkeypatch):
+async def test_call_client_error_retried_then_exhausted(core):
     import aiohttp
 
-    monkeypatch.setattr(U, "create_signature", lambda *a, **k: "sig")
-    monkeypatch.setattr(U.asyncio, "sleep", _no_sleep)
     err = aiohttp.ClientError("conn reset")
-    sess = _FakeSession([None, None, None], raises=[err, err, err])
+    attempts = core.MAX_ATTEMPTS
+    sess = _FakeSession([None] * attempts, raises=[err] * attempts)
     c = _client_with(sess)
     with pytest.raises(PolygonError):
         await c.call("m")
-    assert len(sess.calls) == 3  # three attempts
+    assert len(sess.calls) == attempts
+
+
+async def test_call_without_session_raises():
+    c = PolygonImportClient("key", "secret")
+    with pytest.raises(PolygonError, match="сессия"):
+        await c.call("m")
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +397,7 @@ async def test_upload_task_generates_ai_checker_and_validator(monkeypatch):
     task = _task_with_solution()
     status = ProblemStatus(name="A", polygon_name="x1")
 
-    async def fake_gen(st, model):
+    async def fake_gen(st, model, **kwargs):
         return {
             "checker": {"code": "// checker"},
             "validator": {"code": "// validator"},
@@ -385,7 +409,7 @@ async def test_upload_task_generates_ai_checker_and_validator(monkeypatch):
         {"problems.list": lambda p: [], "problem.create": lambda p: {"id": 1}}
     )
     await upload_task(
-        client, task, status, generate_ai=True, ai_model="m", build_pkg=False
+        client, task, status, generate_ai=True, ai_model="m", build_pkg=False, user_id=1
     )
     assert status.checker == "checker.cpp"
     assert status.validator == "validator.cpp"
@@ -398,7 +422,7 @@ async def test_upload_task_standard_checker(monkeypatch):
     task = _task_with_solution()
     status = ProblemStatus(name="A", polygon_name="x1")
 
-    async def fake_gen(st, model):
+    async def fake_gen(st, model, **kwargs):
         return {"checker": {"type": "standard", "name": "wcmp"}, "validator": {}}
 
     monkeypatch.setattr(U, "generate_checker_validator", fake_gen)
@@ -406,7 +430,7 @@ async def test_upload_task_standard_checker(monkeypatch):
         {"problems.list": lambda p: [], "problem.create": lambda p: {"id": 1}}
     )
     await upload_task(
-        client, task, status, generate_ai=True, ai_model="m", build_pkg=False
+        client, task, status, generate_ai=True, ai_model="m", build_pkg=False, user_id=1
     )
     assert status.checker == "wcmp"
     set_checker = [p for m, p in client.calls if m == "problem.setChecker"]
@@ -417,7 +441,7 @@ async def test_upload_task_ai_generation_failure_is_non_fatal(monkeypatch):
     task = _task_with_solution()
     status = ProblemStatus(name="A", polygon_name="x1")
 
-    async def fake_gen(st, model):
+    async def fake_gen(st, model, **kwargs):
         raise RuntimeError("LLM down")
 
     monkeypatch.setattr(U, "generate_checker_validator", fake_gen)
@@ -426,7 +450,7 @@ async def test_upload_task_ai_generation_failure_is_non_fatal(monkeypatch):
     )
     # Should not raise — AI errors are logged, import continues
     await upload_task(
-        client, task, status, generate_ai=True, ai_model="m", build_pkg=False
+        client, task, status, generate_ai=True, ai_model="m", build_pkg=False, user_id=1
     )
     assert status.stage == "done"
     assert any("ошибка генерации" in n for n in status.log)
@@ -599,3 +623,31 @@ async def test_run_import_marks_partial_errors(monkeypatch):
     b_status = next(p for p in job.problems if p.name == "B")
     assert b_status.stage == "error"
     assert b_status.error == "failed B"
+
+
+async def test_upload_failure_cancels_ai_generation(monkeypatch):
+    task = _task_with_solution()
+    status = ProblemStatus(name="A", polygon_name="x1")
+    created: list[asyncio.Task] = []
+    real_create_task = asyncio.create_task
+
+    def spy(coro):
+        created.append(real_create_task(coro))
+        return created[-1]
+
+    async def slow_gen(st, model, **kwargs):
+        await asyncio.sleep(3600)
+
+    def fail(_):
+        raise RuntimeError("statement rejected")
+
+    monkeypatch.setattr(U, "generate_checker_validator", slow_gen)
+    monkeypatch.setattr(U.asyncio, "create_task", spy)
+    client = FakeClient({"problems.list": lambda p: [], "problem.create": lambda p: {"id": 1},
+                         "problem.updateInfo": fail})
+    with pytest.raises(RuntimeError):
+        await upload_task(client, task, status, generate_ai=True, ai_model="m", build_pkg=False, user_id=1)
+    monkeypatch.undo()
+    assert len(created) == 1
+    with pytest.raises(asyncio.CancelledError):
+        await created[0]

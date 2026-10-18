@@ -22,14 +22,10 @@ from api.user.gpt.services.ai_file_helpers import (mark_uploaded,
                                                    resolve_filename,
                                                    upsert_ai_file)
 from api.user.gpt.services.files.file_registry import get_spec
-from api.user.polygon.files.checker.post.set_checker import set_checker
-from api.user.polygon.files.generator.post.save_file import set_generator
-from api.user.polygon.files.interactor.post.set_interactor import set_interactor
-from api.user.polygon.files.script.post.save_script import save_script
-from api.user.polygon.files.solution.post.save_solution import save_solution
-from api.user.polygon.files.validator.post.set_validator import set_validator
-from api.user.polygon.problem.post.commit import commit_changes
-from api.user.polygon.problem.post.create import create_problem
+from api.user.polygon.methods import (commit_changes, create_problem,
+                                      save_file, save_script, save_solution,
+                                      upload_checker, upload_interactor,
+                                      upload_validator)
 from models.task.session import TaskSession
 
 logger = logging.getLogger(__name__)
@@ -54,7 +50,7 @@ async def ensure_problem(db: AsyncSession, session: TaskSession) -> int:
 
     name = _make_polygon_name(session.model, session.id)
     logger.info(f"[{session.id}] Auto-creating Polygon problem '{name}'")
-    problem_id = await create_problem(name=name, user_id=session.user_id, db=db)
+    problem_id = await create_problem(name, session.user_id, db)
     session.polygon_problem_id = problem_id
     await db.commit()
     return problem_id
@@ -72,24 +68,24 @@ async def _push_to_polygon(
     """Dispatch to the Polygon setter that matches the registry category.
 
     The ``checker`` category covers both a regular checker and an output-only
-    scorer; both go through ``set_checker``.
+    scorer; both go through ``upload_checker``.
     """
     if category == "validator":
-        await set_validator(problem_id, filename, content, user_id, db)
+        await upload_validator(problem_id, filename, content, user_id, db)
     elif category == "generator":
-        await set_generator(problem_id, filename, content, user_id, db)
+        await save_file(problem_id, "source", filename, content, user_id, db)
     elif category == "checker":
-        await set_checker(problem_id, filename, content, user_id, db)
+        await upload_checker(problem_id, filename, content, user_id, db)
     elif category == "interactor":
-        await set_interactor(problem_id, filename, content, user_id, db)
+        await upload_interactor(problem_id, filename, content, user_id, db)
     elif category == "script":
         await save_script(problem_id, "tests", content, user_id, db)
     elif category == "solution":
         # Polygon auto-detects the language for .cpp but not reliably for .py
         # (it rejects with a 'file:' error), so pass an explicit sourceType.
         source_type = "python.3" if filename.endswith(".py") else None
-        await save_solution(problem_id, filename, content, tag, user_id, db,
-                            source_type=source_type)
+        await save_solution(problem_id, filename, content, user_id, db,
+                            tag=tag, source_type=source_type)
     else:
         raise ValueError(f"Unknown file category '{category}' for sync")
 

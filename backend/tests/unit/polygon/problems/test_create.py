@@ -1,6 +1,6 @@
 """Unit tests for api/user/polygon/problems/create.py route handler."""
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 import api.user.polygon.problems.create as mod
 from api.pydantic_schemas.user.polygon_task import CreatePolygonProblemRequest
@@ -9,7 +9,7 @@ from models.task.session import TaskSession
 
 
 @pytest.mark.asyncio
-async def test_route_create_problem_creates_session(monkeypatch, db, user):
+async def test_route_create_problem_creates_clean_problem(monkeypatch, db, user):
     captured = {}
 
     async def fake_create_problem(name, user_id, db):
@@ -22,18 +22,7 @@ async def test_route_create_problem_creates_session(monkeypatch, db, user):
     body = CreatePolygonProblemRequest(name="my-problem")
     result = await route_create_problem(body=body, user_id=user.id, db=db)
 
-    assert result["polygon_id"] == 777
-    assert result["name"] == "my-problem"
-    assert result["session_id"]
+    assert result == {"polygon_id": 777, "name": "my-problem"}
     assert captured == {"name": "my-problem", "user_id": user.id}
-
-    # A TaskSession row must have been persisted with the polygon id.
-    row = (
-        await db.execute(
-            select(TaskSession).where(TaskSession.id == result["session_id"])
-        )
-    ).scalars().first()
-    assert row is not None
-    assert row.polygon_problem_id == 777
-    assert row.user_id == user.id
-    assert row.problem_settings["input_file"] == "stdin"
+    # the AI workspace now lives in the AI authoring service, not in ai_sessions
+    assert (await db.execute(select(func.count()).select_from(TaskSession))).scalar() == 0

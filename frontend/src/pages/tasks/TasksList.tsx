@@ -7,6 +7,7 @@ import {
     Clock, X, AlertCircle, Search,
 } from 'lucide-react';
 import { api } from '../../api/instance';
+import { aiApi, errorText } from '../../api/ai';
 import { Pagination } from '../../components/Pagination';
 
 interface PolygonProblem {
@@ -100,6 +101,9 @@ export const TasksList = () => {
     const [newName, setNewName] = useState('');
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
+    const [newType, setNewType] = useState('regular');
+    const [newIdea, setNewIdea] = useState('');
+    const [newGroups, setNewGroups] = useState(false);
 
     const fetchProblems = async (
         p = page,
@@ -175,10 +179,30 @@ export const TasksList = () => {
         setCreating(true);
         setCreateError(null);
         try {
-            const res = await api.post('/polygon/problems/', { name: newName.trim() });
-            navigate(`/tasks/${res.data.polygon_id}`);
-        } catch (e: any) {
-            setCreateError(e?.response?.data?.detail || 'Ошибка создания задачи');
+            // a clean Polygon problem + its AI workspace; with an idea the AI generates it
+            // (generation is available for regular problems only so far)
+            const regular = newType === 'regular';
+            const idea = regular ? newIdea.trim() : '';
+            let polygonId: number;
+            try {
+                const res = await aiApi.createProblem({
+                    name: newName.trim(),
+                    problem_type: newType,
+                    idea: idea || undefined,
+                    groups: idea ? newGroups : undefined,
+                });
+                polygonId = res.polygon_id;
+            } catch (e) {
+                // the AI service is down: a clean regular problem can still be created directly
+                const status = (e as { response?: { status?: number } })?.response?.status;
+                const unavailable = status === undefined || status === 502 || status === 503 || status === 504;
+                if (idea || !regular || !unavailable) throw e;
+                const res = await api.post<{ polygon_id: number }>('/polygon/problems/', { name: newName.trim() });
+                polygonId = res.data.polygon_id;
+            }
+            navigate(`/tasks/${polygonId}`);
+        } catch (e) {
+            setCreateError(errorText(e, 'Ошибка создания задачи'));
         } finally {
             setCreating(false);
         }
@@ -199,7 +223,10 @@ export const TasksList = () => {
                         </p>
                     </div>
                     <button
-                        onClick={() => { setShowCreate(true); setNewName(''); setCreateError(null); }}
+                        onClick={() => {
+                            setShowCreate(true); setNewName(''); setCreateError(null);
+                            setNewIdea(''); setNewGroups(false); setNewType('regular');
+                        }}
                         className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700
                                    hover:from-blue-700 hover:to-blue-800 text-white
                                    w-full sm:w-auto px-5 py-3 rounded-2xl font-bold text-sm
@@ -394,7 +421,7 @@ export const TasksList = () => {
             {/* Create dialog */}
             {showCreate && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 w-full max-w-md shadow-2xl">
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 w-full max-w-lg shadow-2xl">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-xl font-black dark:text-white flex items-center gap-2">
                                 <Plus size={20} className="text-blue-500" />
@@ -421,6 +448,37 @@ export const TasksList = () => {
                                        focus:border-blue-500 transition-all mb-3"
                             autoFocus
                         />
+                        <div className="flex gap-1 mb-3 bg-slate-100 dark:bg-slate-800 rounded-2xl p-1">
+                            {[['regular', 'Обычная'], ['interactive', 'Интерактивная'], ['output_only', 'Output-only']].map(([id, label]) => (
+                                <button
+                                    key={id}
+                                    onClick={() => setNewType(id)}
+                                    className={`flex-1 text-xs font-bold py-2 rounded-xl transition-all
+                                        ${newType === id ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400'
+                                            : 'text-slate-500'}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                        <textarea
+                            value={newIdea}
+                            onChange={e => setNewIdea(e.target.value)}
+                            rows={4}
+                            placeholder={newType === 'regular'
+                                ? 'Идея задачи (необязательно): ИИ напишет условие, решение, валидатор, чекер, генераторы и тесты'
+                                : 'Генерация пока доступна для обычных задач; для этого типа будет создана пустая задача'}
+                            disabled={newType !== 'regular'}
+                            className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800
+                                       rounded-2xl px-4 py-3 text-sm dark:text-white outline-none resize-none
+                                       focus:border-blue-500 transition-all mb-2 disabled:opacity-50"
+                        />
+                        {newType === 'regular' && newIdea.trim() && (
+                            <label className="flex items-center gap-2 text-xs text-slate-500 mb-3">
+                                <input type="checkbox" checked={newGroups} onChange={e => setNewGroups(e.target.checked)} />
+                                С подзадачами (группы тестов и баллы)
+                            </label>
+                        )}
                         {createError && (
                             <p className="text-sm text-red-500 mb-3">{createError}</p>
                         )}
@@ -431,7 +489,7 @@ export const TasksList = () => {
                                        flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                         >
                             {creating ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-                            Создать
+                            {newIdea.trim() && newType === 'regular' ? 'Создать и сгенерировать' : 'Создать'}
                         </button>
                     </div>
                 </div>

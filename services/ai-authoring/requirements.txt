@@ -1,0 +1,18 @@
+fastapi>=0.124.4
+uvicorn>=0.24.0
+pydantic>=2.12.5
+pydantic-settings>=2.12.5
+SQLAlchemy>=2.0.45
+asyncpg
+greenlet>=3.3.0
+alembic>=1.17.2
+httpx>=0.28
+pyjwt>=2.10
+
+pytest>=9.0.2
+pytest-asyncio
+aiosqlite>=0.20.0
+
+# pinned like the backend: newer ruff adds rules
+ruff==0.14.0
+mypy>=1.14.0

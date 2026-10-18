@@ -13,7 +13,7 @@ def _record(bucket, name):
 
 def _patch(monkeypatch):
     calls = []
-    for name in ("update_info", "set_tags", "commit_changes"):
+    for name in ("update_info", "save_tags", "commit_changes"):
         monkeypatch.setattr(
             f"api.user.gpt.services.sync.settings_sync.{name}",
             _record(calls, name),
@@ -36,8 +36,8 @@ async def test_sync_settings_pushes_info_and_commits(db, task_session, monkeypat
 
     info = [c for c in calls if c[0] == "update_info"][0]
     kwargs = info[2]
-    assert kwargs["input_file_name"] == "in.txt"
-    assert kwargs["output_file_name"] == "out.txt"
+    assert kwargs["input_file"] == "in.txt"
+    assert kwargs["output_file"] == "out.txt"
     assert kwargs["time_limit"] == 2000
     assert kwargs["memory_limit"] == 256
     # REGULAR session -> not interactive
@@ -54,6 +54,9 @@ async def test_sync_settings_interactive_derived_from_problem_type(db, task_sess
     await ss.sync_settings(db, task_session, {})
     info = [c for c in calls if c[0] == "update_info"][0]
     assert info[2]["interactive"] is True
+    # Unset files / limits are not sent (None), so Polygon keeps its values.
+    for key in ("input_file", "output_file", "time_limit", "memory_limit"):
+        assert info[2][key] is None
 
 
 @pytest.mark.asyncio
@@ -72,15 +75,15 @@ async def test_sync_tags_joins_and_commits(db, task_session, monkeypatch):
     pid = await ss.sync_tags(db, task_session, ["dp", "graphs"])
     assert pid == 555
 
-    tags = [c for c in calls if c[0] == "set_tags"][0]
-    # set_tags(problem_id, ",".join(tags), user_id, db)
+    tags = [c for c in calls if c[0] == "save_tags"][0]
+    # save_tags(problem_id, tags, user_id, db) — the core joins the list
     assert tags[1][0] == 555
-    assert tags[1][1] == "dp,graphs"
+    assert tags[1][1] == ["dp", "graphs"]
     assert [c[0] for c in calls].count("commit_changes") == 1
 
 
 @pytest.mark.asyncio
-async def test_sync_tags_empty_skips_set_tags_and_commit(db, task_session, monkeypatch):
+async def test_sync_tags_empty_skips_save_tags_and_commit(db, task_session, monkeypatch):
     calls = _patch(monkeypatch)
     pid = await ss.sync_tags(db, task_session, [])
     assert pid == 555
@@ -92,5 +95,5 @@ async def test_sync_tags_no_commit(db, task_session, monkeypatch):
     calls = _patch(monkeypatch)
     await ss.sync_tags(db, task_session, ["x"], polygon_commit=False)
     names = [c[0] for c in calls]
-    assert "set_tags" in names
+    assert "save_tags" in names
     assert "commit_changes" not in names
