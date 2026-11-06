@@ -151,16 +151,20 @@ async def run_export(
     web_factory: Callable[[str, str, str], EjudgeWeb] = EjudgeWeb,
     config: EjudgeConfig | None = None,
     fetched: dict | None = None,
+    own_contest: bool = False,
 ) -> dict:
     """``config`` defaults to the user's ejudge integration (or the server's ejudge).
 
     ``fetched``, when given, receives the downloaded package (``fetched["package"]``)
     so a caller (the NlogN publication) can reuse it without a second download.
+    ``own_contest``: a contest this app created itself (``autocontest``), allowed
+    regardless of the allowed-contests list.
     """
     if config is None:
         config = await ejudge_config.resolve(user_id, db)
     require_configured(config)
-    require_allowed(config, request.contest_id)
+    if not own_contest:
+        require_allowed(config, request.contest_id)
     await progress(5)
     package_id, package = await fetch_package(
         request.polygon_id, request.package_id, user_id, db, preferred=config.package_type

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.crypt import get_current_user
 from api.user.ejudge import config as ejudge_config
-from api.user.ejudge import export
+from api.user.ejudge import autocontest, export
 from api.user.ejudge.common import EjudgeError
 from api.user.integrations.nlogn import nlogn_status
 from api.user.nlogn import publish
@@ -32,14 +32,15 @@ def set_enqueue(enqueue: Any) -> None:
 
 class PublishIn(BaseModel):
     polygon_id: int
-    ejudge_contest_id: int = Field(gt=0, lt=1_000_000)
+    # empty: the problem's previous contest, else an automatic block of ejudge contests
+    ejudge_contest_id: int | None = Field(default=None, gt=0, lt=1_000_000)
     short_name: str | None = Field(default=None, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
     package_id: int | None = None
     title: str | None = Field(default=None, max_length=255)
     nlogn_contest_id: int | None = Field(default=None, gt=0)
 
 
-async def check_ejudge(user_id: int, db: AsyncSession, contest_id: int) -> None:
+async def check_ejudge(user_id: int, db: AsyncSession, contest_id: int | None) -> None:
     """HTTP errors for an export that cannot run (before queueing a job)."""
     try:
         config = await ejudge_config.resolve(user_id, db)
@@ -47,6 +48,10 @@ async def check_ejudge(user_id: int, db: AsyncSession, contest_id: int) -> None:
         raise HTTPException(status_code=400, detail=str(e))
     if not config.configured:
         raise HTTPException(status_code=400, detail=export.NOT_CONFIGURED)
+    if contest_id is None:
+        return  # the job picks the contest (see publish.choose_contest)
+    if await autocontest.is_auto_contest(db, config, contest_id):
+        return
     try:
         export.require_allowed(config, contest_id)
     except EjudgeError as e:

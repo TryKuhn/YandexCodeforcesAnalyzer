@@ -45,6 +45,7 @@ interface Result {
     short_name: string;
     title: string;
     ejudge_reloaded?: boolean;
+    auto_contest?: { id: number; created: boolean } | null;
     warnings?: string[];
     nlogn?: {
         problem_id: number | null;
@@ -103,7 +104,8 @@ export const NlognPublishModal = ({ polygonId, packageId, defaultTitle, onClose 
         const { job_id } = (await api.post<{ job_id: string }>('/nlogn/publish', {
             polygon_id: polygonId,
             package_id: packageId,
-            ejudge_contest_id: Number(contestId),
+            // empty: TaskForge picks the contest itself (the previous one or an automatic block)
+            ejudge_contest_id: contestId ? Number(contestId) : undefined,
             short_name: shortName.trim() || undefined,
             title: title.trim() || undefined,
             nlogn_contest_id: nlognContestId ? Number(nlognContestId) : undefined,
@@ -120,7 +122,7 @@ export const NlognPublishModal = ({ polygonId, packageId, defaultTitle, onClose 
         }, 2000);
     });
 
-    const validContest = /^\d{1,6}$/.test(contestId) && Number(contestId) > 0;
+    const validContest = !contestId || (/^\d{1,6}$/.test(contestId) && Number(contestId) > 0);
     const validNlognContest = !nlognContestId || /^\d{1,9}$/.test(nlognContestId);
     const ready = !!status?.nlogn.linked && !!status?.ejudge.configured;
     const running = !!job && job.status !== 'done' && job.status !== 'failed';
@@ -177,8 +179,9 @@ export const NlognPublishModal = ({ polygonId, packageId, defaultTitle, onClose 
 
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className={labelCls}>ID контеста ejudge</label>
-                        <input className={inputCls} value={contestId} placeholder="например 1501" disabled={running}
+                        <label className={labelCls}>ID контеста ejudge (необяз.)</label>
+                        <input className={inputCls} value={contestId} placeholder="авто" disabled={running}
+                               title="Пусто — TaskForge сам выберет контест: прежний для этой задачи или свой блок на 10 задач (создаст новый, когда текущий заполнится)"
                                onChange={e => setContestId(e.target.value.trim())} />
                     </div>
                     <div>
@@ -187,6 +190,12 @@ export const NlognPublishModal = ({ polygonId, packageId, defaultTitle, onClose 
                                onChange={e => setShortName(e.target.value)} />
                     </div>
                 </div>
+                {!contestId && (
+                    <p className="text-[11px] text-slate-400 -mt-1">
+                        Без ID задача попадёт в прежний контест ejudge (если уже публиковалась) или в контест-блок TaskForge
+                        на 10 задач; когда блок заполнится, TaskForge сам создаст следующий по образцу.
+                    </p>
+                )}
                 <div>
                     <label className={labelCls}>Название задачи в NlogN</label>
                     <input className={inputCls} value={title} placeholder="по умолчанию — название из условия" disabled={running}
@@ -240,6 +249,13 @@ export const NlognPublishModal = ({ polygonId, packageId, defaultTitle, onClose 
                                     ejudge: контест {result.ejudge_contest_id}, задача {result.ejudge_problem_id} ({result.short_name})
                                     {result.ejudge_reloaded ? ', конфигурация перезагружена' : ''}
                                 </div>
+                                {result.auto_contest && (
+                                    <div>
+                                        {result.auto_contest.created
+                                            ? `Создан новый контест ejudge ${result.auto_contest.id} (блок TaskForge на 10 задач).`
+                                            : `Контест ejudge ${result.auto_contest.id} — блок TaskForge для задач NlogN.`}
+                                    </div>
+                                )}
                                 {result.nlogn?.url && (
                                     <div>
                                         NlogN: {result.nlogn.created ? 'создана' : 'обновлена'}{' '}

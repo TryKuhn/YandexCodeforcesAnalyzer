@@ -27,7 +27,8 @@ public_router = APIRouter()
 
 
 class PublicPublishIn(BaseModel):
-    ejudge_contest_id: int = Field(gt=0, lt=1_000_000)
+    # empty: the problem's previous contest, else an automatic block of ejudge contests
+    ejudge_contest_id: int | None = Field(default=None, gt=0, lt=1_000_000)
     short_name: str | None = Field(default=None, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
     package_id: int | None = None
 
@@ -100,7 +101,7 @@ async def public_publish(
 
 _RESULT_KEYS = ("ejudge_contest_id", "ejudge_problem_id", "short_name", "title", "html_statement",
                 "text_statement", "time_limit_ms", "memory_limit_mb", "polygon_id", "package_id", "revision",
-                "url", "warnings")
+                "url", "warnings", "auto_contest")
 
 
 @public_router.get("/jobs/{job_id}")
