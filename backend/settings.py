@@ -108,6 +108,13 @@ class Settings(BaseSettings):
     EJUDGE_PACKAGE_TYPE: str = "linux"
     # comma-separated contest ids the export may write to; empty = any contest
     EJUDGE_ALLOWED_CONTESTS: str = ""
+    # publications without a contest go to ejudge contests this app creates itself,
+    # EJUDGE_AUTO_CONTEST_SIZE problems per contest, cloned from a template contest
+    # (EJUDGE_TEMPLATE_CONTEST; 0 = the contest of the latest publication / the newest one)
+    EJUDGE_AUTO_CONTEST_SIZE: int = 10
+    EJUDGE_TEMPLATE_CONTEST: int = 0
+    # where ejudge keeps contest descriptions (NNNNNN.xml); empty = <judges_dir>/data/contests
+    EJUDGE_CONTESTS_XML_DIR: str = ""
 
     POSTGRES_DB: str
     POSTGRES_USER: str

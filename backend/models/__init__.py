@@ -26,7 +26,14 @@ from models.task.test_group import PolygonTestGroup
 from models.task.validator import PolygonValidator
 from models.user.refresh_token import RefreshToken
 from models.user.role import Role
-from models.user.integrations import ApiToken, EjudgeAccount, LLMApiKey, NlognAccount, NlognPublication
+from models.user.integrations import (
+    ApiToken,
+    EjudgeAccount,
+    EjudgeAutoContest,
+    LLMApiKey,
+    NlognAccount,
+    NlognPublication,
+)
 from models.user.user import User
 
 __all__ = [
@@ -58,6 +65,7 @@ __all__ = [
     "NlognAccount",
     "ApiToken",
     "NlognPublication",
+    "EjudgeAutoContest",
     "PolygonProblem",
     "PolygonStatement",
     "PolygonChecker",

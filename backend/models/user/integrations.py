@@ -110,3 +110,20 @@ class NlognPublication(Base):
 
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+
+class EjudgeAutoContest(Base):
+    """An ejudge contest this app created itself to hold published problems (blocks of N problems).
+
+    ``host_key`` tells ejudge servers apart: the same contest number on two hosts is two contests.
+    """
+    __tablename__ = "ejudge_auto_contests"
+    __table_args__ = (UniqueConstraint("host_key", "contest_id", name="uq_ejudge_auto_contests_host_contest"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    host_key: Mapped[str] = mapped_column(String(512), index=True)
+    contest_id: Mapped[int]
+    template_id: Mapped[int]
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+

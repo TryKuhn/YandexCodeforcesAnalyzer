@@ -22,7 +22,9 @@ from dataclasses import asdict, dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user.ejudge import export
+from api.user.ejudge import autocontest, export
+from api.user.ejudge import config as ejudge_config
+from api.user.ejudge.config import EjudgeConfig
 from api.user.ejudge.common import EjudgeError
 from api.user.ejudge.export import ExportRequest, HostFactory
 from api.user.ejudge.remote import SSHHost
@@ -49,7 +51,8 @@ async def _no_progress(_: int) -> None:
 @dataclass
 class PublishRequest:
     polygon_id: int
-    ejudge_contest_id: int
+    # None: the contest of this problem's previous publication, else an automatic block
+    ejudge_contest_id: int | None = None
     short_name: str | None = None
     package_id: int | None = None
     title: str | None = None
@@ -112,6 +115,26 @@ def publication_out(row: NlognPublication, nlogn_base_url: str | None = None) ->
     }
 
 
+async def choose_contest(
+    request: PublishRequest, user_id: int, db: AsyncSession, config: EjudgeConfig, host_factory: HostFactory
+) -> tuple[int, dict | None]:
+    """The ejudge contest to export into and, when it is an automatic block, ``{"id", "created"}``.
+
+    No explicit id: a problem published before goes back to its contest (an update,
+    not a copy); a new one goes to the current block (``autocontest``).
+    """
+    if request.ejudge_contest_id:
+        auto = await autocontest.is_auto_contest(db, config, request.ejudge_contest_id)
+        return request.ejudge_contest_id, ({"id": request.ejudge_contest_id, "created": False} if auto else None)
+    previous = await latest_publication(db, user_id, request.polygon_id)
+    if previous is not None:
+        auto = await autocontest.is_auto_contest(db, config, previous.ejudge_contest_id)
+        return previous.ejudge_contest_id, ({"id": previous.ejudge_contest_id, "created": False} if auto else None)
+    async with host_factory(config) as host:  # type: ignore[attr-defined]
+        contest_id, created = await autocontest.allocate_contest(host, config, db, user_id)
+    return contest_id, {"id": contest_id, "created": created}
+
+
 async def run_publish(
     request: PublishRequest,
     user_id: int,
@@ -135,12 +158,15 @@ async def run_publish(
     async def export_progress(percent: int) -> None:
         await progress(int(percent * 0.8))
 
+    config = await ejudge_config.resolve(user_id, db)
+    export.require_configured(config)
+    contest_id, auto = await choose_contest(request, user_id, db, config, host_factory)
     fetched: dict = {}
     report = await export.run_export(
-        ExportRequest(polygon_id=request.polygon_id, contest_id=request.ejudge_contest_id,
+        ExportRequest(polygon_id=request.polygon_id, contest_id=contest_id,
                       package_id=request.package_id, short_name=request.short_name),
         user_id, db, progress=export_progress, host_factory=host_factory, web_factory=web_factory,
-        fetched=fetched,
+        fetched=fetched, config=config, own_contest=auto is not None,
     )
     package = fetched["package"]
     warnings: list[str] = list(report.get("warnings") or [])
@@ -149,7 +175,7 @@ async def run_publish(
 
     title = (request.title or statement.title or package.name("russian", "english")).strip()[:255]
     result: dict = {
-        "ejudge_contest_id": request.ejudge_contest_id,
+        "ejudge_contest_id": contest_id,
         "ejudge_problem_id": int(report["problem_id"]),
         "short_name": report["short_name"],
         "title": title,
@@ -165,6 +191,7 @@ async def run_publish(
         "url": problem_url(request.polygon_id),
         "ejudge_reloaded": bool(report.get("reloaded")),
         "warnings": warnings,
+        "auto_contest": auto,
     }
 
     if client is not None:
