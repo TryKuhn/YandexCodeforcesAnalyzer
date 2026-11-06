@@ -156,7 +156,7 @@ async def _run_build(ctx: RunContext, current: list[int]) -> dict:
         ctx.invalidate()
 
         if state == "READY":
-            repaired = f" (после {attempt - 1} починок)" if attempt > 1 else ""
+            repaired = f" (починок: {attempt - 1})" if attempt > 1 else ""
             text = f"Пакет #{build.package_id} собран{repaired}."
             await ctx.step(text)
             await ctx.say(text, intent="build", package_id=build.package_id, state=state)

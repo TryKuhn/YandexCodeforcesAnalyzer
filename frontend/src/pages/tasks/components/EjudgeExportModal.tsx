@@ -5,6 +5,7 @@
 // valuer.cfg for olympiad scoring), then run the export job and follow it.
 
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertCircle, CheckCircle, Eye, Loader2, Search, Upload, X } from 'lucide-react';
 import { api } from '../../../api/instance';
 import { errorText } from '../../../api/ai';
@@ -15,7 +16,14 @@ interface Props {
     onClose: () => void;
 }
 
-interface Status { configured: boolean; web_reload: boolean; url: string | null; ssh_host: string | null }
+interface Status {
+    configured: boolean;
+    source?: 'user' | 'server';
+    error?: string;
+    web_reload: boolean;
+    url: string | null;
+    ssh_host: string | null;
+}
 interface ContestInfo {
     contest_id: number;
     score_system: string;
@@ -117,9 +125,18 @@ export const EjudgeExportModal = ({ polygonId, packageId, onClose }: Props) => {
 
                 {status && !status.configured && (
                     <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-xs">
-                        Экспорт не настроен на сервере: нужны EJUDGE_SSH_HOST, EJUDGE_JUDGES_DIR, SSH-ключ
-                        (и для перезагрузки конфигурации — EJUDGE_URL, EJUDGE_LOGIN, EJUDGE_PASSWORD).
+                        {status.error ? `${status.error}. ` : 'Экспорт в ejudge не настроен. '}
+                        Подключите свой сервер ejudge в{' '}
+                        <Link to="/profile" className="font-bold underline">профиле → Интеграции → Ejudge</Link>
+                        {' '}(SSH по ключу или паролю, каталог judges, вход в serve-control для перезагрузки конфигурации).
                     </div>
+                )}
+                {status?.configured && (
+                    <p className="text-[11px] text-slate-400">
+                        {status.source === 'user'
+                            ? <>Ваш сервер ejudge: {status.ssh_host} (<Link to="/profile" className="underline">изменить</Link>)</>
+                            : <>Сервер ejudge по умолчанию: {status.ssh_host}</>}
+                    </p>
                 )}
 
                 <div className="flex flex-wrap items-end gap-2">

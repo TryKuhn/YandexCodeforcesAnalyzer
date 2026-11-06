@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from sqlalchemy import select
 
 from authoring.llm.protocol import FileEdit, LimitsEdit, StandardChecker, StatementEdit
@@ -185,7 +186,7 @@ async def test_build_repairs_until_ready(db, make_ctx, llm, backend, problem, se
     assert "Validator rejects test 3" in repair_calls[0].user
     assert "Предыдущие попытки" in repair_calls[1].user
     contents = [m.content for m in await messages(db, session_row.id)]
-    assert contents[-1] == "Пакет #3 собран (после 2 починок)."
+    assert contents[-1] == "Пакет #3 собран (починок: 2)."
 
 
 async def test_build_gives_up_after_three_repairs(db, make_ctx, llm, backend, session_row):
@@ -237,16 +238,8 @@ async def test_generate_whole_problem(db, make_ctx, llm, backend, problem, sessi
     reply = (await messages(db, session_row.id))[-1]
     assert reply.meta["intent"] == "generate" and "Задача сгенерирована" in reply.content
     assert ctx.run.progress_total >= ctx.run.progress_done
-
-
-async def test_generate_refuses_interactive(db, make_ctx, session_row):
-    import pytest
-
-    from authoring.pipeline.context import PipelineError
-    session_row.problem_type = "interactive"
-    await db.commit()
-    with pytest.raises(PipelineError, match="только обычные"):
-        await run_generate(await make_ctx("generate", {"idea": "x"}))
+    main_call = llm.calls_with("авторское (главное) решение")[0]
+    assert "сложить два числа" in main_call.user and "Простая задача." in main_call.user
 
 
 # --------------------------------------------------------------------------- review fixes
@@ -280,6 +273,22 @@ async def test_generate_intent_on_filled_problem_is_not_regenerated(db, make_ctx
     assert "целиком я её не пересоздаю" in (await messages(db, session_row.id))[-1].content
 
 
+@pytest.mark.parametrize("targets", [
+    ["statement", "solution"],
+    ["checker", "generator", "limits", "samples", "script", "solution", "statement", "tags", "validator"],
+])
+async def test_new_problem_idea_on_filled_problem_is_not_a_full_rewrite(db, make_ctx, llm, problem, session_row,
+                                                                       targets):
+    problem.statements = {"russian": {"name": "A", "legend": "qsort", "input": "", "output": ""}}
+    llm.on("маршрутизатор", router("generate", targets))
+    llm.on("Отвечай на вопрос пользователя", "Это другая задача.")
+    result = await run_chat(await make_ctx("chat", {"text": "Сделай задачу: даны два числа, вывести их сумму"}))
+    assert result == {"intent": "question"}
+    assert not llm.calls_with("Ты вносишь изменения в задачу")
+    assert problem.statements["russian"]["legend"] == "qsort"
+    assert "целиком я её не пересоздаю" in (await messages(db, session_row.id))[-1].content
+
+
 async def test_generator_edit_keeps_script_when_plan_exists(db, make_ctx, llm, session_row):
     session_row.settings = {"auto_build": True, "groups_plan": {"use_groups": True, "groups": []}}
     await db.commit()
@@ -310,3 +319,64 @@ async def test_build_timeout_stops_without_repair(make_ctx, llm, backend, monkey
     result = await run_build(await make_ctx("build"))
     assert result["state"] == "TIMEOUT" and result["needs_user"]
     assert llm.calls == []
+
+
+STATEMENT_OK = (
+    '<statement lang="russian" field="name">Сумма</statement>'
+    '<statement lang="russian" field="legend">Даны $a$ и $b$.</statement>'
+    '<statement lang="russian" field="input">Два числа.</statement>'
+    '<statement lang="russian" field="output">Сумма.</statement>'
+    "<sample>1 2</sample><reply>Простая задача.</reply>"
+)
+
+
+async def test_generate_retries_statement_without_legend(db, make_ctx, llm, backend, problem, session_row):
+    answers = iter(["<reply>Уточните, какой именно qsort?</reply>", STATEMENT_OK])
+    llm.on("составь полное условие задачи", lambda model, msgs: next(answers))
+    llm.on("авторское (главное) решение", '<file role="solution" name="x.cpp">main</file>')
+    llm.on("переборное решение", '<file role="solution" name="y.cpp">brute</file>')
+    install_generation_answers(llm)
+    llm.on("Напиши валидатор входных данных", '<file role="validator" name="q.cpp">validator</file>')
+    llm.on("Выбери чекер", '<checker standard="std::ncmp.cpp"/>')
+
+    result = await run_generate(await make_ctx("generate", {"idea": "сложить два числа", "plan": PLAN}))
+
+    assert result["build"] is True, result
+    assert problem.statements["russian"]["legend"] == "Даны $a$ и $b$."
+    calls = llm.calls_with("составь полное условие задачи")
+    assert len(calls) == 2
+    retry = calls[1].messages
+    assert retry[-2].role == "assistant" and "Не задавай вопросов" in retry[-1].parts[0].text
+
+
+async def test_generate_shows_model_reply_when_statement_never_comes(db, make_ctx, llm, problem, session_row):
+    llm.on("составь полное условие задачи", "<reply>Какая схема разбиения: Хоара или Ломуто?</reply>")
+
+    result = await run_generate(await make_ctx("generate", {"idea": "qsort", "plan": PLAN}))
+
+    assert result["needs_user"] and not result.get("build")
+    assert len(llm.calls_with("составь полное условие задачи")) == 2
+    reply = (await messages(db, session_row.id))[-1]
+    assert "Хоара или Ломуто" in reply.content
+    assert not problem.statements.get("russian", {}).get("legend")
+
+
+async def test_generate_empty_statement_answer_is_a_clear_error(make_ctx, llm, session_row):
+    import pytest
+
+    from authoring.pipeline.context import PipelineError
+    llm.on("составь полное условие задачи", "")
+    with pytest.raises(PipelineError, match="две попытки"):
+        await run_generate(await make_ctx("generate", {"idea": "x", "plan": PLAN}))
+
+
+async def test_samples_without_groups_are_not_reported_as_errors(make_ctx, llm, backend, problem):
+    from authoring.pipeline.groups import normalize_plan
+    from authoring.pipeline.plan_apply import apply_plan
+    install_generation_answers(llm)
+    problem.tests[1] = {"index": 1, "manual": True, "input": "1 2\n", "group": None, "points": None,
+                        "useInStatements": True, "scriptLine": None, "description": None}
+    plan = normalize_plan({"use_groups": False, "groups": [
+        {"name": "main", "generator": "gen", "cases": [{"args": "5", "count": 2}]}]})
+    result = await apply_plan(await make_ctx("groups"), plan, step_offset=0, total=5)
+    assert not any("тест-пример" in e for e in result.errors), result.errors

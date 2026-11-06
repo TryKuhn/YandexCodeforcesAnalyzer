@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from authoring.db import Session, utcnow
 from authoring.llm.client import LLM, LLMError
 from authoring.llm.client import llm as default_llm
+from authoring.llm.credentials import for_user
 from authoring.models import ACTIVE_RUN_STATUSES, AuthoringSession, Message, Run, RunKind, RunStatus
 from authoring.pipeline.build import run_build
 from authoring.pipeline.chat import run_chat
@@ -68,9 +69,12 @@ class Worker:
         llm: LLM = default_llm,
         client_factory: Callable[[int], PolygonClient] = PolygonClient,
         concurrency: int = 4,
+        llm_factory: Callable[[int], LLM] | None = None,
     ) -> None:
         self.sessions = session_factory
         self.llm = llm
+        # runs use the user's own LLM keys (profile) when linked; an injected llm (tests) is used as is
+        self.llm_factory = llm_factory or (for_user if llm is default_llm else (lambda _user_id: llm))
         self.client_factory = client_factory
         self.concurrency = concurrency
         self._busy_sessions: set[str] = set()
@@ -177,7 +181,7 @@ class Worker:
             if session is None:
                 return
             ctx = RunContext(db=db, run=run, session=session, client=self.client_factory(run.user_id),
-                             llm=self.llm)
+                             llm=self.llm_factory(run.user_id))
             await self._execute(ctx)
 
     async def _execute(self, ctx: RunContext) -> None:

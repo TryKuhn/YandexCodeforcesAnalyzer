@@ -9,12 +9,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.crypt import get_current_user
+from api.user.ejudge import config as ejudge_config
 from api.user.ejudge import export
-from api.user.ejudge.common import EjudgeError, is_configured
+from api.user.ejudge.common import EjudgeError
 from api.user.polygon.client import PolygonAPIError
 from app.database import get_db
 from models.jobs.job import Job
-from settings import settings
 
 ejudge_router = APIRouter()
 
@@ -42,23 +42,45 @@ def _http(e: Exception) -> HTTPException:
     return HTTPException(status_code=400, detail=str(e))
 
 
+async def _config(user_id: int, db: AsyncSession) -> ejudge_config.EjudgeConfig:
+    try:
+        return await ejudge_config.resolve(user_id, db)
+    except EjudgeError as e:
+        raise _http(e)
+
+
 @ejudge_router.get("/status")
-async def route_status() -> dict:
-    """Whether the export is configured (no secrets in the answer)."""
+async def route_status(
+    user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Whether the export is configured for this user (no secrets in the answer).
+
+    ``source``: "user" -- the user's own ejudge (profile integration), "server" --
+    the server-wide EJUDGE_* settings.
+    """
+    try:
+        config = await ejudge_config.resolve(user_id, db)
+    except EjudgeError as e:
+        return {"configured": False, "source": "user", "error": str(e), "web_reload": False,
+                "url": None, "ssh_host": None, "judges_dir": None}
     return {
-        "configured": is_configured(settings),
-        "web_reload": bool(settings.EJUDGE_URL and settings.EJUDGE_LOGIN),
-        "url": settings.EJUDGE_URL or None,
-        "ssh_host": settings.EJUDGE_SSH_HOST or None,
-        "judges_dir": settings.EJUDGE_JUDGES_DIR,
+        "configured": config.configured,
+        "source": config.source,
+        "web_reload": config.web_reload,
+        "url": config.web_url or None,
+        "ssh_host": config.ssh_host or None,
+        "judges_dir": config.judges_dir,
     }
 
 
 @ejudge_router.get("/contests/{contest_id}")
-async def route_contest(contest_id: int, user_id: int = Depends(get_current_user)) -> dict:
+async def route_contest(
+    contest_id: int, user_id: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
     """Score system and problems of a contest, read from its serve.cfg."""
+    config = await _config(user_id, db)
     try:
-        return await export.contest_info(contest_id)
+        return await export.contest_info(contest_id, config=config)
     except EjudgeError as e:
         raise _http(e)
 
@@ -82,13 +104,14 @@ async def route_export(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Queue the export; poll ``/export/{job_id}``."""
-    if not is_configured(settings):
-        raise HTTPException(status_code=400, detail="экспорт в ejudge не настроен")
+    """Queue the export; poll ``/export/{job_id}``. The job resolves the user's ejudge itself."""
+    config = await _config(user_id, db)
+    if not config.configured:
+        raise HTTPException(status_code=400, detail=export.NOT_CONFIGURED)
     if _enqueue is None:
         raise HTTPException(status_code=503, detail="очередь задач недоступна")
     try:
-        export.require_allowed(body.contest_id)
+        export.require_allowed(config, body.contest_id)
     except EjudgeError as e:
         raise HTTPException(status_code=403, detail=str(e))
     job = await _enqueue(

@@ -33,8 +33,9 @@ from authoring.api.schemas import (
 from authoring.auth import get_current_user
 from authoring.db import get_db, utcnow
 from authoring.llm.client import LLM, LLMError
-from authoring.llm.client import llm as default_llm
+from authoring.llm.credentials import for_user
 from authoring.llm.models import DEFAULT_MODEL, MAIN_MODELS, ROUTER_MODELS, normalize_model
+from authoring.llm.problem_types import INTERACTIVE, OUTPUT_ONLY
 from authoring.models import ACTIVE_RUN_STATUSES, AuthoringSession, Build, Event, Message, Run, RunKind, RunStatus
 from authoring.pipeline import assist
 from authoring.pipeline.groups import (
@@ -56,8 +57,9 @@ router = APIRouter(prefix="/api/ai")
 MESSAGE_PAGE = 300
 
 
-def get_llm() -> LLM:
-    return default_llm
+def get_llm(user_id: int = Depends(get_current_user)) -> LLM:
+    """The requesting user's LLM: their own API key when linked, the server's otherwise."""
+    return for_user(user_id)
 
 
 def get_client_factory() -> Callable[[int], PolygonClient]:
@@ -111,6 +113,17 @@ async def _latest_build(db: AsyncSession, session_id: str) -> Build | None:
     )).scalars().first()
 
 
+async def apply_problem_type(client: PolygonClient, polygon_id: int, problem_type: str, *, fresh: bool = False) -> None:
+    """Mirror the problem type into Polygon: the interactive flag, and points for
+    output-only problems (always scored). Points are never switched off here:
+    a regular problem may have them for its groups."""
+    interactive = problem_type == INTERACTIVE
+    if interactive or not fresh:
+        await client.update_info(polygon_id, interactive=interactive)
+    if problem_type == OUTPUT_ONLY:
+        await client.enable_points(polygon_id, True)
+
+
 def _plan_or_422(raw: dict):  # type: ignore[no-untyped-def]
     try:
         return normalize_plan(raw)
@@ -146,8 +159,7 @@ async def route_create_problem(
     client = client_factory(user_id)
     try:
         polygon_id = await client.create_problem(body.name.strip())
-        if body.problem_type == "interactive":
-            await client.update_info(polygon_id, interactive=True)
+        await apply_problem_type(client, polygon_id, body.problem_type, fresh=True)
     except PolygonError as e:
         raise HTTPException(status_code=e.status if e.status and e.status < 500 else 502, detail=e.message)
     session = await _get_or_create(db, user_id, polygon_id, model=body.model, problem_type=body.problem_type)
@@ -196,11 +208,17 @@ async def route_patch_session(
     body: SessionPatch,
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    client_factory: Callable[[int], PolygonClient] = Depends(get_client_factory),
 ) -> dict:
     session = await _session(db, session_id, user_id)
     if body.model is not None:
         session.model = normalize_model(body.model)
-    if body.problem_type is not None:
+    if body.problem_type is not None and body.problem_type != session.problem_type:
+        # Polygon first: a type the problem does not have there would mislead every model
+        try:
+            await apply_problem_type(client_factory(user_id), session.polygon_id, body.problem_type)
+        except PolygonError as e:
+            raise HTTPException(status_code=502, detail=f"Не удалось сменить тип задачи в Polygon: {e.message}")
         session.problem_type = body.problem_type
     if body.auto_build is not None:
         session.settings = {**(session.settings or {}), "auto_build": body.auto_build}

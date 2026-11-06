@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from authoring.llm.problem_types import TYPE_LABELS, normalize_type, type_guide
 from authoring.sync.diff import STATEMENT_LABELS
 from authoring.sync.snapshot import file_role
 
@@ -60,11 +61,14 @@ def tests_summary(snapshot: dict) -> str:
 def build_dossier(snapshot: dict, *, polygon_id: int, problem_type: str) -> str:
     """Render a snapshot as the materials text (Markdown)."""
     info = snapshot.get("info") or {}
-    parts: list[str] = [f"# Задача Polygon #{polygon_id}"]
+    kind = normalize_type(problem_type)
+    # the type guide comes first: every model that reads the materials (router,
+    # answers, edits, generation, repairs) must treat the problem as its type
+    parts: list[str] = [f"# Задача Polygon #{polygon_id}", "## Тип задачи\n" + type_guide(kind)]
 
     parts.append(
         "## Параметры\n"
-        f"- тип задачи: {problem_type}\n"
+        f"- тип задачи: {TYPE_LABELS[kind]} ({kind})\n"
         f"- TL: {info.get('timeLimit')} мс, ML: {info.get('memoryLimit')} МБ\n"
         f"- ввод: {info.get('inputFile') or 'stdin'}, вывод: {info.get('outputFile') or 'stdout'}\n"
         f"- интерактивная: {'да' if info.get('interactive') else 'нет'}\n"

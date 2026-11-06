@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.crypt import get_current_payload, get_current_user
 from api.user.auth import auth_router
 from app.database import get_db
-from models import RefreshToken, Role, User
+from models import EjudgeAccount, LLMApiKey, NlognAccount, RefreshToken, Role, User
 
 
 @auth_router.get("/me")
@@ -35,6 +35,11 @@ async def get_me(
         "is_yandex_linked": bool(user.yandex_access_token),
         "is_codeforces_linked": bool(user.codeforces_api_key),
         "is_polygon_linked": bool(user.polygon_api_key),
+        "is_ejudge_linked": await db.get(EjudgeAccount, user.id) is not None,
+        "is_nlogn_linked": await db.get(NlognAccount, user.id) is not None,
+        "llm_providers": sorted(
+            (await db.execute(select(LLMApiKey.provider).where(LLMApiKey.user_id == user.id))).scalars().all()
+        ),
     }
 
 

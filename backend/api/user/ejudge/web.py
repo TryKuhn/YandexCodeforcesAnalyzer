@@ -43,14 +43,21 @@ class EjudgeWeb:
             raise EjudgeError(f"ejudge web: HTTP {response.status_code} на {script}")
         return response
 
+    async def _login(self, client: httpx.AsyncClient) -> str:
+        login = await self._post(client, "serve-control", {"login": self.login_name, "password": self.password})
+        sid = _sid(login)
+        if not sid:
+            raise EjudgeError("ejudge: не удалось войти в serve-control (проверьте логин и пароль)")
+        return sid
+
+    async def check_login(self) -> None:
+        """Only logs in to serve-control (to check the integration's web credentials)."""
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30, transport=_transport) as client:
+            await self._login(client)
+
     async def reload_config(self, contest_id: int) -> None:
         async with httpx.AsyncClient(follow_redirects=True, timeout=60, transport=_transport) as client:
-            login = await self._post(
-                client, "serve-control", {"login": self.login_name, "password": self.password}
-            )
-            sid = _sid(login)
-            if not sid:
-                raise EjudgeError("ejudge: не удалось войти в serve-control (проверьте логин и пароль)")
+            sid = await self._login(client)
             master = await self._post(
                 client, "new-master",
                 {"contest_id": str(contest_id), "SID": sid, "action": ACTION_MASTER_LOGIN},

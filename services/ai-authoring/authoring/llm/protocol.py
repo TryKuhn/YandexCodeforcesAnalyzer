@@ -45,12 +45,14 @@ STATEMENT_FIELDS = ("name", "legend", "input", "output", "scoring", "interaction
 SOLUTION_TAGS = ("MA", "OK", "RJ", "TL", "TO", "TM", "WA", "PE", "ML", "NR", "RE")
 
 _TAGS = "reply|file|statement|script|limits|tags|checker|sample|groups"
+# attribute values: "..." / '...' / bare (models sometimes drop the quotes)
+_VALUE = r"(?:\"[^\"]*\"|'[^']*'|[^\s\"'<>/=`]+)"
 _BLOCK_RE = re.compile(
-    rf"<(?P<tag>{_TAGS})(?P<attrs>(?:\s+[\w-]+\s*=\s*(?:\"[^\"]*\"|'[^']*'))*)\s*"
+    rf"<(?P<tag>{_TAGS})(?P<attrs>(?:\s+[\w-]+\s*=\s*{_VALUE})*)\s*"
     rf"(?:/>|>(?P<body>.*?)</(?P=tag)\s*>)",
     re.DOTALL,
 )
-_ATTR_RE = re.compile(r"([\w-]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)')")
+_ATTR_RE = re.compile(r"([\w-]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s\"'<>/=`]+))")
 _OPEN_RE = re.compile(rf"<(?P<tag>{_TAGS})[\s>]")
 _NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.+-]{0,63}$")
 # Polygon finds testlib.h only with the quoted form
@@ -150,7 +152,7 @@ def parse(text: str) -> Parsed:
     replies: list[str] = []
     for m in _BLOCK_RE.finditer(text):
         tag = m.group("tag")
-        attrs = {k: v1 or v2 for k, v1, v2 in _ATTR_RE.findall(m.group("attrs") or "")}
+        attrs = {k: v1 or v2 or v3 for k, v1, v2, v3 in _ATTR_RE.findall(m.group("attrs") or "")}
         body = _body(m.group("body"))
         if tag == "reply":
             replies.append(body.strip())

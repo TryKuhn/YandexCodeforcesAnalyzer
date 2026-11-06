@@ -6,7 +6,8 @@ import { Loader2, RefreshCw, AlertCircle, Plus, X, FileText, Upload, ChevronRigh
 import { api } from '../../../api/instance';
 import { aiApi } from '../../../api/ai';
 import { CodeEditor } from '../../../components/CodeEditor';
-import { SOLUTION_TAGS } from '../FileEditorPage';
+import { SOLUTION_TAGS, SOLUTION_TAG_HINTS } from '../solutionTags';
+import { plural } from '../../../utils/plural';
 
 interface Props {
     polygonId: number;
@@ -39,6 +40,9 @@ const SOLUTION_TAG_BADGE: Record<string, { color: string; bg: string }> = {
     ML: { color: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-100 dark:bg-orange-900/30' },
     RE: { color: 'text-purple-700 dark:text-purple-400', bg: 'bg-purple-100 dark:bg-purple-900/30' },
     RJ: { color: 'text-slate-700 dark:text-slate-400',  bg: 'bg-slate-100 dark:bg-slate-800' },
+    TO: { color: 'text-teal-700 dark:text-teal-400',    bg: 'bg-teal-100 dark:bg-teal-900/30' },
+    TM: { color: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-100 dark:bg-orange-900/30' },
+    PE: { color: 'text-pink-700 dark:text-pink-400',    bg: 'bg-pink-100 dark:bg-pink-900/30' },
 };
 
 // Role of a "source" file: plain source / checker / validator / generator
@@ -46,6 +50,7 @@ const SOURCE_ROLES = [
     { value: 'generic',   label: 'Обычный' },
     { value: 'checker',   label: 'Чекер' },
     { value: 'validator', label: 'Валидатор' },
+    { value: 'interactor', label: 'Интерактор' },
     { value: 'generator', label: 'Генератор' },
 ];
 
@@ -136,6 +141,11 @@ const AddFileForm = ({ polygonId, section, sessionId, onUploaded, onClose }: Add
                     name: name.trim(),
                     content,
                 });
+            } else if (section === 'source' && sourceRole === 'interactor') {
+                await api.post(`/polygon/problems/${polygonId}/interactor`, {
+                    name: name.trim(),
+                    content,
+                });
             } else {
                 // generic source (incl. generators), resource, aux
                 await api.post(`/polygon/problems/${polygonId}/files`, {
@@ -180,9 +190,12 @@ const AddFileForm = ({ polygonId, section, sessionId, onUploaded, onClose }: Add
                             className="w-full text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 outline-none dark:text-white"
                         >
                             {SOLUTION_TAGS.map(t => (
-                                <option key={t.value} value={t.value}>{t.label}</option>
+                                <option key={t.value} value={t.value} title={t.hint}>{t.label}</option>
                             ))}
                         </select>
+                        <p className="mt-1 text-[10px] text-slate-400 max-w-[260px]">
+                            {SOLUTION_TAGS.find(t => t.value === tag)?.hint}
+                        </p>
                     </div>
                 )}
 
@@ -361,7 +374,8 @@ export const FilesTab = ({ polygonId, sessionId }: Props) => {
             {showTag && f.tag && (() => {
                 const badge = SOLUTION_TAG_BADGE[f.tag] || SOLUTION_TAG_BADGE.RJ;
                 return (
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${badge.color} ${badge.bg}`}>
+                    <span title={SOLUTION_TAG_HINTS[f.tag] || f.tag}
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${badge.color} ${badge.bg}`}>
                         {f.tag}
                     </span>
                 );
@@ -373,15 +387,19 @@ export const FilesTab = ({ polygonId, sessionId }: Props) => {
         </button>
     );
 
-    const Section = ({
+    // A render function, not a nested component: a component declared inside
+    // FilesTab is a new type on every render, so React would remount the
+    // section (and wipe the add-file form the user is typing in, or an AI
+    // draft being generated) whenever the page re-renders.
+    const renderSection = ({
         title, items, section, showTag = false, hint
     }: { title: string; items: PolygonFile[]; section: FileSection; showTag?: boolean; hint?: string }) => {
         const isAdding = addingSection === section;
         return (
-            <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+            <div key={section} className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
                 <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 flex items-center gap-3">
                     <span className="text-xs font-bold text-slate-600 dark:text-slate-300 flex-1">{title}</span>
-                    <span className="text-[11px] text-slate-400">{items.length} файлов</span>
+                    <span className="text-[11px] text-slate-400">{items.length} {plural(items.length, ['файл', 'файла', 'файлов'])}</span>
                     <button
                         onClick={() => setAddingSection(isAdding ? null : section)}
                         className={`flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg transition-all
@@ -468,11 +486,11 @@ export const FilesTab = ({ polygonId, sessionId }: Props) => {
                 </div>
             )}
 
-            <Section title="Решения"         items={files.solutions}     section="solution" showTag
-                     hint="Polygon API не поддерживает удаление решений — ненужное решение удалите в веб-интерфейсе Polygon." />
-            <Section title="Исходные файлы"  items={files.sourceFiles}   section="source" />
-            <Section title="Ресурсы"         items={files.resourceFiles} section="resource" />
-            <Section title="Вспомогательные" items={files.auxFiles}      section="aux" />
+            {renderSection({ title: 'Решения', items: files.solutions, section: 'solution', showTag: true,
+                hint: 'Polygon API не поддерживает удаление решений — ненужное решение удалите в веб-интерфейсе Polygon.' })}
+            {renderSection({ title: 'Исходные файлы', items: files.sourceFiles, section: 'source' })}
+            {renderSection({ title: 'Ресурсы', items: files.resourceFiles, section: 'resource' })}
+            {renderSection({ title: 'Вспомогательные', items: files.auxFiles, section: 'aux' })}
         </div>
     );
 };

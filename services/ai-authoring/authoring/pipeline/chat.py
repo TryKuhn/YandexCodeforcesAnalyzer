@@ -14,6 +14,7 @@ Every model gets the full problem materials.
 from __future__ import annotations
 
 import logging
+import re
 
 from authoring.llm import prompts
 from authoring.llm.client import LLMError, parse_json
@@ -21,7 +22,7 @@ from authoring.llm.models import ROUTER_MODELS
 from authoring.llm.protocol import TARGETS, parse
 from authoring.models import Message
 from authoring.pipeline.apply import apply_edits
-from authoring.pipeline.context import PipelineError, RunContext
+from authoring.pipeline.context import PipelineError, RunContext, plural
 from authoring.pipeline.generate import make_plan, run_generate
 from authoring.pipeline.plan_apply import apply_plan
 
@@ -31,6 +32,9 @@ INTENTS = ("question", "modify", "generate", "groups", "build", "chat")
 
 # a change in the first target is useless without the second one
 COMPANIONS = {"generator": {"script"}, "script": {"generator"}}
+
+# "write a TL solution", "добавь неверное решение": a solution even if the router gave no targets
+SOLUTION_REQUEST_RE = re.compile(r"решени|\bsolution\b", re.IGNORECASE)
 
 # UI file context -> target
 CONTEXT_TARGETS = {
@@ -59,6 +63,8 @@ async def route(ctx: RunContext, dossier: str, history: list[dict], text: str, c
         hint = CONTEXT_TARGETS.get(str(context.get("file_role") or context.get("scope") or ""))
         if hint:
             targets = [hint]
+    if intent == "modify" and not targets and SOLUTION_REQUEST_RE.search(text):
+        targets = ["solution"]
     return {"intent": intent, "targets": targets, "summary": str(data.get("summary") or "")}
 
 
@@ -73,6 +79,11 @@ def allowed_targets(targets: list[str], *, with_companions: bool = True) -> set[
         for t in targets:
             allowed |= COMPANIONS.get(t, set())
     return allowed
+
+
+def _rewrites_everything(targets: list[str]) -> bool:
+    chosen = set(targets)
+    return {"statement", "solution"} <= chosen or len(chosen) >= 4
 
 
 def _has_content(snapshot: dict) -> bool:
@@ -111,8 +122,10 @@ async def run_chat(ctx: RunContext) -> dict:
         return {"intent": intent, "build": True, "force_build": True}
 
     if intent == "generate" and _has_content(await ctx.snapshot()):
-        # never rewrite a filled problem on a classifier's guess
-        intent = "modify" if targets else "question"
+        # never rewrite a filled problem on a classifier's guess: a narrow change
+        # becomes an edit, a whole new problem (statement + solution, or most of
+        # the files) is refused with an explanation
+        intent = "modify" if targets and not _rewrites_everything(targets) else "question"
         meta["intent"] = intent
         if intent == "question":
             await ctx.step("Отвечаю")
@@ -132,7 +145,8 @@ async def run_chat(ctx: RunContext) -> dict:
         plan = await make_plan(ctx, text)
         result = await apply_plan(ctx, plan, step_offset=0, total=4 if plan.use_groups else 2)
         reply = (
-            f"План применён: {len(plan.groups)} групп, сумма баллов {plan.total_points:g}. "
+            f"План применён: {plural(len(plan.groups), 'группа', 'группы', 'групп')}, "
+            f"сумма баллов {plan.total_points:g}. "
             "Каждая группа — COMPLETE_GROUP + first-failed, все баллы на одном тесте группы.\n\n"
             + result.report()
         )

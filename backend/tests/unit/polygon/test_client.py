@@ -360,3 +360,18 @@ async def test_request_unexpected_200_body_is_not_retried(counting_sig, no_sleep
     with pytest.raises(PolygonAPIError, match="неожиданный ответ"):
         await request("m", {}, api_key="K", api_secret="S", session=session)
     assert len(session.posts) == 1
+
+
+def test_parse_429_is_reported_as_rate_limit():
+    with pytest.raises(PolygonAPIError) as exc:
+        parse_response("m", 429, b"<html><body>429 Too Many Requests</body></html>", "json")
+    assert exc.value.http_status == 429
+    assert "частоту запросов" in str(exc.value) and "шлюз" not in str(exc.value)
+
+
+@pytest.mark.parametrize("method", ["problem.saveTest", "problem.buildPackage"])
+async def test_request_retries_429_with_long_backoff(counting_sig, no_sleep, method):
+    session = _Session(_Resp(429, "<html>429 Too Many Requests</html>"), _Resp(200, _ok("done")))
+    assert await request(method, {}, api_key="K", api_secret="S", session=session) == "done"
+    assert len(session.posts) == 2
+    assert no_sleep == [client_mod.RATE_LIMIT_BACKOFF_SECONDS]

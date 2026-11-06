@@ -6,6 +6,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, AlertCircle, ArrowLeft, Save, FileCode2 } from 'lucide-react';
 import { api } from '../../api/instance';
 import { CodeEditor } from '../../components/CodeEditor';
+import { SOLUTION_TAGS } from './solutionTags';
 
 type FileSection = 'source' | 'resource' | 'aux' | 'solution';
 
@@ -15,18 +16,6 @@ const SECTION_LABEL: Record<FileSection, string> = {
     resource: 'Ресурс',
     aux:      'Вспомогательный файл',
 };
-
-export const SOLUTION_TAGS: { value: string; label: string }[] = [
-    { value: 'MA', label: 'MA — главное решение' },
-    { value: 'OK', label: 'OK — корректное' },
-    { value: 'WA', label: 'WA — неверный ответ' },
-    { value: 'PE', label: 'PE — ошибка формата' },
-    { value: 'TL', label: 'TL — превышение времени' },
-    { value: 'TO', label: 'TO — TL или OK' },
-    { value: 'ML', label: 'ML — превышение памяти' },
-    { value: 'RE', label: 'RE — ошибка исполнения' },
-    { value: 'RJ', label: 'RJ — отклонено' },
-];
 
 export const FileEditorPage = () => {
     const { polygonId: polygonIdStr, section: sectionStr, name: nameStr } = useParams<{

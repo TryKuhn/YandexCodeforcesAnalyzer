@@ -167,6 +167,27 @@
   `valuer.cfg`), `servecfg.py` (точечная правка `serve.cfg`), `remote.py` (SSH/SFTP), `web.py` (reload
   через serve-control/new-master), `export.py` (оркестрация), `router.py` (`/api/ejudge/...`).
   `assets/gvaluer.cpp` — валюер из ejudge (GPLv2+, самодостаточный), компилируется в каталоге задачи.
+  Куда экспортировать — `config.py` (`EjudgeConfig`): свой сервер пользователя из профиля
+  (`/api/integrations/ejudge`, SSH по ключу ИЛИ паролю, ключ хоста закреплён отпечатком SHA256/строкой
+  known_hosts) важнее серверных `EJUDGE_*`.
+- **`backend/api/user/integrations/`** — интеграции профиля с секретами: свой ejudge и свои ключи LLM
+  (`/api/integrations/llm`: OpenRouter / Anthropic / OpenAI). Секреты шифруются Fernet-ключом из
+  `SECRET_KEY` (`api/crypt/secrets.py`) и наружу не отдаются; расшифрованные ключи LLM получает только
+  AI-сервис (`GET /api/integrations/llm/resolve`, токен с `svc=ai-authoring`). В AI-сервисе
+  `llm/credentials.py` (кэш 60 с) + `llm/client.py:route_for`: ключ Anthropic → Messages API для claude-*,
+  ключ OpenAI → OpenAI API для gpt-*, ключ OpenRouter → OpenRouter, иначе ключ сервера. Отклонённый свой
+  ключ — понятная ошибка, а не тихий откат на ключ сервера.
+
+- **`backend/api/user/nlogn/`** — публикация задач на contest.nlogn.info (NlogN судит свои «ejudge»-задачи на
+  ТОМ ЖЕ ejudge, куда пишет экспорт): job `nlogn.publish` = экспорт пакета в контест ejudge + условие из пакета
+  (`statement.py`: HTML Polygon `statements/.html/<lang>/problem.html` → классы с префиксом `task__my-`, формулы →
+  `<script type="math/tex">`, картинки → data URI; без HTML — свой мини-конвертер LaTeX из `problem-properties.json`)
+  + задача NlogN `ejudge` с `foreignProblemIdentifier = "<контест>:<задача>"`. Режим `push` (кнопка «NlogN» во
+  вкладке «Пакеты»): токен NlogN-админа из профиля (`/api/integrations/nlogn`, хранится только токен) →
+  `POST {nlogn}/api/admin/problems/upsert/ejudge`. Режим `pull`: админка NlogN ходит в публичное API
+  `/api/public/v1/*` (`public.py`) по персональному токену `tfp_…` (`/api/integrations/tokens`, хранится только
+  sha256; JWT там не принимается, а токен `tfp_` — на остальных ручках) и сохраняет условие у себя.
+  Где что опубликовано — таблица `nlogn_publications` (подстановка в форму и привязка `ejudge` в списке задач).
 
 Старый пакет `backend/api/user/gpt/` выведен из использования (роутер не подключён) и подлежит удалению
 вместе с `backend/tests/unit/gpt/`; таблица `ai_sessions` (`models/task/session.py`) больше не пишется.

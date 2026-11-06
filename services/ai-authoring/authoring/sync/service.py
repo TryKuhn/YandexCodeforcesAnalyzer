@@ -28,6 +28,18 @@ async def load_snapshot(db: AsyncSession, session_id: str) -> dict | None:
     return row.data if row else None
 
 
+def _follow_interactive_flag(session: AuthoringSession, snapshot: dict) -> None:
+    """Polygon's interactive flag decides interactive vs not (a problem opened for the
+    first time, or switched in Polygon); output-only has no flag there and stays as set."""
+    interactive = (snapshot.get("info") or {}).get("interactive")
+    if interactive is None:
+        return
+    if interactive and session.problem_type != "interactive":
+        session.problem_type = "interactive"
+    elif not interactive and session.problem_type == "interactive":
+        session.problem_type = "regular"
+
+
 async def sync_session(
     db: AsyncSession,
     session: AuthoringSession,
@@ -65,6 +77,7 @@ async def sync_session(
     else:
         row.data = snapshot
         row.taken_at = utcnow()
+    _follow_interactive_flag(session, snapshot)
     session.last_synced_at = utcnow()
     session.sync_error = "; ".join(snapshot.get("errors") or [])[:2000] or None
     try:

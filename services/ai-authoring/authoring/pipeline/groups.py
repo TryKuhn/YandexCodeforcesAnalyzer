@@ -195,6 +195,19 @@ def expand_lines(plan: TestPlan) -> list[ScriptLine]:
     return lines
 
 
+_MATH_WORDS = (
+    (r"\\le(?:q)?(?![a-z])", "<="), (r"\\ge(?:q)?(?![a-z])", ">="), (r"\\ne(?:q)?(?![a-z])", "!="),
+    (r"\\cdot(?![a-z])", "*"), (r"\\times(?![a-z])", "*"), (r"\\[,;! ]", ""), (r"~", " "),
+)
+
+
+def _plain_math(text: str) -> str:
+    """LaTeX bits of a group description in plain ASCII (for script comments): ``$n \\le 10^5$`` -> ``n <= 10^5``."""
+    for pattern, repl in _MATH_WORDS:
+        text = re.sub(pattern, repl, text)
+    return text.replace("$", "")
+
+
 def build_script(plan: TestPlan) -> str:
     """The FreeMarker script: one ``<#list>`` per case, unique numbers across the script."""
     out = ["<#-- Generated from the test plan by AI authoring. Edit the plan, not this script. -->"]
@@ -202,7 +215,8 @@ def build_script(plan: TestPlan) -> str:
     for group in plan.generated_groups:
         title = f"group {group.name}" if plan.use_groups else "tests"
         # inside a FreeMarker comment: no "-->" / "${" that would end it or be evaluated
-        description = " ".join(re.sub(r"[^A-Za-z0-9 _.,:;=+*/()\[\]]", " ", group.description).split())[:80]
+        plain = re.sub(r"[^A-Za-z0-9 _.,:;=+*/()\[\]<>!^]", " ", _plain_math(group.description))
+        description = " ".join(plain.split())[:80]
         out.append(f"<#-- {title}: {description} -->" if description else f"<#-- {title} -->")
         for case in group.cases:
             args = f" {case.args}" if case.args else ""
