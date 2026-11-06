@@ -8,6 +8,8 @@ from api.judge.grading import JOB_TYPE as JUDGE_JOB
 from api.judge.grading import make_handler as make_judge_handler
 from api.user.ejudge.export import JOB_TYPE as EJUDGE_EXPORT_JOB
 from api.user.ejudge.export import make_handler as make_ejudge_handler
+from api.user.nlogn.publish import JOB_TYPE as NLOGN_PUBLISH_JOB
+from api.user.nlogn.publish import make_handler as make_nlogn_handler
 from app.database import Session
 from blobs import BlobStore
 from jobs.transport import RedisStreamTransport
@@ -20,6 +22,7 @@ def build_handlers() -> dict[str, Handler]:
     return {
         JUDGE_JOB: make_judge_handler(Session, BlobStore()),
         EJUDGE_EXPORT_JOB: make_ejudge_handler(Session),
+        NLOGN_PUBLISH_JOB: make_nlogn_handler(Session),
     }
 
 

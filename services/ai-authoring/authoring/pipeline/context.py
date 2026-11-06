@@ -19,6 +19,18 @@ class RunCancelled(Exception):
     """The user cancelled the run."""
 
 
+def plural(n: int, one: str, few: str, many: str) -> str:
+    """``n`` with the Russian plural form: plural(3, "тест", "теста", "тестов") -> "3 теста"."""
+    n10, n100 = abs(n) % 10, abs(n) % 100
+    if n10 == 1 and n100 != 11:
+        word = one
+    elif 2 <= n10 <= 4 and not 12 <= n100 <= 14:
+        word = few
+    else:
+        word = many
+    return f"{n} {word}"
+
+
 class PipelineError(Exception):
     """An expected failure with a message for the user."""
 

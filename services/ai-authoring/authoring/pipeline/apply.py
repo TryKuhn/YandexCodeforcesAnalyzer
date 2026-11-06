@@ -93,6 +93,19 @@ def describe(edit: Edit) -> str:
     return type(edit).__name__
 
 
+def _free_solution_name(name: str, tag: str, taken: dict) -> str:
+    """``main.cpp`` + TL -> ``main_tl.cpp`` (``main_tl2.cpp``, ... if taken)."""
+    stem, dot, ext = name.rpartition(".")
+    if not dot:
+        stem, ext = name, "cpp"
+    candidate = f"{stem}_{tag.lower()}.{ext}"
+    k = 2
+    while candidate in taken:
+        candidate = f"{stem}_{tag.lower()}{k}.{ext}"
+        k += 1
+    return candidate
+
+
 def _clamp(value: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, value))
 
@@ -189,6 +202,13 @@ async def apply_edits(
         else:  # solution
             existing = solutions.get(edit.name) or {}
             tag = edit.tag or existing.get("tag") or "OK"
+            if existing.get("tag") == "MA" and tag != "MA":
+                # "write a TL solution" must not turn the main solution into one:
+                # the problem would lose its MA and every build would fail
+                new_name = _free_solution_name(edit.name, tag, solutions)
+                result.errors.append(f"{edit.name} — главное решение, тег {tag} ему не ставлю: "
+                                     f"новое решение сохранено как {new_name}")
+                edit.name, existing = new_name, {}
             if tag == "MA":
                 for other_name, other in solutions.items():
                     if other_name != edit.name and other.get("tag") == "MA" and other.get("content") is not None:

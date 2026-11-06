@@ -9,6 +9,7 @@ import {
 import { api } from '../../api/instance';
 import { aiApi, errorText } from '../../api/ai';
 import { Pagination } from '../../components/Pagination';
+import { parseServerDate } from '../../utils/date';
 
 interface PolygonProblem {
     polygon_id: number;
@@ -50,9 +51,18 @@ const ACCESS_BADGE: Record<string, { label: string; color: string; bg: string }>
     },
 };
 
+// what the AI generates from an idea, per problem type
+const IDEA_PLACEHOLDERS: Record<string, string> = {
+    regular: 'Идея задачи (необязательно): ИИ напишет условие, решение, валидатор, чекер, генераторы и тесты',
+    interactive: 'Идея интерактивной задачи (необязательно): ИИ напишет условие с протоколом, интерактор, '
+        + 'решение, валидатор, чекер, генераторы и тесты',
+    output_only: 'Идея output-only задачи (необязательно): ИИ напишет условие с системой оценки, эталонное '
+        + 'решение жюри, скорер (частичные баллы за тест), валидатор, генераторы и тесты',
+};
+
 const formatRelative = (dateStr: string | null): string => {
     if (!dateStr) return '';
-    const date = new Date(dateStr);
+    const date = parseServerDate(dateStr);  // UTC without 'Z' from the backend
     const diff = Date.now() - date.getTime();
     if (diff < 60_000) return 'только что';
     if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} мин назад`;
@@ -180,16 +190,15 @@ export const TasksList = () => {
         setCreateError(null);
         try {
             // a clean Polygon problem + its AI workspace; with an idea the AI generates it
-            // (generation is available for regular problems only so far)
             const regular = newType === 'regular';
-            const idea = regular ? newIdea.trim() : '';
+            const idea = newIdea.trim();
             let polygonId: number;
             try {
                 const res = await aiApi.createProblem({
                     name: newName.trim(),
                     problem_type: newType,
                     idea: idea || undefined,
-                    groups: idea ? newGroups : undefined,
+                    groups: idea && newType !== 'output_only' ? newGroups : undefined,
                 });
                 polygonId = res.polygon_id;
             } catch (e) {
@@ -465,15 +474,12 @@ export const TasksList = () => {
                             value={newIdea}
                             onChange={e => setNewIdea(e.target.value)}
                             rows={4}
-                            placeholder={newType === 'regular'
-                                ? 'Идея задачи (необязательно): ИИ напишет условие, решение, валидатор, чекер, генераторы и тесты'
-                                : 'Генерация пока доступна для обычных задач; для этого типа будет создана пустая задача'}
-                            disabled={newType !== 'regular'}
+                            placeholder={IDEA_PLACEHOLDERS[newType] ?? IDEA_PLACEHOLDERS.regular}
                             className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800
                                        rounded-2xl px-4 py-3 text-sm dark:text-white outline-none resize-none
                                        focus:border-blue-500 transition-all mb-2 disabled:opacity-50"
                         />
-                        {newType === 'regular' && newIdea.trim() && (
+                        {newType !== 'output_only' && newIdea.trim() && (
                             <label className="flex items-center gap-2 text-xs text-slate-500 mb-3">
                                 <input type="checkbox" checked={newGroups} onChange={e => setNewGroups(e.target.checked)} />
                                 С подзадачами (группы тестов и баллы)
@@ -489,7 +495,7 @@ export const TasksList = () => {
                                        flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                         >
                             {creating ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-                            {newIdea.trim() && newType === 'regular' ? 'Создать и сгенерировать' : 'Создать'}
+                            {newIdea.trim() ? 'Создать и сгенерировать' : 'Создать'}
                         </button>
                     </div>
                 </div>

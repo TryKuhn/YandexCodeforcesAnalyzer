@@ -1,6 +1,10 @@
 import {useState, useEffect} from 'react';
 import {useAuthStore} from '../store/useAuthStore';
 import {api} from '../api/instance';
+import {EjudgeIntegration} from '../components/integrations/EjudgeIntegration';
+import {LlmKeysIntegration} from '../components/integrations/LlmKeysIntegration';
+import {NlognIntegration} from '../components/integrations/NlognIntegration';
+import {ApiTokensIntegration} from '../components/integrations/ApiTokensIntegration';
 import {
     User, Shield, Monitor, Loader2, Globe, Unlink, Clock
 } from 'lucide-react';
@@ -338,6 +342,11 @@ export const Profile = () => {
                             </button>
                         )}
                     </div>
+
+                    <EjudgeIntegration/>
+                    <LlmKeysIntegration/>
+                    <NlognIntegration/>
+                    <ApiTokensIntegration/>
                 </div>
             </div>
 

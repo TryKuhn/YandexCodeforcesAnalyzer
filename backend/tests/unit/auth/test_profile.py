@@ -45,6 +45,20 @@ async def test_get_me_returns_link_flags(db, user):
     assert result["is_polygon_linked"] is True
     assert result["is_yandex_linked"] is False
     assert result["is_codeforces_linked"] is False
+    assert result["is_ejudge_linked"] is False and result["llm_providers"] == []
+
+
+@pytest.mark.asyncio
+async def test_get_me_reports_integrations(db, user):
+    from api.crypt.secrets import encrypt
+    from models import EjudgeAccount, LLMApiKey
+
+    db.add(EjudgeAccount(user_id=user.id, ssh_host="h", auth_method="password", ssh_secret_enc=encrypt("x")))
+    db.add(LLMApiKey(user_id=user.id, provider="openai", key_enc=encrypt("k"), key_hint="h"))
+    db.add(LLMApiKey(user_id=user.id, provider="anthropic", key_enc=encrypt("k"), key_hint="h"))
+    await db.commit()
+    result = await get_me(user_id=user.id, db=db)
+    assert result["is_ejudge_linked"] is True and result["llm_providers"] == ["anthropic", "openai"]
 
 
 # --------------------------------------------------------------------------- #

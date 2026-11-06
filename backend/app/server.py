@@ -26,6 +26,9 @@ from api.user.auth import auth_router
 from api.user.codeforces import codeforces_router
 from api.user.ejudge import ejudge_router
 from api.user.ejudge import router as ejudge_routes
+from api.user.integrations import integrations_router
+from api.user.nlogn import nlogn_router, public_router
+from api.user.nlogn import router as nlogn_routes
 from api.user.ai import ai_proxy_router
 from api.user.ai.proxy import close_client as close_ai_proxy_client
 from api.user.plagiarism import plagiarism_router
@@ -87,6 +90,11 @@ async def lifespan(app: FastAPI):
         )
     )
     ejudge_routes.set_enqueue(
+        lambda db, job_type, payload, user_id=None: enqueue(
+            db, transport, job_type, payload, user_id=user_id
+        )
+    )
+    nlogn_routes.set_enqueue(
         lambda db, job_type, payload, user_id=None: enqueue(
             db, transport, job_type, payload, user_id=user_id
         )
@@ -237,6 +245,20 @@ app.include_router(
     tags=["ejudge"],
     dependencies=[Depends(get_current_user)],
 )
+app.include_router(
+    integrations_router,
+    prefix="/api/integrations",
+    tags=["integrations"],
+    dependencies=[Depends(get_current_user)],
+)
+app.include_router(
+    nlogn_router,
+    prefix="/api/nlogn",
+    tags=["nlogn"],
+    dependencies=[Depends(get_current_user)],
+)
+# for other systems (the NlogN admin): personal access tokens only, see api.crypt.api_tokens
+app.include_router(public_router, prefix="/api/public/v1", tags=["public"])
 app.include_router(
     yandex_router,
     prefix="/api/yandex",

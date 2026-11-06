@@ -21,7 +21,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user.ejudge.common import EjudgeError, is_configured
+from api.user.ejudge import config as ejudge_config
+from api.user.ejudge.common import EjudgeError
+from api.user.ejudge.config import EjudgeConfig
 from api.user.ejudge.convert import MANAGED_KEYS, build_plan
 from api.user.ejudge.package import PolygonPackage, parse_package
 from api.user.ejudge.remote import EjudgeHost, SSHHost, q
@@ -37,7 +39,7 @@ JOB_TYPE = "ejudge.export"
 PACKAGE_TYPES = ("linux", "windows", "standard")
 
 Progress = Callable[[int], Awaitable[None]]
-HostFactory = Callable[[object], EjudgeHost]
+HostFactory = Callable[[EjudgeConfig], EjudgeHost]
 
 
 async def _no_progress(_: int) -> None:
@@ -54,27 +56,31 @@ class ExportRequest:
     internal_name: str | None = None
 
 
-def contest_dir(contest_id: int) -> str:
-    return posixpath.join(settings.EJUDGE_JUDGES_DIR, f"{contest_id:06d}")
+def contest_dir(config: EjudgeConfig, contest_id: int) -> str:
+    return posixpath.join(config.judges_dir, f"{contest_id:06d}")
 
 
-def serve_cfg_path(contest_id: int) -> str:
-    return posixpath.join(contest_dir(contest_id), "conf", "serve.cfg")
+def serve_cfg_path(config: EjudgeConfig, contest_id: int) -> str:
+    return posixpath.join(contest_dir(config, contest_id), "conf", "serve.cfg")
 
 
-def require_configured() -> None:
-    if not is_configured(settings):
-        raise EjudgeError("экспорт в ejudge не настроен (EJUDGE_SSH_HOST, EJUDGE_JUDGES_DIR)")
+NOT_CONFIGURED = "экспорт в ejudge не настроен: подключите ejudge в профиле (раздел «Интеграции»)"
 
 
-def require_allowed(contest_id: int) -> None:
-    allowed = settings.ejudge_allowed_contests
+def require_configured(config: EjudgeConfig) -> None:
+    if not config.configured:
+        raise EjudgeError(NOT_CONFIGURED)
+
+
+def require_allowed(config: EjudgeConfig, contest_id: int) -> None:
+    allowed = config.allowed_contests
     if allowed and contest_id not in allowed:
-        raise EjudgeError(f"контест {contest_id} не входит в EJUDGE_ALLOWED_CONTESTS")
+        where = "списка разрешённых контестов интеграции" if config.source == "user" else "EJUDGE_ALLOWED_CONTESTS"
+        raise EjudgeError(f"контест {contest_id} не входит в {where}")
 
 
 async def fetch_package(
-    polygon_id: int, package_id: int | None, user_id: int, db: AsyncSession
+    polygon_id: int, package_id: int | None, user_id: int, db: AsyncSession, *, preferred: str | None = None
 ) -> tuple[int, PolygonPackage]:
     """The package (latest READY by default), as a parsed full package."""
     packages = await methods.get_packages(polygon_id, user_id, db)
@@ -87,7 +93,7 @@ async def fetch_package(
         raise EjudgeError(f"пакет #{package_id} не найден среди собранных")
 
     errors: list[str] = []
-    preferred = settings.EJUDGE_PACKAGE_TYPE
+    preferred = preferred or settings.EJUDGE_PACKAGE_TYPE
     for package_type in dict.fromkeys((preferred, *PACKAGE_TYPES)):
         try:
             data = await methods.download_package(
@@ -99,15 +105,18 @@ async def fetch_package(
     raise EjudgeError("не удалось скачать полный пакет: " + "; ".join(errors))
 
 
-async def read_contest(host: EjudgeHost, contest_id: int) -> ServeCfg:
-    return ServeCfg(await host.read_text(serve_cfg_path(contest_id)))
+async def read_contest(host: EjudgeHost, config: EjudgeConfig, contest_id: int) -> ServeCfg:
+    return ServeCfg(await host.read_text(serve_cfg_path(config, contest_id)))
 
 
-async def contest_info(contest_id: int, host_factory: HostFactory = SSHHost) -> dict:
-    require_configured()
-    require_allowed(contest_id)
-    async with host_factory(settings) as host:  # type: ignore[attr-defined]
-        cfg = await read_contest(host, contest_id)
+async def contest_info(
+    contest_id: int, host_factory: HostFactory = SSHHost, *, config: EjudgeConfig | None = None
+) -> dict:
+    config = config or ejudge_config.server_config()
+    require_configured(config)
+    require_allowed(config, contest_id)
+    async with host_factory(config) as host:  # type: ignore[attr-defined]
+        cfg = await read_contest(host, config, contest_id)
     return {
         "contest_id": contest_id,
         "score_system": cfg.score_system,
@@ -140,22 +149,36 @@ async def run_export(
     progress: Progress = _no_progress,
     host_factory: HostFactory = SSHHost,
     web_factory: Callable[[str, str, str], EjudgeWeb] = EjudgeWeb,
+    config: EjudgeConfig | None = None,
+    fetched: dict | None = None,
 ) -> dict:
-    require_configured()
-    require_allowed(request.contest_id)
+    """``config`` defaults to the user's ejudge integration (or the server's ejudge).
+
+    ``fetched``, when given, receives the downloaded package (``fetched["package"]``)
+    so a caller (the NlogN publication) can reuse it without a second download.
+    """
+    if config is None:
+        config = await ejudge_config.resolve(user_id, db)
+    require_configured(config)
+    require_allowed(config, request.contest_id)
     await progress(5)
-    package_id, package = await fetch_package(request.polygon_id, request.package_id, user_id, db)
+    package_id, package = await fetch_package(
+        request.polygon_id, request.package_id, user_id, db, preferred=config.package_type
+    )
+    if fetched is not None:
+        fetched["package"] = package
+        fetched["package_id"] = package_id
     await progress(30)
 
-    async with host_factory(settings) as host:  # type: ignore[attr-defined]
-        cfg = await read_contest(host, request.contest_id)
+    async with host_factory(config) as host:  # type: ignore[attr-defined]
+        cfg = await read_contest(host, config, request.contest_id)
         plan = build_plan(
             package, cfg,
             polygon_id=request.polygon_id,
             short_name=request.short_name,
             problem_id=request.problem_id,
             internal_name=request.internal_name,
-            gvaluer_binary=settings.EJUDGE_GVALUER_PATH,
+            gvaluer_binary=config.gvaluer_path,
         )
         report = {**plan.report(), "package_id": package_id, "contest_id": request.contest_id}
         if dry_run:
@@ -163,7 +186,7 @@ async def run_export(
         await progress(40)
 
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        problems_dir = posixpath.join(contest_dir(request.contest_id), "problems")
+        problems_dir = posixpath.join(contest_dir(config, request.contest_id), "problems")
         final = posixpath.join(problems_dir, plan.internal_name)
         staging = posixpath.join(problems_dir, f".{plan.internal_name}.upload-{stamp}")
         backup = posixpath.join(problems_dir, f".{plan.internal_name}.bak-{stamp}")
@@ -171,21 +194,21 @@ async def run_export(
         try:
             await host.write_files(staging, plan.files)
             await progress(70)
-            if plan.valuer_cfg is not None and settings.EJUDGE_GVALUER_PATH:
-                await _check(host, f"cp {q(settings.EJUDGE_GVALUER_PATH)} {q(staging + '/gvaluer')}",
+            if plan.valuer_cfg is not None and config.gvaluer_path:
+                await _check(host, f"cp {q(config.gvaluer_path)} {q(staging + '/gvaluer')}",
                              "копирование gvaluer")
             for executable, source in plan.compile:
                 await _check(
                     host,
-                    f"cd {q(staging)} && {settings.EJUDGE_CXX} -o {q(executable)} {q(source)}",
+                    f"cd {q(staging)} && {config.cxx} -o {q(executable)} {q(source)}",
                     f"компиляция {source} на сервере ejudge",
                 )
             await progress(85)
 
             # serve.cfg may have been edited meanwhile (by a person or another export):
             # re-read it right before changing anything and make sure the plan still holds
-            serve = serve_cfg_path(request.contest_id)
-            fresh = await read_contest(host, request.contest_id)
+            serve = serve_cfg_path(config, request.contest_id)
+            fresh = await read_contest(host, config, request.contest_id)
             if fresh.text() != cfg.text():
                 again = build_plan(
                     package, fresh,
@@ -193,7 +216,7 @@ async def run_export(
                     short_name=request.short_name,
                     problem_id=request.problem_id,
                     internal_name=request.internal_name,
-                    gvaluer_binary=settings.EJUDGE_GVALUER_PATH,
+                    gvaluer_binary=config.gvaluer_path,
                 )
                 if (again.internal_name, again.problem_id, again.short_name, again.score_system) != (
                     plan.internal_name, plan.problem_id, plan.short_name, plan.score_system
@@ -231,16 +254,16 @@ async def run_export(
     report["problem_dir"] = final
     report["backup_dir"] = backup
     report["reloaded"] = False
-    if settings.EJUDGE_URL and settings.EJUDGE_LOGIN:
+    if config.web_reload:
         try:
-            await web_factory(settings.EJUDGE_URL, settings.EJUDGE_LOGIN, settings.EJUDGE_PASSWORD) \
+            await web_factory(config.web_url, config.web_login, config.web_password) \
                 .reload_config(request.contest_id)
             report["reloaded"] = True
         except EjudgeError as e:
             report["warnings"] = [*report["warnings"], f"конфигурация не перезагружена: {e}"]
     else:
-        report["warnings"] = [*report["warnings"], "EJUDGE_URL/EJUDGE_LOGIN не заданы: перезагрузите конфигурацию "
-                              "контеста в ejudge вручную"]
+        report["warnings"] = [*report["warnings"], "не заданы адрес и логин веб-интерфейса ejudge: перезагрузите "
+                              "конфигурацию контеста в ejudge вручную"]
     await progress(100)
     return report
 

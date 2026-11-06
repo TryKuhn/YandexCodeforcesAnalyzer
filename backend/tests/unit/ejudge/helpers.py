@@ -42,6 +42,7 @@ def package_zip(
     input_file: str = "",
     time_limit: int = 1000,
     memory: int = 256 * 1024 * 1024,
+    statements: dict[str, bytes | str] | None = None,
 ) -> bytes:
     """tests: [{"group": "1", "points": 30, "sample": True}, ...]"""
     test_xml = []
@@ -96,6 +97,8 @@ def package_zip(
         zf.writestr("files/check.cpp", '#include "testlib.h"\nint main(){}\n')
         if interactor:
             zf.writestr("files/interactor.cpp", "int main(){}\n")
+        for path, content in (statements or {}).items():
+            zf.writestr(f"statements/{path}", content)
         for i in range(1, len(tests) + 1):
             zf.writestr(f"tests/{i:02d}", f"input {i}\n")
             if answers:
@@ -114,9 +117,11 @@ class FakeHost:
         self.reads: list[str] = []
         self.after_read: dict[int, object] = {}  # n-th read (1-based) -> callable(host), simulates edits
         self.fail_rename = False
+        self.configs: list = []  # the EjudgeConfig of every connection
 
     # async context manager, like SSHHost
-    def __call__(self, settings) -> FakeHost:  # host_factory(settings)
+    def __call__(self, config) -> FakeHost:  # host_factory(config)
+        self.configs.append(config)
         return self
 
     async def __aenter__(self) -> FakeHost:

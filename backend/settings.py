@@ -23,6 +23,13 @@ class Settings(BaseSettings):
         """Return CORS_ORIGINS parsed into a list of trimmed origin strings."""
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
+    # where the jury frontend is served (links in publications); defaults to the first CORS origin
+    PUBLIC_URL: str = ""
+
+    @property
+    def public_url(self) -> str:
+        return (self.PUBLIC_URL or (self.cors_origins[:1] or ["http://localhost:5173"])[0]).rstrip("/")
+
     ALGORITHM: str = "HS256"
     SECRET_KEY: str
     EXPIRES_ACCESS: int = 30

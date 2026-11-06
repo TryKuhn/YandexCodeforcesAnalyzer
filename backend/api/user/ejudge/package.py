@@ -17,6 +17,10 @@ from api.user.ejudge.common import EjudgeError
 
 MAX_PACKAGE_BYTES = 1024 * 1024 * 1024
 MAX_UNPACKED_BYTES = 2 * 1024 * 1024 * 1024
+# statement files kept in memory (PDFs and other bulky files are skipped)
+MAX_STATEMENT_FILE_BYTES = 5 * 1024 * 1024
+STATEMENT_EXTENSIONS = (".html", ".htm", ".json", ".tex", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".bmp",
+                        ".webp", ".css")
 
 
 @dataclass
@@ -52,6 +56,10 @@ class PolygonPackage:
     checker_source: tuple[str, bytes] | None  # (file name, content)
     interactor_source: tuple[str, bytes] | None
     resources: dict[str, bytes]  # name -> content (testlib.h, ...)
+    # everything under statements/ (relative path -> bytes): the generated HTML
+    # statements (statements/.html/<lang>/problem.html + images) and the sources
+    # (statements/<lang>/problem-properties.json); used by the NlogN publication
+    statement_files: dict[str, bytes] = field(default_factory=dict)
 
     @property
     def has_points(self) -> bool:
@@ -177,6 +185,14 @@ def parse_package(data: bytes, *, testset: str = "tests") -> PolygonPackage:
             if content is not None:
                 resources[posixpath.basename(path)] = content
 
+        statement_files: dict[str, bytes] = {}
+        for info in zf.infolist():
+            name = info.filename
+            if (name.startswith("statements/") and not info.is_dir()
+                    and name.lower().endswith(STATEMENT_EXTENSIONS)
+                    and info.file_size <= MAX_STATEMENT_FILE_BYTES):
+                statement_files[name[len("statements/"):]] = zf.read(info)
+
         revision = root.get("revision")
         return PolygonPackage(
             short_name=root.get("short-name") or "problem",
@@ -192,4 +208,5 @@ def parse_package(data: bytes, *, testset: str = "tests") -> PolygonPackage:
             checker_source=source(checker.find("source") if checker is not None else None),
             interactor_source=source(interactor_node),
             resources=resources,
+            statement_files=statement_files,
         )

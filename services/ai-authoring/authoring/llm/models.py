@@ -35,6 +35,17 @@ ROUTER_MODELS: tuple[str, ...] = (
 
 ALLOWED_MODEL_IDS = frozenset(m.id for m in MAIN_MODELS)
 
+# OpenRouter id -> the vendor's own API id, for users who linked their own
+# Anthropic / OpenAI key (verified in the vendors' docs, 2026-10-24:
+# platform.claude.com/docs/en/models/*-5-5/overview, developers.openai.com/api/docs/models/gpt-6.1-sol).
+# A model missing here always goes through OpenRouter.
+DIRECT_MODEL_IDS: dict[str, str] = {
+    "anthropic/claude-opus-5.5": "claude-opus-5-5",
+    "anthropic/claude-sonnet-5.5": "claude-sonnet-5-5",
+    "anthropic/claude-haiku-5.5": "claude-haiku-5-5",
+    "openai/gpt-6.1-sol": "gpt-6.1-sol",
+}
+
 # ids stored by older sessions / the retired gpt service -> current ones
 _LEGACY = {
     "anthropic/claude-opus-4.8": DEFAULT_MODEL,
@@ -56,3 +67,7 @@ def normalize_model(model: str | None) -> str:
 
 def is_anthropic(model: str) -> bool:
     return model.startswith("anthropic/")
+
+
+def is_openai(model: str) -> bool:
+    return model.startswith("openai/")

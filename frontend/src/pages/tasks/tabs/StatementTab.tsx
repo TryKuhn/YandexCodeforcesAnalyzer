@@ -117,7 +117,10 @@ function processInline(s: string): string {
 
 // Convert a \begin{tabular}{spec} ... \end{tabular} body into a Markdown table.
 function tabularToMarkdown(body: string): string {
-    let b = body.replace(/^\s*\{[^}]*\}/, '');   // drop the column spec {|c|c|...}
+    // drop the column spec {|c|c|p{7cm}|...} (balanced: p{..} has its own braces)
+    let b = body;
+    const specStart = b.search(/\S/);
+    if (specStart >= 0 && b[specStart] === '{') b = b.slice(extractGroup(b, specStart)[1]);
     const rows = b.split('\\\\')
         .map(r => r.replace(/\\hline/g, '').trim())
         .filter(Boolean);
@@ -153,6 +156,19 @@ function renderLatex(src: string): string {
     // \verb<delim>...<delim> and \verb*<delim>...<delim> (any delimiter char)
     s = s.replace(/\\verb\*?([^a-zA-Z0-9\s])([\s\S]*?)\1/g, (_m, _d, body) => stashCode(body, true));
 
+    // Protect math the same way: text rewrites (\texttt → `code`, << → «, -- → –,
+    // unescaping \{ \}) must not touch formulas, KaTeX renders them itself
+    // (\texttt inside math is mapped to \mathtt by the KaTeX macros).
+    const mathStash: string[] = [];
+    const stashMath = (math: string): string => {
+        mathStash.push(math);
+        return `@@MATH${mathStash.length - 1}@@`;
+    };
+    s = s.replace(/\\\[([\s\S]*?)\\\]/g, (_m, body) => stashMath(`$$${body}$$`));
+    s = s.replace(/\\\(([\s\S]*?)\\\)/g, (_m, body) => stashMath(`$${body}$`));
+    s = s.replace(/(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$/g, m => stashMath(m));
+    s = s.replace(/(?<!\\)\$((?:\\.|[^$\\])+?)\$/g, m => stashMath(m));
+
     // Guillemets and dashes first (before tables, whose separators use --- )
     s = s.replace(/<</g, '«').replace(/>>/g, '»');
     s = s.replace(/---/g, '—').replace(/(?<!-)--(?!-)/g, '–');
@@ -186,15 +202,13 @@ function renderLatex(src: string): string {
     // Inline formatting (balanced braces, nested)
     s = processInline(s);
 
-    // Math delimiters
-    s = s.replace(/\\\[/g, '$$').replace(/\\\]/g, '$$');
-    s = s.replace(/\\\(/g, '$').replace(/\\\)/g, '$');
-
     // Unescape remaining escaped chars outside code
     s = unescapeLatex(s);
 
     // Strip leading indentation so aligned LaTeX isn't seen as a code block
     s = s.split('\n').map(l => l.replace(/^[ \t]+/, '')).join('\n');
+
+    s = s.replace(/@@MATH(\d+)@@/g, (_m, i) => mathStash[Number(i)] ?? '');
 
     // Restore stashed code (verbatim/lstlisting/\verb) as Markdown code, after
     // all rewriting so its contents were never altered.
@@ -742,6 +756,9 @@ export const StatementTab = ({ polygonId, sessionId, interactive = false, enable
                                                break-words overflow-x-auto
                                                [&_p]:break-words [&_pre]:whitespace-pre-wrap [&_pre]:break-words
                                                [&_table]:block [&_table]:w-max [&_table]:max-w-full [&_table]:overflow-x-auto
+                                               [&_th]:px-3 [&_td]:px-3 [&_th]:border [&_td]:border
+                                               [&_th]:border-slate-300 [&_td]:border-slate-300
+                                               dark:[&_th]:border-slate-600 dark:[&_td]:border-slate-600
                                                [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden"
                                 >
                                     <ReactMarkdown

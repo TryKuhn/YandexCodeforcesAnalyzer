@@ -11,6 +11,9 @@ interface User {
     is_yandex_linked: boolean;
     is_codeforces_linked: boolean;
     is_polygon_linked: boolean;
+    is_ejudge_linked?: boolean;
+    is_nlogn_linked?: boolean;
+    llm_providers?: string[];
 }
 
 interface AuthState {

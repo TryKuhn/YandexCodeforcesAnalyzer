@@ -39,7 +39,9 @@ ResponseKind = Literal["json", "text", "bytes"]
 
 MAX_ATTEMPTS = 4
 RETRY_BACKOFF_SECONDS = 1.5
-RETRY_HTTP_STATUSES = frozenset({500, 502, 503, 504})
+# Polygon's per-key rate limit: back off long enough for the window to pass
+RATE_LIMIT_BACKOFF_SECONDS = 5.0
+RETRY_HTTP_STATUSES = frozenset({429, 500, 502, 503, 504})
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=300)
 _TRANSIENT_COMMENT_MARKERS = (
     "not within 5 minutes",
@@ -231,7 +233,11 @@ def parse_response(method: str, http_status: int, body: bytes, kind: ResponseKin
         )
 
     if http_status != 200:
-        if "<html" in text[:500].lower():
+        if http_status == 429:
+            # Polygon's rate limit (served as an HTML page by its front proxy):
+            # the call was not executed, so even non-repeatable methods may retry
+            message = "HTTP 429: Polygon ограничил частоту запросов (too many requests)"
+        elif "<html" in text[:500].lower():
             message = f"HTTP {http_status}: сервер Polygon временно недоступен (ошибка шлюза)"
         else:
             message = f"HTTP {http_status}: {text[:300]}"
@@ -320,7 +326,8 @@ async def request(
             logger.warning(
                 f"Polygon {method}: {last_error}; повтор {attempt}/{MAX_ATTEMPTS - 1}"
             )
-            await _sleep(RETRY_BACKOFF_SECONDS * attempt)
+            rate_limited = isinstance(last_error, PolygonAPIError) and last_error.http_status == 429
+            await _sleep((RATE_LIMIT_BACKOFF_SECONDS if rate_limited else RETRY_BACKOFF_SECONDS) * attempt)
 
     raise last_error
 

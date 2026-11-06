@@ -13,6 +13,7 @@ import logging
 from typing import Any
 
 from authoring.llm import prompts
+from authoring.llm.problem_types import OUTPUT_ONLY, OUTPUT_ONLY_TEST_POINTS, normalize_type
 from authoring.llm.protocol import FileEdit, StatementEdit, single_file
 from authoring.pipeline.apply import ApplyResult, apply_edits
 from authoring.pipeline.context import PipelineError, RunContext
@@ -85,6 +86,22 @@ async def _wait_for_tests(ctx: RunContext, expected: int) -> list[dict]:
     return tests
 
 
+async def set_output_only_points(ctx: RunContext, tests: list[dict]) -> None:
+    """Output-only: points are always on and every test (samples too) is worth the
+    same maximum; the scorer awards a share of it with quitp."""
+    client, pid = ctx.client, ctx.session.polygon_id
+    await client.enable_points(pid, True)
+    semaphore = asyncio.Semaphore(_POINTS_CONCURRENCY)
+
+    async def set_points(index: int) -> None:
+        async with semaphore:
+            await client.save_test(pid, index, test_points=OUTPUT_ONLY_TEST_POINTS)
+
+    await asyncio.gather(*(
+        set_points(t["index"]) for t in tests if _differs(t.get("points"), OUTPUT_ONLY_TEST_POINTS)
+    ))
+
+
 async def setup_testset(ctx: RunContext, plan: TestPlan) -> ApplyResult:
     """Script + groups + points (no model calls)."""
     result = ApplyResult()
@@ -101,12 +118,18 @@ async def setup_testset(ctx: RunContext, plan: TestPlan) -> ApplyResult:
         assignment = assign(plan, tests, lines)
     except PlanError as e:
         raise PipelineError(str(e))
-    result.errors += assignment.warnings
+    # without groups every test is just "a test": where samples land is not news
+    if plan.use_groups:
+        result.errors += assignment.warnings
 
     if not plan.use_groups:
         if any(t.get("group") for t in tests):
             await client.enable_groups(pid, False)
             result.changed.append("группы выключены")
+        if normalize_type(ctx.session.problem_type) == OUTPUT_ONLY:
+            await set_output_only_points(ctx, tests)
+            result.changed.append(f"баллы: до {OUTPUT_ONLY_TEST_POINTS} за каждый из {len(tests)} тестов")
+            result.targets.add("groups")
         return result
 
     if plan.total_points > 0:

@@ -94,6 +94,13 @@ async def test_patch_session(api, problem):
         "model": "anthropic/claude-sonnet-4.6", "problem_type": "output_only", "auto_build": False})).json()
     assert data["model"] == "anthropic/claude-sonnet-5.5"
     assert data["problem_type"] == "output_only" and data["auto_build"] is False
+    # the type is mirrored into Polygon: output-only problems are always scored
+    assert problem.points_enabled and problem.info["interactive"] is False
+
+    data = (await api.patch(f"/api/ai/sessions/{sid}", json={"problem_type": "interactive"})).json()
+    assert data["problem_type"] == "interactive" and problem.info["interactive"] is True
+    data = (await api.patch(f"/api/ai/sessions/{sid}", json={"problem_type": "regular"})).json()
+    assert data["problem_type"] == "regular" and problem.info["interactive"] is False
     assert (await api.patch(f"/api/ai/sessions/{sid}", json={"problem_type": "weird"})).status_code == 422
 
 
@@ -149,6 +156,12 @@ async def test_solution_draft_and_skip(api, llm, problem):
     assert ok == {"skipped": False, "code": "int main(){}\n", "name": "wa.cpp", "tag": "WA"}
     skipped = (await api.post(f"/api/ai/sessions/{sid}/solution-draft", json={"tag": "ML"})).json()
     assert skipped == {"skipped": True, "reason": "нельзя гарантировать ML"}
+    tl = (await api.post(f"/api/ai/sessions/{sid}/solution-draft", json={
+        "tag": "TL", "name": "slow.cpp", "instruction": "перебор за O(n^2)"})).json()
+    assert tl["tag"] == "TL" and tl["name"] == "slow.cpp"
+    call = llm.calls[-1]
+    assert "Тег: TL. Имя файла: slow.cpp." in call.user and "перебор за O(n^2)" in call.user
+    assert "TL -- ОБЯЗАНО превысить" in call.system
 
 
 async def test_checker_validator_assist(api, llm):

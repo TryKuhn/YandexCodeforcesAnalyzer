@@ -157,3 +157,12 @@ def test_dependencies_on_empty_samples_group_are_dropped():
     a = assign(plan, tests, lines)
     assert a.policies["1"][2] == [] and a.policies["2"][2] == ["1"]
     assert any("убрана зависимость" in w for w in a.warnings)
+
+
+def test_script_comment_keeps_math_readable():
+    plan = normalize_plan({"use_groups": True, "groups": [
+        {"name": "1", "points": 100, "description": "без доп. ограничений ($n \\le 10^5$, $a_i \\ne 0$)",
+         "generator": "gen", "cases": [{"args": "5", "count": 1}]}]})
+    script = build_script(plan)
+    assert script.splitlines()[1].endswith("(n <= 10^5, a_i != 0) -->")
+    assert expand_freemarker(script) == ["gen 5 1 > $"]

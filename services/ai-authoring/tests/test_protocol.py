@@ -126,3 +126,11 @@ def test_single_quotes_truncation_and_checker_suffix():
     assert parsed.edits[1] == StandardChecker("std::wcmp.cpp")
     assert any("оборвана" in w for w in parsed.warnings)
     assert parse('<limits time_limit="1e999"/>').edits == []
+
+
+def test_unquoted_attributes_are_accepted():
+    parsed = parse("<statement lang=russian field=legend>Даны $a < b$.</statement>"
+                   "<limits time_limit=2000 memory_limit=256/><checker standard=std::ncmp.cpp/>")
+    assert parsed.edits[0] == StatementEdit("russian", "legend", "Даны $a < b$.")
+    assert parsed.edits[1] == LimitsEdit(2000, 256)
+    assert parsed.edits[2] == StandardChecker("std::ncmp.cpp")

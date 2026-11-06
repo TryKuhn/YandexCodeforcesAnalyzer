@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     OPENROUTER_PROVIDER_ORDER: str = ""
     OPENROUTER_PROVIDER_IGNORE: str = ""
     OPENROUTER_ALLOW_FALLBACKS: bool = True
+    # users' own keys (profile -> "ИИ-модели"): direct vendor APIs
+    ANTHROPIC_API_URL: str = "https://api.anthropic.com/v1/messages"
+    ANTHROPIC_VERSION: str = "2026-10-21"
+    OPENAI_DIRECT_URL: str = "https://api.openai.com/v1/chat/completions"
+    # how long the users' keys fetched from the backend are reused
+    LLM_CREDENTIALS_TTL_SECONDS: float = 60.0
 
     # --- sync / worker -------------------------------------------------------
     SYNC_INTERVAL_MINUTES: int = 5

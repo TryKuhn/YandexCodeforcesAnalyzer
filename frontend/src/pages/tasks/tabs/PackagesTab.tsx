@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Loader2, Package, CheckCircle, XCircle, AlertCircle, Download, Wrench, Sparkles, Upload, History,
+    Loader2, Package, CheckCircle, XCircle, AlertCircle, Download, Wrench, Sparkles, Upload, History, Send,
 } from 'lucide-react';
 import { api } from '../../../api/instance';
 import { aiApi, errorText, isActive, isBuildFinal, type AiBuild, type AiRun } from '../../../api/ai';
 import { EjudgeExportModal } from '../components/EjudgeExportModal';
+import { NlognPublishModal } from '../components/NlognPublishModal';
 
 interface Props {
     polygonId: number;
@@ -23,6 +24,10 @@ interface PolygonPackage {
     state: 'PENDING' | 'RUNNING' | 'READY' | 'FAILED';
     comment?: string;
     type: string;
+}
+
+interface PackageRow extends PolygonPackage {
+    types: string[];
 }
 
 const STATE_CONFIG: Record<PolygonPackage['state'], { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -46,18 +51,39 @@ const STATE_CONFIG: Record<PolygonPackage['state'], { label: string; color: stri
 
 const DOWNLOAD_TYPES = ['standard', 'linux', 'windows'] as const;
 
+/** Polygon lists a full package once per archive type (standard/linux/windows): one row per package id. */
+const mergePackages = (list: PolygonPackage[]): PackageRow[] => {
+    const byId = new Map<number, PackageRow>();
+    for (const p of list) {
+        const row = byId.get(p.id);
+        if (row) {
+            if (p.type && !row.types.includes(p.type)) row.types.push(p.type);
+        } else {
+            byId.set(p.id, { ...p, types: p.type ? [p.type] : [] });
+        }
+    }
+    return [...byId.values()].sort((a, b) => b.id - a.id);
+};
+
+/** Archive types to offer: the ones Polygon reported, in the usual order (standard if it said nothing). */
+const downloadTypes = (pkg: PackageRow): string[] => {
+    const known = DOWNLOAD_TYPES.filter(t => pkg.types.includes(t));
+    return known.length ? known : ['standard'];
+};
+
 const formatTime = (seconds: number) => new Date(seconds * 1000).toLocaleString('ru-RU', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
 export const PackagesTab = ({ polygonId, sessionId, latestBuild, activeRun, onRunStarted }: Props) => {
-    const [packages, setPackages] = useState<PolygonPackage[]>([]);
+    const [packages, setPackages] = useState<PackageRow[]>([]);
     const [builds, setBuilds] = useState<AiBuild[]>([]);
     const [loading, setLoading] = useState(true);
     const [starting, setStarting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [downloading, setDownloading] = useState<string | null>(null);
     const [exportPackage, setExportPackage] = useState<number | null>(null);
+    const [publishPackage, setPublishPackage] = useState<number | null>(null);
 
     const building = isActive(activeRun) && activeRun?.kind === 'build';
     const hasPending = packages.some(p => p.state === 'PENDING' || p.state === 'RUNNING');
@@ -69,7 +95,7 @@ export const PackagesTab = ({ polygonId, sessionId, latestBuild, activeRun, onRu
                 api.get<PolygonPackage[]>(`/polygon/problems/${polygonId}/packages`),
                 sessionId ? aiApi.builds(sessionId, 10) : Promise.resolve([] as AiBuild[]),
             ]);
-            setPackages([...(pkgs.data || [])].sort((a, b) => b.id - a.id));
+            setPackages(mergePackages(pkgs.data || []));
             setBuilds(history);
         } catch (e) {
             if (!silent) setError(errorText(e, 'Ошибка загрузки пакетов'));
@@ -244,14 +270,14 @@ export const PackagesTab = ({ polygonId, sessionId, latestBuild, activeRun, onRu
                                 <div className="flex items-center gap-3 flex-wrap">
                                     <span className="text-xs font-mono text-slate-500 shrink-0">#{pkg.id}</span>
                                     <span className="text-sm font-bold text-slate-700 dark:text-slate-200 flex-1 min-w-0 truncate">
-                                        rev. {pkg.revision} &mdash; {pkg.type}
+                                        rev. {pkg.revision}{pkg.types.length > 0 && ` — ${pkg.types.join(', ')}`}
                                     </span>
                                     <span className={`flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${conf.color} ${conf.bg}`}>
                                         {conf.icon} {conf.label}
                                     </span>
                                     {pkg.state === 'READY' && (
                                         <div className="flex items-center gap-1 shrink-0">
-                                            {DOWNLOAD_TYPES.map(t => (
+                                            {downloadTypes(pkg).map(t => (
                                                 <button
                                                     key={t}
                                                     onClick={() => download(pkg, t)}
@@ -272,6 +298,14 @@ export const PackagesTab = ({ polygonId, sessionId, latestBuild, activeRun, onRu
                                                            bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100"
                                             >
                                                 <Upload size={10} /> ejudge
+                                            </button>
+                                            <button
+                                                onClick={() => setPublishPackage(pkg.id)}
+                                                title="Выгрузить в ejudge и создать/обновить задачу на contest.nlogn.info"
+                                                className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg
+                                                           bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-100"
+                                            >
+                                                <Send size={10} /> NlogN
                                             </button>
                                         </div>
                                     )}
@@ -295,6 +329,9 @@ export const PackagesTab = ({ polygonId, sessionId, latestBuild, activeRun, onRu
 
             {exportPackage !== null && (
                 <EjudgeExportModal polygonId={polygonId} packageId={exportPackage} onClose={() => setExportPackage(null)} />
+            )}
+            {publishPackage !== null && (
+                <NlognPublishModal polygonId={polygonId} packageId={publishPackage} onClose={() => setPublishPackage(null)} />
             )}
         </div>
     );

@@ -276,7 +276,8 @@ async def test_web_bad_login(monkeypatch):
 
 # --------------------------------------------------------------------------- routes
 async def test_routes_status_export_and_job(db, user, monkeypatch):
-    assert (await router.route_status())["configured"] is True
+    status = await router.route_status(user_id=user.id, db=db)
+    assert status["configured"] is True and status["source"] == "server"
 
     monkeypatch.setattr(router, "_enqueue", None)
     body = router.ExportIn(polygon_id=555, contest_id=42)
@@ -299,13 +300,13 @@ async def test_routes_status_export_and_job(db, user, monkeypatch):
     assert e.value.status_code == 404
 
 
-async def test_route_contest_reports_errors(monkeypatch):
-    async def broken(contest_id):
+async def test_route_contest_reports_errors(monkeypatch, db, user):
+    async def broken(contest_id, **kwargs):
         raise EjudgeError("не удалось подключиться к ejudge по SSH: refused")
 
     monkeypatch.setattr(export, "contest_info", broken)
     with pytest.raises(HTTPException) as e:
-        await router.route_contest(42, user_id=1)
+        await router.route_contest(42, user_id=user.id, db=db)
     assert e.value.status_code == 400 and "SSH" in e.value.detail
 
 

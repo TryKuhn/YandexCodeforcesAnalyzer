@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, AlertCircle, FileText, Folder, TestTube, Package } from 'lucide-react';
 import { api } from '../../api/instance';
-import { aiApi, isActive, type AiEvent } from '../../api/ai';
+import { aiApi, errorText, isActive, type AiEvent } from '../../api/ai';
 import { DEFAULT_AI_MODEL } from '../../constants/aiModels';
 import { ProblemHeader } from './components/ProblemHeader';
 import { ChatPanel } from './components/ChatPanel';
@@ -165,7 +165,15 @@ export const TaskPage = () => {
 
     const handleProblemTypeChange = async (problemType: string) => {
         setSavingType(true);
-        try { await ai.update({ problem_type: problemType }); } catch { /* unchanged */ } finally { setSavingType(false); }
+        // the type is mirrored into Polygon (interactive flag, points for output-only)
+        try {
+            await ai.update({ problem_type: problemType });
+            bumpTabs();
+        } catch (e) {
+            alert(errorText(e, 'Не удалось сменить тип задачи'));
+        } finally {
+            setSavingType(false);
+        }
     };
 
     if (loading) {
@@ -262,7 +270,7 @@ export const TaskPage = () => {
                                 sessionId={sessionId}
                                 interactive={problemType === 'interactive'}
                                 enableGroups={scoringFlags.groups}
-                                enablePoints={scoringFlags.points}
+                                enablePoints={scoringFlags.points || problemType === 'output_only'}
                             />
                         )}
                         {activeTab === 'files' && (
