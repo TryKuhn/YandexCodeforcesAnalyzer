@@ -100,7 +100,7 @@ def user_config(**kw) -> EjudgeConfig:
 
 def test_key_auth_with_fingerprint_pins_the_host_key():
     pem = KEY.export_private_key().decode()
-    options = connect_options(user_config(ssh_key=pem, host_key="SHA256:xyz"))
+    options = connect_options(user_config(ssh_key=pem, host_key="SHA256:" + "x" * 43))
     assert options["client_keys"][0].get_fingerprint() == KEY.get_fingerprint()
     assert "password" not in options and options["agent_path"] is None
     client = options["client_factory"]()
@@ -127,6 +127,8 @@ def test_password_auth_and_known_hosts_line():
 
 
 def test_host_key_is_required_unless_explicitly_insecure():
+    with pytest.raises(EjudgeError, match="SHA256: и 43"):
+        connect_options(user_config(ssh_password="pw", host_key="SHA256:xyz"))
     with pytest.raises(EjudgeError, match="ключ хоста"):
         connect_options(user_config(ssh_password="pw"))
     assert connect_options(user_config(ssh_password="pw", insecure=True))["known_hosts"] is None

@@ -244,7 +244,7 @@ export const EjudgeIntegration = () => {
                                 <label className={labelCls}>КЛЮЧ ХОСТА (отпечаток SHA256:… или строка known_hosts)</label>
                                 <textarea className={`${inputCls} font-mono text-[11px] h-16`} value={form.host_key}
                                           disabled={form.insecure_host_key}
-                                          placeholder="SHA256:… — нажмите «Проверить подключение», чтобы увидеть отпечаток сервера"
+                                          placeholder="SHA256:… — отпечаток ключа СЕРВЕРА (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub), не вашего ключа для входа. Пусто + «Проверить подключение» покажет его"
                                           onChange={e => set('host_key', e.target.value)}/>
                                 <label className="flex items-center gap-2 mt-1 ml-1 text-xs text-slate-500">
                                     <input type="checkbox" checked={form.insecure_host_key}
