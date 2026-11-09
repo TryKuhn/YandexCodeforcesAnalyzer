@@ -19,7 +19,7 @@ from api.crypt import get_current_user
 from api.crypt.secrets import SecretError, decrypt_optional, encrypt, encrypt_optional
 from api.user.ejudge.common import EjudgeError
 from api.user.ejudge.config import EjudgeConfig, parse_contests, server_config
-from api.user.ejudge.remote import EjudgeHost, SSHHost, host_key_fingerprint, q
+from api.user.ejudge.remote import EjudgeHost, SSHHost, host_key_fingerprint, normalize_fingerprint, q
 from api.user.ejudge.web import EjudgeWeb
 from api.user.integrations.base import integrations_router
 from app.database import get_db
@@ -97,7 +97,7 @@ def _config_from(body: EjudgeLinkIn, existing: EjudgeAccount | None) -> EjudgeCo
         ssh_key=key + ("\n" if key and not key.endswith("\n") else ""),
         ssh_key_passphrase=passphrase,
         ssh_password=password,
-        host_key=(body.host_key or "").strip(),
+        host_key=normalize_fingerprint(body.host_key or "") or (body.host_key or "").strip(),
         insecure=body.insecure_host_key,
         judges_dir=body.judges_dir.rstrip("/") or "/",
         web_url=body.web_url or "",
